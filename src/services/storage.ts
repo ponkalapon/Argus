@@ -2,9 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { AgentSettings, StoredChat } from '../types';
 
-const SETTINGS_KEY = 'agentaiphone.settings.v1';
-const API_KEY = 'agentaiphone.apiKey.v1';
-const CHATS_KEY = 'agentaiphone.chats.v1';
+const SETTINGS_KEY = 'argus.settings.v1';
+
+const API_KEY = 'argus.apiKey.v1';
+
+const CHATS_KEY = 'argus.chats.v1';
 
 export const defaultSettings: AgentSettings = {
   baseUrl: 'https://api.openai.com',

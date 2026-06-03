@@ -1,4 +1,4 @@
-package com.dimap.agentaiphone
+package com.dimap.argus
 
 import android.app.Application
 import android.content.res.Configuration

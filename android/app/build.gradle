@@ -88,9 +88,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.dimap.agentaiphone'
+    namespace 'com.dimap.argus'
     defaultConfig {
-        applicationId 'com.dimap.agentaiphone'
+        applicationId 'com.dimap.argus'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

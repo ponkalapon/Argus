@@ -547,7 +547,7 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
 
       // Update Android home-screen widget data. Never block chat if widget update fails.
       try {
-        setWidgetData(JSON.stringify({ lastResponse: result.text }), 'com.dimap.agentaiphone');
+        setWidgetData(JSON.stringify({ lastResponse: result.text }), 'com.dimap.argus');
       } catch {
         // Widget module can be unavailable on some builds/dev environments.
       }
