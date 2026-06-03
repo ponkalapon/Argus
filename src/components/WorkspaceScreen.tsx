@@ -13,8 +13,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
+
 import { MessageBubble } from './MessageBubble';
 import { requestChatCompletion } from '../services/openaiClient';
 import { AgentSettings, AgentStatus, ChatCompletionMessage, ChatMessage, StoredChat } from '../types';
@@ -622,19 +621,6 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
   const openDrawer = useCallback(() => setShowChatList(true), []);
   const closeDrawer = useCallback(() => setShowChatList(false), []);
 
-  const edgeGestureRef = useRef(false);
-  const edgeGesture = Gesture.Pan()
-    .minDistance(0)
-    .onBegin((e) => {
-      edgeGestureRef.current = e.absoluteX < 40;
-    })
-    .onUpdate((e) => {
-      if (edgeGestureRef.current && e.translationX > 30) {
-        edgeGestureRef.current = false;
-        runOnJS(openDrawer)();
-      }
-    });
-
   const openSearch = () => {
     setIsSearching(true);
     setSearchQuery('');
@@ -670,8 +656,15 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
   return (
     <View style={styles.slideRoot}>
       {/* Main content - slides right when drawer opens */}
-      <GestureDetector gesture={edgeGesture}>
-        <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateX: contentTranslate }] }]}>
+      <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateX: contentTranslate }] }]}>
+        {/* Invisible edge zone to open drawer */}
+        {!showChatList && (
+          <Pressable
+            onPress={openDrawer}
+            hitSlop={{ right: 20, top: 20, bottom: 20 }}
+            style={styles.edgeZone}
+          />
+        )}
         <SafeAreaView style={styles.safeArea}>
           <KeyboardAvoidingView
             behavior="padding"
@@ -724,6 +717,7 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
                 isEmptyChat && styles.scrollContentEmpty,
               ]}
               keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
               onContentSizeChange={scrollToEnd}
               showsVerticalScrollIndicator={false}
               style={{ flex: 1, opacity: entrance }}
@@ -836,7 +830,6 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Animated.View>
-      </GestureDetector>
 
       {/* Drawer overlay */}
       <Animated.View
@@ -1316,6 +1309,14 @@ const styles = StyleSheet.create({
   slideRoot: {
     backgroundColor: colors.background,
     flex: 1,
+  },
+  edgeZone: {
+    height: '100%',
+    left: 0,
+    position: 'absolute',
+    top: 0,
+    width: 30,
+    zIndex: 100,
   },
   drawerOverlay: {
     backgroundColor: 'rgba(0,0,0,0.5)',

@@ -88,6 +88,7 @@ export const GestureBottomSheet = ({
   }, [visible]);
 
   const panGesture = Gesture.Pan()
+    .activeOffsetY([-20, 20])
     .onStart(() => {
       gestureStartY.value = currentY.value;
     })

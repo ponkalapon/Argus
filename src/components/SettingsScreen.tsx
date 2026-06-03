@@ -14,11 +14,12 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Trash2, ChevronDown, ChevronRight } from 'lucide-react-native';
+import { Trash2, ChevronDown, ChevronRight, BarChart3, ArrowLeft } from 'lucide-react-native';
 import { AgentSettings } from '../types';
 import { loadApiKey, saveApiKey, sanitizeSettings } from '../services/storage';
-import { getTokenStats, resetTokenStats, TokenStats } from '../services/tokenStats';
+import { getTokenStats, getDailyStats, resetTokenStats, TokenStats, DailyRecord } from '../services/tokenStats';
 import { listSkills, deleteSkill, Skill } from '../services/skills';
+import { UsageChart } from './UsageChart';
 import { colors, motion, radius, spacing, typography } from '../styles/theme';
 
 type Props = {
@@ -43,12 +44,19 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isKeyLoaded, setIsKeyLoaded] = useState(false);
   const [tokenStats, setTokenStats] = useState<TokenStats | null>(null);
+  const [dailyStats, setDailyStats] = useState<DailyRecord[]>([]);
   const [connectionExpanded, setConnectionExpanded] = useState(true);
   const [statsExpanded, setStatsExpanded] = useState(true);
   const [skillsExpanded, setSkillsExpanded] = useState(false);
   const [sectionsLoaded, setSectionsLoaded] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
+  const [showStatsDetail, setShowStatsDetail] = useState(false);
   const entrance = useRef(new Animated.Value(0)).current;
+
+  const loadDaily = useCallback(async () => {
+    const stats = await getDailyStats();
+    setDailyStats(stats);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -138,12 +146,13 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
         onPress: async () => {
           await resetTokenStats();
           setTokenStats({ totalInput: 0, totalOutput: 0, totalRequests: 0 });
+          setDailyStats([]);
         },
       },
     ]);
   };
 
-  const toggleSection = (setter: (prev: boolean) => boolean) => {
+  const toggleSection = (setter: React.Dispatch<React.SetStateAction<boolean>>) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setter((prev) => !prev);
   };
@@ -161,6 +170,40 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
         ? `${(n / 1_000).toFixed(1)}K`
         : String(n);
 
+  const openStatsDetail = () => {
+    setShowStatsDetail(true);
+    loadDaily();
+  };
+
+  const closeStatsDetail = () => {
+    setShowStatsDetail(false);
+  };
+
+  // ── Detail View (Chart) ──
+  if (showStatsDetail) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={closeStatsDetail}
+            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+          >
+            <ArrowLeft size={22} color={colors.text} />
+          </Pressable>
+          <Text style={styles.headerTitle}>График использования</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.card}>
+            <UsageChart data={dailyStats} />
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Main Settings View ──
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -293,6 +336,17 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                       <Text style={styles.statLabel}>запросов</Text>
                     </View>
                   </View>
+                  <View style={styles.divider} />
+                  <Pressable
+                    onPress={openStatsDetail}
+                    style={({ pressed }) => [styles.nestedRow, pressed && styles.pressed]}
+                  >
+                    <View style={styles.nestedRowLeft}>
+                      <BarChart3 size={16} color={colors.textMuted} />
+                      <Text style={styles.nestedRowText}>График использования</Text>
+                    </View>
+                    <ChevronRight size={14} color={colors.textDim} />
+                  </Pressable>
                   <View style={styles.divider} />
                   <Pressable
                     onPress={handleResetStats}
@@ -539,6 +593,24 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxl,
     marginBottom: spacing.md,
     paddingHorizontal: spacing.xs,
+  },
+
+  /* Nested row */
+  nestedRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+  },
+  nestedRowLeft: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  nestedRowText: {
+    color: colors.textMuted,
+    fontSize: typography.body,
   },
 
   /* Skills */
