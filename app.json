@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "AgentAI Phone",
+    "slug": "agentaiphone",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "dark",
+    "scheme": "agentaiphone",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dimap.agentaiphone"
+    },
+    "splash": {
+      "backgroundColor": "#000000",
+      "resizeMode": "contain"
+    },
+    "android": {
+      "package": "com.dimap.agentaiphone",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#000000"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow AgentAI to access your calendar",
+          "remindersPermission": "Allow AgentAI to access your reminders"
+        }
+      ],
+      [
+        "@bittingz/expo-widgets",
+        {
+          "android": [
+            {
+              "name": "LastResponseWidget",
+              "resourceName": "last_response_widget",
+              "label": "Последний ответ AI"
+            }
+          ]
+        }
+      ],
+      "expo-sharing",
+      "expo-splash-screen"
+    ]
+  }
+}
