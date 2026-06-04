@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   KeyboardAvoidingView,
   Platform,
@@ -9,22 +8,12 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { MessageBubble } from './MessageBubble';
-import { requestChatCompletion } from '../services/openaiClient';
-import { TOOL_DEFINITIONS } from '../services/tools';
-import { AgentSettings, AgentStatus, ChatCompletionMessage, ChatMessage, StoredChat } from '../types';
 import { colors, motion, radius, spacing, typography } from '../styles/theme';
-import { DocumentContext, pickAndParseDocument, searchContext } from '../services/rag';
-import * as VoiceService from '../services/voice';
-import { searchContacts } from '../services/contacts';
-import { loadChats, saveChats } from '../services/storage';
-import { setWidgetData } from '@bittingz/expo-widgets';
-
+import { AgentSettings, StoredChat } from '../types';
 import {
   listWorkspaceFiles,
   readWorkspaceFile,
@@ -32,13 +21,18 @@ import {
   exportWorkspaceArchive,
 } from '../services/workspace';
 import type { WorkspaceFile } from '../services/workspace';
-import * as ImagePicker from 'expo-image-picker';
-import { estimateTokens, estimateMessagesTokens } from '../services/context';
 import { searchSessions } from '../services/sessionSearch';
 import { WebView } from 'react-native-webview';
 import { SvgXml } from 'react-native-svg';
-import { GestureBottomSheet, BOTTOM_SHEET_HEIGHT } from './GestureBottomSheet';
-import { ArrowLeft, ArrowUp, Bot, Camera, Check, ChevronDown, Download, Folder, Globe, Image, Layers, Menu, Mic, Paperclip, Plus, Search, Settings, Trash2, Users, X } from 'lucide-react-native';
+import { GestureBottomSheet } from './GestureBottomSheet';
+import { ArrowLeft, Check, Download, Folder, Globe, Plus, Search, Settings, Trash2, X } from 'lucide-react-native';
+import { useAttachments } from '../hooks/useAttachments';
+import { useChatSession } from '../hooks/useChatSession';
+import { useModelCatalog } from '../hooks/useModelCatalog';
+import { WorkspaceActionSheet } from './workspace/WorkspaceActionSheet';
+import { WorkspaceComposer } from './workspace/WorkspaceComposer';
+import { WorkspaceHeader } from './workspace/WorkspaceHeader';
+import { MessageList } from './workspace/MessageList';
 
 const useAnimatedValue = (target: number): number => {
   const [current, setCurrent] = useState(target);
@@ -76,54 +70,6 @@ type Props = {
   onClearPendingAttach?: () => void;
 };
 
-const initialAssistantMessage: ChatMessage = {
-  id: 'welcome',
-  role: 'assistant',
-  content: 'Привет! Чем могу помочь?',
-  createdAt: Date.now(),
-};
-
-
-
-type ModelGroup = { provider: string; models: string[] };
-
-const guessProvider = (modelId: string): string => {
-  const id = modelId.toLowerCase();
-  if (id.startsWith('gpt-') || id.startsWith('o3-') || id.startsWith('o4-')) return 'OpenAI';
-  if (id.startsWith('claude-')) return 'Anthropic';
-  if (id.startsWith('gemini-') || id.startsWith('gemma-')) return 'Google';
-  if (id.includes('/')) return id.split('/')[0];
-  if (id.startsWith('deepseek-')) return 'DeepSeek';
-  if (id.startsWith('qwen-') || id.startsWith('qwen/')) return 'Qwen';
-  if (id.startsWith('mistral-') || id.startsWith('mixtral-')) return 'Mistral';
-  if (id.startsWith('llama-')) return 'Meta';
-  if (id.startsWith('phi-')) return 'Microsoft';
-  return 'Другие';
-};
-
-const groupModels = (ids: string[]): ModelGroup[] => {
-  const map = new Map<string, string[]>();
-  for (const id of ids) {
-    const provider = guessProvider(id);
-    if (!map.has(provider)) map.set(provider, []);
-    map.get(provider)!.push(id);
-  }
-  const sorted: ModelGroup[] = [];
-  for (const [provider, models] of map) {
-    sorted.push({ provider, models: models.sort() });
-  }
-  const otherIdx = sorted.findIndex((g) => g.provider === 'Другие');
-  if (otherIdx > 0) sorted.push(sorted.splice(otherIdx, 1)[0]);
-  return sorted;
-};
-
-const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-const createChatTitle = (content: string) => {
-  const oneLine = content.replace(/\s+/g, ' ').trim();
-  return oneLine.length > 36 ? `${oneLine.slice(0, 36).trim()}…` : oneLine || 'Новый чат';
-};
-
 const formatChatDate = (timestamp: number) =>
   new Date(timestamp).toLocaleDateString('ru-RU', {
     day: '2-digit',
@@ -140,35 +86,86 @@ const detectPreviewMode = (path: string): PreviewMode => {
   return 'text';
 };
 
-const toStoredMessages = (chatMessages: ChatMessage[]) =>
-  chatMessages
-    .filter((m) => m.id !== 'welcome')
-    .filter((m) => m.content.trim().length > 0)
-    .filter((m) => !m.content.startsWith('Ошибка:') || m.role === 'assistant');
-
-const toApiMessages = (messages: ChatMessage[]): ChatCompletionMessage[] =>
-  messages
-    .filter((m) => m.id !== 'welcome')
-    .filter((m) => !m.content.startsWith('Ошибка:'))
-    .filter((m) => m.content.trim().length > 0)
-    .map((m) => ({ role: m.role, content: m.content }));
-
 export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbox, onOpenFiles, onSaveSettings, pendingAttach, onClearPendingAttach }: Props) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([initialAssistantMessage]);
   const [draft, setDraft] = useState('');
-  const [status, setStatus] = useState<AgentStatus>('idle');
-  const [error, setError] = useState('');
-  const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showChatList, setShowChatList] = useState(false);
-  const [attachedDocs, setAttachedDocs] = useState<DocumentContext[]>([]);
-  const [chats, setChats] = useState<StoredChat[]>([]);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [inputTokens, setInputTokens] = useState(0);
-  const [outputTokens, setOutputTokens] = useState(0);
-  const [internetEnabled, setInternetEnabled] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const streamedTextRef = useRef('');
+  const [wsFiles, setWsFiles] = useState<WorkspaceFile[]>([]);
+  const [showWsModal, setShowWsModal] = useState(false);
+  const [previewFile, setPreviewFile] = useState<WorkspaceFile | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{ chatId: string; title: string; excerpt: string; score: number; updatedAt: number }[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const entrance = useRef(new Animated.Value(0)).current;
+  const drawerAnim = useRef(new Animated.Value(0)).current;
   const tokenPulse = useRef(new Animated.Value(1)).current;
+  const DRAWER_WIDTH = 290;
+
+  const hasRequiredSettings = Boolean(settings.baseUrl.trim() && settings.model.trim());
+
+  const {
+    attachedDocs,
+    handleAttachDocument,
+    handleCamera,
+    handleContactsSearch,
+    handleOpenFiles,
+    handlePhotoLibrary,
+    handleVoiceToggle,
+    internetEnabled,
+    isRecording,
+    setAttachedDocs,
+    setInternetEnabled,
+    setShowAttachMenu,
+    showAttachMenu,
+  } = useAttachments({ onOpenFiles, pendingAttach, onClearPendingAttach, setDraft });
+
+  const scrollToEnd = () => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+  };
+
+  const {
+    activeChatId,
+    chats,
+    deleteChat,
+    error,
+    inputTokens,
+    isEmptyChat,
+    messageCount,
+    messages,
+    openChat,
+    outputTokens,
+    sendMessage,
+    startNewChat,
+    status,
+  } = useChatSession({
+    settings,
+    apiKey,
+    hasRequiredSettings,
+    attachedDocs,
+    internetEnabled,
+    onOpenSettings,
+    setAttachedDocs,
+    setDraft,
+    scrollToEnd,
+  });
+
+  const {
+    filteredGroups,
+    isLoadingModels,
+    modelLabel,
+    modelPanelTranslate,
+    modelPickerAnim,
+    modelSearch,
+    modelOverlayOpacity,
+    openModelPicker,
+    setModelSearch,
+    setShowModelPicker,
+    showModelPicker,
+  } = useModelCatalog(settings, apiKey);
 
   const animInputTokens = useAnimatedValue(inputTokens);
   const animOutputTokens = useAnimatedValue(outputTokens);
@@ -187,38 +184,6 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     tokenPulse.setValue(1);
     return undefined;
   }, [status === 'thinking']);
-
-  useEffect(() => {
-    VoiceService.onResult((text) => {
-      setDraft((prev) => prev ? `${prev} ${text}` : text);
-      setIsRecording(false);
-    });
-    VoiceService.onError(() => setIsRecording(false));
-    return () => { VoiceService.destroy(); };
-  }, []);
-
-  useEffect(() => {
-    if (pendingAttach && onClearPendingAttach) {
-      setAttachedDocs((prev) => [...prev, { name: pendingAttach.name, content: pendingAttach.content }]);
-      onClearPendingAttach();
-    }
-  }, [pendingAttach]);
-
-  const [wsFiles, setWsFiles] = useState<WorkspaceFile[]>([]);
-  const [showWsModal, setShowWsModal] = useState(false);
-  const [previewFile, setPreviewFile] = useState<WorkspaceFile | null>(null);
-  const [isFocused, setIsFocused] = useState(false);
-  const [showModelPicker, setShowModelPicker] = useState(false);
-  const [modelSearch, setModelSearch] = useState('');
-  const [modelGroups, setModelGroups] = useState<ModelGroup[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<{ chatId: string; title: string; excerpt: string; score: number; updatedAt: number }[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const searchInputRef = useRef<TextInput>(null);
-  const scrollRef = useRef<ScrollView | null>(null);
-  const entrance = useRef(new Animated.Value(0)).current;
-  const drawerAnim = useRef(new Animated.Value(0)).current;
-  const DRAWER_WIDTH = 290;
 
   useEffect(() => {
     Animated.spring(drawerAnim, {
@@ -262,61 +227,11 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     outputRange: [0, 0.5],
   });
 
-  const modelPickerAnim = useRef(new Animated.Value(0)).current;
-  const [isLoadingModels, setIsLoadingModels] = useState(false);
-
-  useEffect(() => {
-    Animated.spring(modelPickerAnim, {
-      toValue: showModelPicker ? 1 : 0,
-      useNativeDriver: true,
-      damping: 26,
-      stiffness: 250,
-    }).start();
-  }, [showModelPicker]);
-
-  const modelOverlayOpacity = modelPickerAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.55],
-  });
-  const modelPanelTranslate = modelPickerAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-60, 0],
-  });
-
-  const streamQueue = useRef('');
-  const streamTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const streamMessageId = useRef<string | null>(null);
-  const chatsRef = useRef<StoredChat[]>([]);
-
-  const canSend = useMemo(() => draft.trim().length > 0 && status !== 'thinking', [draft, status]);
-
-  const sendAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.spring(sendAnim, {
-      toValue: canSend ? 1 : 0,
-      useNativeDriver: true,
-      damping: 20,
-      stiffness: 260,
-    }).start();
-  }, [canSend]);
-  const hasRequiredSettings = Boolean(settings.baseUrl.trim() && settings.model.trim());
-  const isEmptyChat = messages.length === 1 && messages[0].id === 'welcome';
-  const modelLabel = settings.model.trim() || 'Выбрать модель';
-  const messageCount = useMemo(() => messages.filter(m => m.id !== 'welcome').length, [messages]);
   const contextPressureColor: string = useMemo(() => {
     if (messageCount < 10) return colors.success;
     if (messageCount < 20) return colors.warning;
     return colors.danger;
   }, [messageCount]);
-  const filteredGroups = useMemo(() => {
-    const q = modelSearch.trim().toLowerCase();
-    if (!q) return modelGroups;
-    return modelGroups.map(g => ({
-      ...g,
-      models: g.models.filter(m => m.toLowerCase().includes(q)),
-    })).filter(g => g.models.length > 0);
-  }, [modelSearch, modelGroups]);
 
   useEffect(() => {
     Animated.timing(entrance, {
@@ -325,366 +240,6 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
       useNativeDriver: true,
     }).start();
   }, [entrance]);
-
-  useEffect(() => {
-    if (!showModelPicker || !settings.baseUrl.trim()) return;
-    let cancelled = false;
-    setIsLoadingModels(true);
-    const baseUrl = settings.baseUrl.trim().replace(/\/+$/, '');
-    fetch(`${baseUrl}/v1/models`, {
-      headers: apiKey.trim() ? { Authorization: `Bearer ${apiKey.trim()}` } : undefined,
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((json: { data?: { id: string }[] }) => {
-        if (cancelled) return;
-        const ids = json.data?.map((m) => m.id).filter(Boolean) || [];
-        setModelGroups(groupModels(ids));
-        if (!cancelled) setIsLoadingModels(false);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setModelGroups([]);
-        if (!cancelled) setIsLoadingModels(false);
-      });
-    return () => { cancelled = true; };
-  }, [showModelPicker]);
-
-  useEffect(() => {
-    loadChats().then((storedChats) => {
-      chatsRef.current = storedChats;
-      setChats(storedChats);
-    });
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (streamTimer.current) clearInterval(streamTimer.current);
-    };
-  }, []);
-
-  const scrollToEnd = () => {
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    });
-  };
-
-  const persistChats = async (nextChats: StoredChat[]) => {
-    const sorted = [...nextChats].sort((a, b) => b.updatedAt - a.updatedAt);
-    chatsRef.current = sorted;
-    setChats(sorted);
-    try {
-      await saveChats(sorted);
-    } catch {
-      // Keep the UI responsive even if local persistence fails.
-    }
-  };
-
-  const saveChatSnapshot = async (chatId: string, title: string, chatMessages: ChatMessage[]) => {
-    const storedMessages = toStoredMessages(chatMessages);
-    if (!storedMessages.length) return;
-
-    const existing = chatsRef.current.find((chat) => chat.id === chatId);
-    const now = Date.now();
-    const nextChat: StoredChat = {
-      id: chatId,
-      title: existing?.title || title,
-      messages: storedMessages,
-      createdAt: existing?.createdAt || now,
-      updatedAt: now,
-    };
-
-    await persistChats([nextChat, ...chatsRef.current.filter((chat) => chat.id !== chatId)]);
-
-    try {
-      const { indexChat } = await import('../services/sessionSearch');
-      await indexChat(chatId, title, storedMessages);
-    } catch { /* indexing non-critical */ }
-  };
-
-  const updateMessageContent = (id: string, append: string) => {
-    if (!append) return;
-    setMessages((current) =>
-      current.map((m) => (m.id === id ? { ...m, content: m.content + append } : m)),
-    );
-    scrollToEnd();
-  };
-
-  const flushAllStreamText = () => {
-    const id = streamMessageId.current;
-    const rest = streamQueue.current;
-    streamQueue.current = '';
-    if (id && rest) updateMessageContent(id, rest);
-  };
-
-  const stopStreamTicker = () => {
-    if (streamTimer.current) {
-      clearInterval(streamTimer.current);
-      streamTimer.current = null;
-    }
-  };
-
-  const startStreamTicker = (messageId: string) => {
-    stopStreamTicker();
-    streamMessageId.current = messageId;
-    streamQueue.current = '';
-    streamTimer.current = setInterval(() => {
-      if (!streamQueue.current) return;
-      const nextChunkSize = Math.min(Math.max(Math.ceil(streamQueue.current.length / 2), 4), 42);
-      const chunk = streamQueue.current.slice(0, nextChunkSize);
-      streamQueue.current = streamQueue.current.slice(nextChunkSize);
-      updateMessageContent(messageId, chunk);
-    }, 16);
-  };
-
-  const attachImage = async (uri: string, name: string) => {
-    setAttachedDocs((prev) => [...prev, { name, content: `[Image: ${name}]\nURI: ${uri}` }]);
-  };
-
-  const handleCamera = async () => {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Нет доступа', 'Разреши доступ к камере в настройках');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.7, base64: false });
-    if (!result.canceled && result.assets?.[0]) {
-      await attachImage(result.assets[0].uri, result.assets[0].fileName || 'photo.jpg');
-    }
-  };
-
-  const handlePhotoLibrary = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Нет доступа', 'Разреши доступ к галерее в настройках');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7, base64: false });
-    if (!result.canceled && result.assets?.[0]) {
-      await attachImage(result.assets[0].uri, result.assets[0].fileName || 'photo.jpg');
-    }
-  };
-
-  const handleAttachDocument = async () => {
-    try {
-      const doc = await pickAndParseDocument();
-      if (doc) {
-        setAttachedDocs((prev) => [...prev, doc]);
-      }
-    } catch (e) {
-      Alert.alert('Ошибка', 'Не удалось загрузить файл');
-    }
-  };
-
-  const handleOpenFiles = () => {
-    onOpenFiles();
-  };
-
-  const handleVoiceToggle = async () => {
-    if (isRecording) {
-      setIsRecording(false);
-      await VoiceService.stopListening();
-    } else {
-      const { PermissionsAndroid } = require('react-native');
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-      );
-      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-        Alert.alert('Нет доступа', 'Разреши доступ к микрофону в настройках');
-        return;
-      }
-      setIsRecording(true);
-      try {
-        await VoiceService.startListening('ru-RU');
-      } catch {
-        setIsRecording(false);
-        Alert.alert('Ошибка', 'Не удалось запустить запись');
-      }
-    }
-  };
-
-  const handleContactsSearch = async () => {
-    try {
-      const results = await searchContacts('');
-      if (results.length === 0) {
-        Alert.alert('Контакты не найдены');
-        return;
-      }
-      const names = results.map((c) => `${c.name} — ${c.phones.join(', ')}`).join('\n');
-      setDraft(`Найди контакт:\n${names}`);
-    } catch {
-      Alert.alert('Ошибка', 'Не удалось загрузить контакты');
-    }
-  };
-
-  const sendMessage = async (text: string) => {
-    const content = text.trim();
-    if (!content || status === 'thinking') return;
-
-    if (!hasRequiredSettings) {
-      Alert.alert('Нужны настройки', 'Укажи Base URL и Model перед отправкой.', [
-        { text: 'Отмена', style: 'cancel' },
-        { text: 'Открыть настройки', onPress: onOpenSettings },
-      ]);
-      return;
-    }
-
-    // RAG Logic: Search in attached documents
-    const context = searchContext(content, attachedDocs);
-    const augmentedContent = context 
-      ? `Контекст из прикрепленных файлов:\n${context}\n\nВопрос пользователя: ${content}`
-      : content;
-
-    const chatId = activeChatId || createId();
-    const chatTitle = chatsRef.current.find((chat) => chat.id === chatId)?.title || createChatTitle(content);
-
-    if (!activeChatId) {
-      setActiveChatId(chatId);
-    }
-
-    const userMessage: ChatMessage = {
-      id: createId(),
-      role: 'user',
-      content,
-      createdAt: Date.now(),
-    };
-    const assistantMessage: ChatMessage = {
-      id: createId(),
-      role: 'assistant',
-      content: '',
-      createdAt: Date.now(),
-    };
-
-    const previousMessages = messages.filter((message) => message.id !== 'welcome');
-    const visibleMessages = previousMessages.concat(userMessage, assistantMessage);
-    const userOnlySnapshot = previousMessages.concat(userMessage);
-    setMessages(visibleMessages);
-    setDraft('');
-    setError('');
-    setStatus('thinking');
-    startStreamTicker(assistantMessage.id);
-    scrollToEnd();
-    await saveChatSnapshot(chatId, chatTitle, userOnlySnapshot);
-
-    // Prepare messages for API with augmented content for the last message
-    const apiMessages = toApiMessages(previousMessages);
-    apiMessages.push({ role: 'user', content: augmentedContent });
-
-    setInputTokens(estimateMessagesTokens(apiMessages));
-    setOutputTokens(0);
-    streamedTextRef.current = '';
-
-    try {
-      const activeTools = internetEnabled
-        ? TOOL_DEFINITIONS
-        : TOOL_DEFINITIONS.filter((t) => !['web_search', 'visit_page'].includes(t.function?.name));
-
-      const result = await requestChatCompletion({
-        settings,
-        apiKey,
-        messages: apiMessages,
-        context: { workspaceId: chatId },
-        tools: activeTools,
-        onToken: (token) => {
-          streamQueue.current += token;
-          streamedTextRef.current += token;
-          setOutputTokens(estimateTokens(streamedTextRef.current));
-        },
-      });
-
-      flushAllStreamText();
-      stopStreamTicker();
-      streamMessageId.current = null;
-      setStatus('idle');
-      scrollToEnd();
-
-      const finalMessages = visibleMessages.map((m) =>
-        m.id === assistantMessage.id && !m.content.trim()
-          ? { ...m, content: result.text }
-          : m,
-      );
-
-      // Update message list and persistent chat
-      setMessages(finalMessages);
-      void saveChatSnapshot(chatId, chatTitle, finalMessages);
-
-      // Record token usage for cumulative stats
-      if (result.usage) {
-        const { recordTokenUsage } = await import('../services/tokenStats');
-        void recordTokenUsage(result.usage.input, result.usage.output);
-      }
-
-      // Update Android home-screen widget data. Never block chat if widget update fails.
-      try {
-        setWidgetData(JSON.stringify({ lastResponse: result.text }), 'com.dimap.argus');
-      } catch {
-        // Widget module can be unavailable on some builds/dev environments.
-      }
-
-    } catch (requestError) {
-      flushAllStreamText();
-      stopStreamTicker();
-      streamMessageId.current = null;
-      let message =
-        requestError instanceof Error ? requestError.message : 'Неизвестная ошибка запроса';
-
-      if (attachedDocs.some(d => d.name?.match(/\.(png|jpg|jpeg|gif|webp|bmp|heic|heif)$/i))) {
-        const lower = message.toLowerCase();
-        if (lower.includes('image') || lower.includes('vision') || lower.includes('picture') || lower.includes('photo')) {
-          message = 'Эта модель не поддерживает изображения. Удали фото из сообщения или выбери другую модель.';
-        }
-      }
-
-      setError(message);
-      setStatus('error');
-      const errorMessages = visibleMessages.map((item) =>
-        item.id === assistantMessage.id
-          ? { ...item, content: item.content.trim() ? item.content : `Ошибка: ${message}` }
-          : item,
-      );
-      setMessages(errorMessages);
-      void saveChatSnapshot(chatId, chatTitle, errorMessages);
-      scrollToEnd();
-    }
-  };
-
-  const startNewChat = () => {
-    if (status === 'thinking') return;
-    stopStreamTicker();
-    streamQueue.current = '';
-    streamMessageId.current = null;
-    setActiveChatId(null);
-    setMessages([initialAssistantMessage]);
-    setAttachedDocs([]);
-    setError('');
-    setStatus('idle');
-  };
-
-  const openChat = (chat: StoredChat) => {
-    if (status === 'thinking') return;
-    setActiveChatId(chat.id);
-    setMessages(chat.messages.length ? chat.messages : [initialAssistantMessage]);
-    setAttachedDocs([]);
-    setError('');
-    setStatus('idle');
-    setShowChatList(false);
-    scrollToEnd();
-  };
-
-  const deleteChat = (chatId: string) => {
-    Alert.alert('Удалить чат?', 'Диалог будет удален без восстановления.', [
-      { text: 'Отмена', style: 'cancel' },
-      {
-        text: 'Удалить',
-        style: 'destructive',
-        onPress: () => {
-          void persistChats(chatsRef.current.filter((chat) => chat.id !== chatId));
-          if (activeChatId === chatId) {
-            startNewChat();
-          }
-        },
-      },
-    ]);
-  };
 
   const openDrawer = useCallback(() => setShowChatList(true), []);
   const closeDrawer = useCallback(() => setShowChatList(false), []);
@@ -721,6 +276,19 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     setTimeout(() => onOpenSettings(), 350);
   };
 
+  const openWorkspaceFiles = async () => {
+    if (activeChatId) {
+      const files = await listWorkspaceFiles(activeChatId);
+      setWsFiles(files);
+    }
+    setShowWsModal(true);
+  };
+
+  const handleOpenChat = (chat: StoredChat) => {
+    openChat(chat);
+    setShowChatList(false);
+  };
+
   return (
     <View style={styles.slideRoot}>
       {/* Main content - slides right when drawer opens */}
@@ -738,154 +306,45 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
             behavior="padding"
             style={styles.container}
           >
-            {/* ── Header ── */}
-            <View style={styles.header}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={openDrawer}
-                style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
-              >
-                <Menu size={20} color={colors.text} />
-              </Pressable>
+            <WorkspaceHeader
+              modelLabel={modelLabel}
+              onOpenDrawer={openDrawer}
+              onOpenModelPicker={openModelPicker}
+              onOpenWorkspaceFiles={openWorkspaceFiles}
+              styles={styles}
+            />
 
-              <Pressable
-                style={({ pressed }) => [styles.modelPill, pressed && styles.pressed]}
-                onPress={() => { setModelSearch(''); setShowModelPicker(true); }}
-                accessibilityRole="button"
-              >
-                <Bot size={14} color="#a78bfa" style={{ marginRight: 4 }} />
-                <Text style={styles.modelPillLabel} numberOfLines={1}>
-                  {modelLabel}
-                </Text>
-                <ChevronDown size={12} color={colors.textMuted} style={{ marginLeft: 4 }} />
-              </Pressable>
-
-              <View style={styles.headerRight}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={async () => {
-                    if (activeChatId) {
-                      const files = await listWorkspaceFiles(activeChatId);
-                      setWsFiles(files);
-                    }
-                    setShowWsModal(true);
-                  }}
-                  style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
-                >
-                  <Folder size={20} color={colors.text} />
-                </Pressable>
-                </View>
-            </View>
-
-            {/* ── Messages ── */}
-            <Animated.ScrollView
-              ref={scrollRef}
-              contentContainerStyle={[
-                styles.scrollContent,
-                isEmptyChat && styles.scrollContentEmpty,
-              ]}
-              keyboardShouldPersistTaps="handled"
-              nestedScrollEnabled
+            <MessageList
+              entrance={entrance}
+              error={error}
+              hasRequiredSettings={hasRequiredSettings}
+              isEmptyChat={isEmptyChat}
+              messages={messages}
               onContentSizeChange={scrollToEnd}
-              showsVerticalScrollIndicator={false}
-              style={{ flex: 1, opacity: entrance }}
-            >
-              {isEmptyChat ? (
-                <View style={styles.welcomeWrap}>
-                  <Text style={styles.welcomeTitle}>Чем могу помочь?</Text>
-                  {!hasRequiredSettings && (
-                    <Pressable
-                      onPress={onOpenSettings}
-                      style={({ pressed }) => [styles.connectHint, pressed && styles.pressed]}
-                    >
-                      <Settings size={16} color={colors.textMuted} style={{ marginRight: 6 }} />
-                      <Text style={styles.connectHintText}>Настроить подключение</Text>
-                    </Pressable>
-                  )}
-                </View>
-              ) : (
-                messages
-                  .filter((m) => m.id !== 'welcome')
-                  .map((m) => <MessageBubble key={m.id} message={m} />)
-              )}
+              onOpenSettings={onOpenSettings}
+              scrollRef={scrollRef}
+              styles={styles}
+            />
 
-              {!!error && (
-                <View style={styles.errorCard}>
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              )}
-            </Animated.ScrollView>
-
-            {/* ── Composer ── */}
-            <View style={styles.composerWrap}>
-              {attachedDocs.length > 0 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.docScroll}>
-                  {attachedDocs.map((doc, i) => (
-                    <View key={i} style={styles.docChip}>
-                      <Text style={styles.docChipText}>{doc.name}</Text>
-                      <TouchableOpacity onPress={() => setAttachedDocs(prev => prev.filter((_, idx) => idx !== i))}>
-                        <X size={14} color={colors.textMuted} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </ScrollView>
-              )}
-
-              <View style={[styles.composer, isFocused && styles.composerFocused]}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setShowAttachMenu(true)}
-                  style={({ pressed }) => pressed && styles.pressed}
-                >
-                  <Text style={styles.attachIcon}>+</Text>
-                </Pressable>
-
-                <TextInput
-                  multiline
-                  onChangeText={setDraft}
-                  onFocus={() => setIsFocused(true)}
-                  onBlur={() => setIsFocused(false)}
-                  placeholder="Спросить Agent…"
-                  placeholderTextColor={colors.textDim}
-                  style={styles.input}
-                  textAlignVertical="top"
-                  value={draft}
-                />
-
-                <Animated.View
-                  style={styles.sendBtnWrap}
-                  pointerEvents={draft.trim().length > 0 ? 'auto' : 'auto'}
-                >
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={draft.trim().length > 0 ? () => sendMessage(draft) : handleVoiceToggle}
-                    style={({ pressed }) => [styles.sendBtn, pressed && styles.sendBtnPressed]}
-                  >
-                    {draft.trim().length > 0 ? (
-                      <ArrowUp size={20} color={colors.background} />
-                    ) : (
-                      <Mic size={20} color={isRecording ? '#ef4444' : colors.background} />
-                    )}
-                  </Pressable>
-                </Animated.View>
-              </View>
-
-              {/* ── Status bar ── */}
-              <View style={styles.statusBar}>
-                <View style={styles.statusLeft}>
-                  <View style={[styles.statusDot, { backgroundColor: contextPressureColor }]} />
-                  <Animated.View style={{ opacity: tokenPulse }}>
-                    <Layers size={11} color={colors.textMuted} style={{ marginRight: 2 }} />
-                  </Animated.View>
-                  <Text style={styles.tokenText}>
-                    Вх: {formatTokenNumber(animInputTokens)}
-                    {' / '}
-                    Вых: {formatTokenNumber(animOutputTokens)}
-                  </Text>
-                </View>
-                <Text style={styles.statusModel} numberOfLines={1}>{modelLabel}</Text>
-              </View>
-            </View>
+            <WorkspaceComposer
+              animInputTokens={animInputTokens}
+              animOutputTokens={animOutputTokens}
+              attachedDocs={attachedDocs}
+              contextPressureColor={contextPressureColor}
+              draft={draft}
+              formatTokenNumber={formatTokenNumber}
+              handleVoiceToggle={handleVoiceToggle}
+              isFocused={isFocused}
+              isRecording={isRecording}
+              modelLabel={modelLabel}
+              onOpenAttachMenu={() => setShowAttachMenu(true)}
+              onSendMessage={sendMessage}
+              setAttachedDocs={setAttachedDocs}
+              setDraft={setDraft}
+              setIsFocused={setIsFocused}
+              styles={styles}
+              tokenPulse={tokenPulse}
+            />
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Animated.View>
@@ -960,8 +419,8 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
                         key={result.chatId}
                         accessibilityRole="button"
                         onPress={() => {
-                          const chat = chatsRef.current.find((c) => c.id === result.chatId);
-                          if (chat) { closeSearch(); openChat(chat); }
+                          const chat = chats.find((c) => c.id === result.chatId);
+                          if (chat) { closeSearch(); handleOpenChat(chat); }
                         }}
                         style={({ pressed }) => [
                           styles.chatItem,
@@ -1043,7 +502,7 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
                       <Pressable
                         key={chat.id}
                         accessibilityRole="button"
-                        onPress={() => openChat(chat)}
+                        onPress={() => handleOpenChat(chat)}
                         style={({ pressed }) => [
                           styles.chatItem,
                           isActive && styles.chatItemActive,
@@ -1324,38 +783,18 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
         </>
       )}
 
-      {/* ── Attach Bottom Sheet ── */}
-      <GestureBottomSheet
-        visible={showAttachMenu}
-        onClose={() => setShowAttachMenu(false)}
-        snapPoints={{ partial: BOTTOM_SHEET_HEIGHT - 260, closed: 3000 }}
-        springConfig={{ damping: 28, stiffness: 220 }}
-      >
-        <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm, paddingTop: spacing.md }}>
-          {[
-            { label: 'Камера', icon: Camera, onPress: handleCamera },
-            { label: 'Фото', icon: Image, onPress: handlePhotoLibrary },
-            { label: 'Файлы', icon: Paperclip, onPress: handleAttachDocument },
-            { label: 'Файл. менеджер', icon: Folder, onPress: handleOpenFiles },
-            { label: 'Контакты', icon: Users, onPress: handleContactsSearch },
-            { label: internetEnabled ? 'Интернет: вкл' : 'Интернет: выкл', icon: Globe, onPress: () => setInternetEnabled((p) => !p), iconColor: internetEnabled ? '#60a5fa' : colors.textMuted },
-          ].map((item) => (
-            <Pressable
-              key={item.label}
-              style={({ pressed }) => [styles.attachItem, pressed && styles.attachItemPressed]}
-              onPress={() => {
-                setShowAttachMenu(false);
-                item.onPress();
-              }}
-            >
-              <View style={styles.attachItemIcon}>
-                <item.icon size={22} color={(item as any).iconColor || colors.textMuted} />
-              </View>
-              <Text style={styles.attachItemLabel}>{item.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </GestureBottomSheet>
+      <WorkspaceActionSheet
+        handleAttachDocument={handleAttachDocument}
+        handleCamera={handleCamera}
+        handleContactsSearch={handleContactsSearch}
+        handleOpenFiles={handleOpenFiles}
+        handlePhotoLibrary={handlePhotoLibrary}
+        internetEnabled={internetEnabled}
+        onToggleInternet={() => setInternetEnabled((p) => !p)}
+        setShowAttachMenu={setShowAttachMenu}
+        showAttachMenu={showAttachMenu}
+        styles={styles}
+      />
     </View>
   );
 };
