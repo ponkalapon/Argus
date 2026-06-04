@@ -843,7 +843,24 @@ export const TOOL_HANDLERS: Record<
   },
   visit_page: async ({ url }) => {
     if (!url) throw new Error('URL обязателен');
-    const content = await fetchPage(url);
-    return { url, content, length: content.length };
+    const result = await fetchPage(url);
+
+    if (!result.ok) {
+      return {
+        url,
+        ok: false,
+        error: result.error,
+        finalUrl: result.finalUrl || url,
+      };
+    }
+
+    return {
+      url,
+      ok: true,
+      finalUrl: result.finalUrl,
+      content: result.content,
+      length: result.length,
+      truncated: result.truncated,
+    };
   },
 };
