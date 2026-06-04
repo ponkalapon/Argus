@@ -1,5 +1,8 @@
 import * as Calendar from 'expo-calendar';
 import { getSoul, updateSoul } from './soul';
+import * as ContactsService from './contacts';
+import { phoneSearchFiles, phoneSearchChats, phoneSearchMemory } from './localSearch';
+import { webSearch, fetchPage } from './webSearch';
 import {
   deleteMemory,
   memorySummary,
@@ -431,6 +434,93 @@ export const TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'search_contacts',
+      description: 'Ищет контакты в телефонной книге по имени или номеру. Возвращает имя и номер телефона.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Имя или номер для поиска' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'initiate_communication',
+      description: 'Открывает звонилку или SMS для указанного номера. Используй после search_contacts.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['call', 'sms'], description: 'call — позвонить, sms — написать' },
+          phone: { type: 'string', description: 'Номер телефона' },
+          name: { type: 'string', description: 'Имя контакта (опционально)' },
+        },
+        required: ['action', 'phone'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'phone_search_files',
+      description: 'Ищет файлы на устройстве по имени. Проверяет рабочую область и выбранные папки.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Имя файла или его часть' },
+          directory: { type: 'string', description: 'Путь к папке (опционально)' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'phone_search_chats',
+      description: 'Ищет информацию в истории прошлых диалогов. Используй чтобы вспомнить что обсуждалось.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Поисковой запрос' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'web_search',
+      description: 'Ищет информацию в интернете. Используй когда нужны актуальные данные, новости или факты.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Поисковой запрос' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'visit_page',
+      description: 'Читает содержимое веб-страницы по URL. Используй после web_search чтобы получить детали.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'Полный URL страницы' },
+        },
+        required: ['url'],
+      },
+    },
+  },
 ];
 
 async function getDefaultCalendarSource() {
@@ -643,5 +733,61 @@ export const TOOL_HANDLERS: Record<
   sandbox_delete_file: async ({ sandboxId, path }) => {
     if (!sandboxId || !path) throw new Error('sandboxId и path обязательны');
     return sandboxDeleteFile(sandboxId, path);
+  },
+  search_contacts: async ({ query }) => {
+    if (!query) throw new Error('Запрос обязателен');
+    const results = await ContactsService.searchContacts(query);
+    return {
+      results: results.map((c) => ({
+        id: c.id,
+        name: c.name,
+        phones: c.phones,
+      })),
+    };
+  },
+  initiate_communication: async ({ action, phone, name }) => {
+    if (!phone) throw new Error('Номер телефона обязателен');
+    if (action === 'call') {
+      ContactsService.openDialer(phone);
+      return { status: 'opened_dialer', contact: name || phone, action: 'call' };
+    }
+    if (action === 'sms') {
+      ContactsService.openSms(phone);
+      return { status: 'opened_sms', contact: name || phone, action: 'sms' };
+    }
+    throw new Error('Неизвестное действие. Используй call или sms.');
+  },
+  phone_search_files: async ({ query, directory }) => {
+    if (!query) throw new Error('Запрос обязателен');
+    const results = await phoneSearchFiles(query);
+    return {
+      results: results.map((f) => ({
+        name: f.name,
+        path: f.path,
+        size: f.size,
+        isDirectory: f.isDirectory,
+      })),
+    };
+  },
+  phone_search_chats: async ({ query }) => {
+    const results = await phoneSearchChats(query || '');
+    return {
+      results: results.map((r) => ({
+        chatId: r.chatId,
+        title: r.title,
+        excerpt: r.excerpt,
+        relevance: r.score.toFixed(2),
+      })),
+    };
+  },
+  web_search: async ({ query }) => {
+    if (!query) throw new Error('Запрос обязателен');
+    const results = await webSearch(query);
+    return { results };
+  },
+  visit_page: async ({ url }) => {
+    if (!url) throw new Error('URL обязателен');
+    const content = await fetchPage(url);
+    return { url, content, length: content.length };
   },
 };

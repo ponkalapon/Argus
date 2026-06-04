@@ -44,6 +44,7 @@ export type ChatCompletionRequest = {
   messages: ChatCompletionMessage[];
   context?: ChatCompletionContext;
   onToken?: (token: string) => void;
+  tools?: any[];
 };
 
 export type TokenUsage = {

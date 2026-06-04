@@ -14,9 +14,11 @@
   "dependencies": {
     "@bittingz/expo-widgets": "^3.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-voice/voice": "^3.2.4",
     "expo": "56.0.8",
     "expo-calendar": "~56.0.8",
     "expo-clipboard": "~56.0.3",
+    "expo-contacts": "~56.0.7",
     "expo-document-picker": "~56.0.4",
     "expo-file-system": "~56.0.7",
     "expo-image-picker": "~56.0.15",

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { Dimensions, Text, View } from 'react-native';
 import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
 import type { DailyRecord } from '../services/tokenStats';
@@ -14,7 +14,7 @@ const AXIS_WIDTH = 40;
 
 export const UsageChart = ({ data }: Props) => {
   const screenWidth = Dimensions.get('window').width;
-  const chartWidth = screenWidth - spacing.xl * 2 - spacing.xl * 2;
+  const chartWidth = Math.max(AXIS_WIDTH + 20, screenWidth - spacing.xl * 2 - spacing.xl * 2);
 
   const chartData = useMemo(() => {
     const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date));
@@ -40,12 +40,12 @@ export const UsageChart = ({ data }: Props) => {
 
   const formatDay = (dateStr: string) => {
     const d = new Date(dateStr + 'T00:00:00');
-    return ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][d.getDay()];
+    return ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][d.getUTCDay()];
   };
 
   const formatShortDate = (dateStr: string) => {
     const d = new Date(dateStr + 'T00:00:00');
-    return `${d.getDate()}.${d.getMonth() + 1}`;
+    return `${d.getUTCDate()}.${d.getUTCMonth() + 1}`;
   };
 
   const formatToken = (n: number) =>
@@ -91,10 +91,10 @@ export const UsageChart = ({ data }: Props) => {
           const inputY = baseline - inputH;
 
           return (
-            <>
-              <Rect key={`in-${record.date}`} x={x} y={inputY} width={barWidth} height={inputH} rx={2} fill="#a78bfa" />
-              <Rect key={`out-${record.date}`} x={x} y={outputY} width={barWidth} height={outputH} rx={2} fill="#6ee7b7" />
-            </>
+            <React.Fragment key={record.date}>
+              <Rect x={x} y={inputY} width={barWidth} height={inputH} rx={2} fill="#a78bfa" />
+              <Rect x={x} y={outputY} width={barWidth} height={outputH} rx={2} fill="#6ee7b7" />
+            </React.Fragment>
           );
         })}
       </Svg>

@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { colors, motion, radius, spacing, typography } from '../styles/theme';
-import { listSandboxes, Sandbox, createSandbox, sandboxListFiles, sandboxDeleteFile } from '../services/sandbox';
+import { listSandboxes, Sandbox, createSandbox, sandboxListFiles, deleteSandbox } from '../services/sandbox';
 import { ArrowLeft, FileCode, FolderOpen, Globe, Plus, Trash2, X } from 'lucide-react-native';
 
 type Props = {
@@ -48,7 +48,7 @@ export const SandboxScreen = ({ onBack }: Props) => {
   };
 
   const handleDeleteSandbox = async (sbId: string) => {
-    await sandboxDeleteFile(sbId, '');
+    await deleteSandbox(sbId);
     setSandboxFiles([]);
     if (activeSbId === sbId) setActiveSbId(null);
     await loadSandboxes();
@@ -294,6 +294,7 @@ const styles = StyleSheet.create({
   },
   sandboxItem: {
     alignItems: 'center',
+    backgroundColor: colors.surface,
     borderRadius: radius.xl,
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { writeWorkspaceFile, readWorkspaceFile, listWorkspaceFiles, deleteWorkspaceFile } from './workspace';
+import { writeWorkspaceFile, readWorkspaceFile, listWorkspaceFiles, deleteWorkspaceFile, deleteWorkspace } from './workspace';
 
 const SANDBOX_INDEX_KEY = '@sandbox_index';
 
@@ -56,6 +56,7 @@ export const deleteSandbox = async (id: string): Promise<boolean> => {
   if (idx === -1) return false;
   entries.splice(idx, 1);
   await save(entries);
+  await deleteWorkspace(id).catch(() => {});
   return true;
 };
 
@@ -83,6 +84,10 @@ export const sandboxListFiles = async (sbId: string) => {
   const files = await listWorkspaceFiles(sbId);
   const prefix = sandboxPrefix(sbId);
   return files
+    .map((f) => ({
+      ...f,
+      path: f.path.replace(/^\/+/, ''),
+    }))
     .filter((f) => f.path.startsWith(prefix))
     .map((f) => ({
       ...f,

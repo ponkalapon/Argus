@@ -313,6 +313,7 @@ export const requestChatCompletion = async ({
   messages,
   context,
   onToken,
+  tools,
 }: ChatCompletionRequest): Promise<ChatCompletionResult> => {
   const baseUrl = normalizeBaseUrl(settings.baseUrl);
   const model = settings.model.trim();
@@ -387,7 +388,7 @@ export const requestChatCompletion = async ({
         max_tokens: 4096,
         max_output_tokens: 4096,
         stream: Boolean(onToken),
-        tools: TOOL_DEFINITIONS,
+        tools: tools || TOOL_DEFINITIONS,
       }),
     });
 

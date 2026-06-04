@@ -16,16 +16,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MessageBubble } from './MessageBubble';
 import { requestChatCompletion } from '../services/openaiClient';
+import { TOOL_DEFINITIONS } from '../services/tools';
 import { AgentSettings, AgentStatus, ChatCompletionMessage, ChatMessage, StoredChat } from '../types';
 import { colors, motion, radius, spacing, typography } from '../styles/theme';
 import { DocumentContext, pickAndParseDocument, searchContext } from '../services/rag';
+import * as VoiceService from '../services/voice';
+import { searchContacts } from '../services/contacts';
 import { loadChats, saveChats } from '../services/storage';
 import { setWidgetData } from '@bittingz/expo-widgets';
 
 import {
   listWorkspaceFiles,
   readWorkspaceFile,
-  workspaceSummary,
   exportWorkspaceFile,
   exportWorkspaceArchive,
 } from '../services/workspace';
@@ -36,7 +38,7 @@ import { searchSessions } from '../services/sessionSearch';
 import { WebView } from 'react-native-webview';
 import { SvgXml } from 'react-native-svg';
 import { GestureBottomSheet, BOTTOM_SHEET_HEIGHT } from './GestureBottomSheet';
-import { ArrowLeft, ArrowUp, Bot, Camera, Check, ChevronDown, Download, Folder, Globe, Image, Layers, Menu, Paperclip, Plus, Search, Settings, Trash2, X } from 'lucide-react-native';
+import { ArrowLeft, ArrowUp, Bot, Camera, Check, ChevronDown, Download, Folder, Globe, Image, Layers, Menu, Mic, Paperclip, Plus, Search, Settings, Trash2, Users, X } from 'lucide-react-native';
 
 const useAnimatedValue = (target: number): number => {
   const [current, setCurrent] = useState(target);
@@ -61,8 +63,6 @@ const useAnimatedValue = (target: number): number => {
   }, [target]);
 
   return current;
-
-  return current;
 };
 
 type Props = {
@@ -70,7 +70,10 @@ type Props = {
   apiKey: string;
   onOpenSettings: () => void;
   onOpenSandbox: () => void;
+  onOpenFiles: () => void;
   onSaveSettings: (settings: AgentSettings, apiKey: string) => Promise<void>;
+  pendingAttach?: { name: string; content: string } | null;
+  onClearPendingAttach?: () => void;
 };
 
 const initialAssistantMessage: ChatMessage = {
@@ -150,7 +153,7 @@ const toApiMessages = (messages: ChatMessage[]): ChatCompletionMessage[] =>
     .filter((m) => m.content.trim().length > 0)
     .map((m) => ({ role: m.role, content: m.content }));
 
-export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbox, onSaveSettings }: Props) => {
+export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbox, onOpenFiles, onSaveSettings, pendingAttach, onClearPendingAttach }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([initialAssistantMessage]);
   const [draft, setDraft] = useState('');
   const [status, setStatus] = useState<AgentStatus>('idle');
@@ -162,6 +165,8 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [inputTokens, setInputTokens] = useState(0);
   const [outputTokens, setOutputTokens] = useState(0);
+  const [internetEnabled, setInternetEnabled] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const streamedTextRef = useRef('');
   const tokenPulse = useRef(new Animated.Value(1)).current;
 
@@ -182,6 +187,23 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     tokenPulse.setValue(1);
     return undefined;
   }, [status === 'thinking']);
+
+  useEffect(() => {
+    VoiceService.onResult((text) => {
+      setDraft((prev) => prev ? `${prev} ${text}` : text);
+      setIsRecording(false);
+    });
+    VoiceService.onError(() => setIsRecording(false));
+    return () => { VoiceService.destroy(); };
+  }, []);
+
+  useEffect(() => {
+    if (pendingAttach && onClearPendingAttach) {
+      setAttachedDocs((prev) => [...prev, { name: pendingAttach.name, content: pendingAttach.content }]);
+      onClearPendingAttach();
+    }
+  }, [pendingAttach]);
+
   const [wsFiles, setWsFiles] = useState<WorkspaceFile[]>([]);
   const [showWsModal, setShowWsModal] = useState(false);
   const [previewFile, setPreviewFile] = useState<WorkspaceFile | null>(null);
@@ -453,6 +475,47 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     }
   };
 
+  const handleOpenFiles = () => {
+    onOpenFiles();
+  };
+
+  const handleVoiceToggle = async () => {
+    if (isRecording) {
+      setIsRecording(false);
+      await VoiceService.stopListening();
+    } else {
+      const { PermissionsAndroid } = require('react-native');
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      );
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert('Нет доступа', 'Разреши доступ к микрофону в настройках');
+        return;
+      }
+      setIsRecording(true);
+      try {
+        await VoiceService.startListening('ru-RU');
+      } catch {
+        setIsRecording(false);
+        Alert.alert('Ошибка', 'Не удалось запустить запись');
+      }
+    }
+  };
+
+  const handleContactsSearch = async () => {
+    try {
+      const results = await searchContacts('');
+      if (results.length === 0) {
+        Alert.alert('Контакты не найдены');
+        return;
+      }
+      const names = results.map((c) => `${c.name} — ${c.phones.join(', ')}`).join('\n');
+      setDraft(`Найди контакт:\n${names}`);
+    } catch {
+      Alert.alert('Ошибка', 'Не удалось загрузить контакты');
+    }
+  };
+
   const sendMessage = async (text: string) => {
     const content = text.trim();
     if (!content || status === 'thinking') return;
@@ -511,11 +574,16 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     streamedTextRef.current = '';
 
     try {
+      const activeTools = internetEnabled
+        ? TOOL_DEFINITIONS
+        : TOOL_DEFINITIONS.filter((t) => !['web_search', 'visit_page'].includes(t.function?.name));
+
       const result = await requestChatCompletion({
         settings,
         apiKey,
         messages: apiMessages,
         context: { workspaceId: chatId },
+        tools: activeTools,
         onToken: (token) => {
           streamQueue.current += token;
           streamedTextRef.current += token;
@@ -785,28 +853,19 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
                 />
 
                 <Animated.View
-                  style={[
-                    styles.sendBtnWrap,
-                    {
-                      opacity: sendAnim,
-                      transform: [
-                        {
-                          scale: sendAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0.7, 1],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
-                  pointerEvents={canSend ? 'auto' : 'none'}
+                  style={styles.sendBtnWrap}
+                  pointerEvents={draft.trim().length > 0 ? 'auto' : 'auto'}
                 >
                   <Pressable
                     accessibilityRole="button"
-                    onPress={() => sendMessage(draft)}
+                    onPress={draft.trim().length > 0 ? () => sendMessage(draft) : handleVoiceToggle}
                     style={({ pressed }) => [styles.sendBtn, pressed && styles.sendBtnPressed]}
                   >
-                    <ArrowUp size={20} color={colors.background} />
+                    {draft.trim().length > 0 ? (
+                      <ArrowUp size={20} color={colors.background} />
+                    ) : (
+                      <Mic size={20} color={isRecording ? '#ef4444' : colors.background} />
+                    )}
                   </Pressable>
                 </Animated.View>
               </View>
@@ -1277,6 +1336,9 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
             { label: 'Камера', icon: Camera, onPress: handleCamera },
             { label: 'Фото', icon: Image, onPress: handlePhotoLibrary },
             { label: 'Файлы', icon: Paperclip, onPress: handleAttachDocument },
+            { label: 'Файл. менеджер', icon: Folder, onPress: handleOpenFiles },
+            { label: 'Контакты', icon: Users, onPress: handleContactsSearch },
+            { label: internetEnabled ? 'Интернет: вкл' : 'Интернет: выкл', icon: Globe, onPress: () => setInternetEnabled((p) => !p), iconColor: internetEnabled ? '#60a5fa' : colors.textMuted },
           ].map((item) => (
             <Pressable
               key={item.label}
@@ -1287,7 +1349,7 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
               }}
             >
               <View style={styles.attachItemIcon}>
-                <item.icon size={22} color={colors.textMuted} />
+                <item.icon size={22} color={(item as any).iconColor || colors.textMuted} />
               </View>
               <Text style={styles.attachItemLabel}>{item.label}</Text>
             </Pressable>
@@ -1311,7 +1373,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   edgeZone: {
-    height: '100%',
+    height: 60,
     left: 0,
     position: 'absolute',
     top: 0,
@@ -1745,6 +1807,12 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '300',
     paddingHorizontal: spacing.xs,
+  },
+  voiceBtn: {
+    alignItems: 'center',
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
   },
   input: {
     color: colors.text,

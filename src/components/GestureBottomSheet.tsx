@@ -34,8 +34,6 @@ const defaultSnapPoints = {
 const defaultSpring = { damping: 28, stiffness: 220 };
 const defaultOverlay = { closed: 0, open: 0.5 };
 
-const snapOrder: SnapPoint[] = ['full', 'partial', 'closed'];
-
 export const GestureBottomSheet = ({
   visible,
   onClose,

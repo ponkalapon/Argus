@@ -51,24 +51,36 @@ const saveDaily = async (records: DailyRecord[]) => {
   await AsyncStorage.setItem(DAILY_KEY, JSON.stringify(records));
 };
 
-export const recordTokenUsage = async (input: number, output: number) => {
-  const stats = await load();
-  stats.totalInput += input;
-  stats.totalOutput += output;
-  stats.totalRequests += 1;
-  await save(stats);
+let recordQueue: Promise<void> = Promise.resolve();
 
-  const daily = await loadDaily();
-  const key = today();
-  const existing = daily.find((r) => r.date === key);
-  if (existing) {
-    existing.input += input;
-    existing.output += output;
-    existing.requests += 1;
-  } else {
-    daily.push({ date: key, input, output, requests: 1 });
-  }
-  await saveDaily(daily);
+export const recordTokenUsage = async (input: number, output: number) => {
+  const task = async () => {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const stats: TokenStats = raw ? JSON.parse(raw) : { ...defaultStats };
+    stats.totalInput += input;
+    stats.totalOutput += output;
+    stats.totalRequests += 1;
+    cache = stats;
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
+
+    const dailyRaw = await AsyncStorage.getItem(DAILY_KEY);
+    const daily: DailyRecord[] = dailyRaw ? JSON.parse(dailyRaw) : [];
+    const key = today();
+    const existing = daily.find((r) => r.date === key);
+    if (existing) {
+      existing.input += input;
+      existing.output += output;
+      existing.requests += 1;
+    } else {
+      daily.push({ date: key, input, output, requests: 1 });
+    }
+    if (daily.length > 365) daily.splice(0, daily.length - 365);
+    dailyCache = daily;
+    await AsyncStorage.setItem(DAILY_KEY, JSON.stringify(daily));
+  };
+
+  recordQueue = recordQueue.then(task, task);
+  return recordQueue;
 };
 
 export const getTokenStats = async (): Promise<TokenStats> => {

@@ -375,9 +375,9 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                   <Text style={styles.emptySkillsText}>Скиллы создаются автоматически, когда AI решает сложные задачи.</Text>
                 </View>
               ) : (
-                skills.map((skill) => (
+                skills.map((skill, index) => (
                   <View key={skill.id}>
-                    {skills.indexOf(skill) > 0 && <View style={styles.divider} />}
+                    {index > 0 && <View style={styles.divider} />}
                     <View style={styles.skillRow}>
                       <View style={styles.skillInfo}>
                         <Text style={styles.skillName}>{skill.name}</Text>

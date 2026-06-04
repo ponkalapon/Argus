@@ -113,6 +113,13 @@ export const deleteWorkspaceFile = async (workspaceId: string, path: string) => 
   return { deleted: normalPath };
 };
 
+export const deleteWorkspace = async (workspaceId: string) => {
+  const dir = getWorkspaceDir(workspaceId);
+  if (dir.exists) {
+    dir.delete();
+  }
+};
+
 export const workspaceSummary = async (workspaceId: string) => {
   const files = await listWorkspaceFiles(workspaceId);
   if (!files.length) return 'Рабочая область пуста.';

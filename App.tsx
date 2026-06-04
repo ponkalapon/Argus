@@ -8,6 +8,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { SettingsScreen } from './src/components/SettingsScreen';
 import { SandboxScreen } from './src/components/SandboxScreen';
 import { WorkspaceScreen } from './src/components/WorkspaceScreen';
+import { FileManagerScreen } from './src/components/FileManagerScreen';
+
 import { loadApiKey, loadSettings, saveSettings } from './src/services/storage';
 import { AgentSettings } from './src/types';
 import { colors, spacing, typography } from './src/styles/theme';
@@ -21,11 +23,12 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export default function App() {
-  const [screen, setScreen] = useState<'workspace' | 'settings' | 'sandbox'>('workspace');
+  const [screen, setScreen] = useState<'workspace' | 'settings' | 'sandbox' | 'files'>('workspace');
   const [settings, setSettings] = useState<AgentSettings | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [pendingAttach, setPendingAttach] = useState<{ name: string; content: string } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -91,8 +94,13 @@ export default function App() {
           <SandboxScreen
             onBack={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setScreen('workspace'); }}
           />
+        ) : screen === 'files' ? (
+          <FileManagerScreen
+            onBack={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setScreen('workspace'); }}
+            onAttach={(name, content) => { setPendingAttach({ name, content }); LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setScreen('workspace'); }}
+          />
         ) : (
-          <WorkspaceScreen apiKey={apiKey} onOpenSettings={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setScreen('settings'); }} onOpenSandbox={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setScreen('sandbox'); }} settings={settings} onSaveSettings={handleSaveSettings} />
+          <WorkspaceScreen apiKey={apiKey} onOpenSettings={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setScreen('settings'); }} onOpenSandbox={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setScreen('sandbox'); }} onOpenFiles={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setScreen('files'); }} settings={settings!} onSaveSettings={handleSaveSettings} pendingAttach={pendingAttach} onClearPendingAttach={() => setPendingAttach(null)} />
         )}
       </LinearGradient>
       </GestureHandlerRootView>
