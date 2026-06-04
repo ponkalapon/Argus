@@ -4,9 +4,82 @@ export type WebSearchResult = {
   snippet: string;
 };
 
-const DDG_URL = 'https://lite.duckduckgo.com/lite/';
+export type WebSearchResponse = {
+  results: WebSearchResult[];
+  diagnostic?: string;
+};
 
-export const webSearch = async (query: string): Promise<WebSearchResult[]> => {
+const DDG_URL = 'https://lite.duckduckgo.com/lite/';
+const SUPPORTED_URL_PROTOCOLS = new Set(['http:', 'https:']);
+
+const HTML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  apos: "'",
+  gt: '>',
+  lt: '<',
+  nbsp: ' ',
+  quot: '"',
+};
+
+const decodeCodePoint = (codePoint: number, fallback: string): string => {
+  if (!Number.isFinite(codePoint) || codePoint < 0 || codePoint > 0x10ffff) return fallback;
+  return String.fromCodePoint(codePoint);
+};
+
+export const decodeHtmlEntities = (value: string): string =>
+  value.replace(/&(#x[\da-f]+|#\d+|[a-z][\da-z]+);/gi, (entity, body: string) => {
+    const normalizedBody = body.toLowerCase();
+
+    if (normalizedBody.startsWith('#x')) {
+      return decodeCodePoint(Number.parseInt(normalizedBody.slice(2), 16), entity);
+    }
+
+    if (normalizedBody.startsWith('#')) {
+      return decodeCodePoint(Number.parseInt(normalizedBody.slice(1), 10), entity);
+    }
+
+    return HTML_ENTITIES[normalizedBody] ?? entity;
+  });
+
+const stripHtmlTags = (value: string): string =>
+  decodeHtmlEntities(value.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim());
+
+const isSupportedUrl = (url: URL): boolean => SUPPORTED_URL_PROTOCOLS.has(url.protocol);
+
+export const normalizeDuckDuckGoUrl = (rawUrl: string): string | null => {
+  const decodedUrl = decodeHtmlEntities(rawUrl).trim();
+  if (!decodedUrl) return null;
+
+  let url: URL;
+  try {
+    url = new URL(decodedUrl.startsWith('//') ? `https:${decodedUrl}` : decodedUrl, DDG_URL);
+  } catch {
+    return null;
+  }
+
+  if (!isSupportedUrl(url)) return null;
+
+  const duckDuckGoRedirect =
+    url.hostname === 'duckduckgo.com' || url.hostname.endsWith('.duckduckgo.com');
+  const redirectedUrl = duckDuckGoRedirect ? url.searchParams.get('uddg') : null;
+
+  if (!redirectedUrl) return url.toString();
+
+  try {
+    const normalizedRedirect = new URL(decodeHtmlEntities(redirectedUrl));
+    return isSupportedUrl(normalizedRedirect) ? normalizedRedirect.toString() : null;
+  } catch {
+    return null;
+  }
+};
+
+const extractAttribute = (tag: string, attributeName: string): string | null => {
+  const attributeRegex = new RegExp(`${attributeName}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
+  const match = attributeRegex.exec(tag);
+  return match?.[2] ?? match?.[3] ?? match?.[4] ?? null;
+};
+
+export const webSearch = async (query: string): Promise<WebSearchResponse> => {
   try {
     const params = new URLSearchParams({ q: query });
     const response = await fetch(`${DDG_URL}?${params.toString()}`, {
@@ -15,39 +88,73 @@ export const webSearch = async (query: string): Promise<WebSearchResult[]> => {
       },
     });
 
-    if (!response.ok) return [];
+    if (!response.ok) {
+      return { results: [], diagnostic: `DuckDuckGo вернул ошибку HTTP ${response.status}` };
+    }
 
     const html = await response.text();
 
-    const results: WebSearchResult[] = [];
-    const linkRegex = /<a[^>]*href="([^"]*)"[^>]*class="result-link"[^>]*>([\s\S]*?)<\/a>/gi;
-    const snippetRegex = /<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/gi;
+    const linkRegex = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+    const snippetRegex = /<td[^>]*class=(?:"[^"]*result-snippet[^"]*"|'[^']*result-snippet[^']*'|[^\s>]*result-snippet[^\s>]*)[^>]*>([\s\S]*?)<\/td>/gi;
 
     const links: string[] = [];
     const titles: string[] = [];
     let m: RegExpExecArray | null;
 
     while ((m = linkRegex.exec(html)) !== null) {
-      links.push(m[1]);
-      titles.push(m[2].replace(/<[^>]+>/g, '').trim());
+      const attributes = m[1];
+      const className = extractAttribute(attributes, 'class') ?? '';
+      if (!className.split(/\s+/).includes('result-link')) continue;
+
+      const href = extractAttribute(attributes, 'href');
+      if (!href) continue;
+
+      links.push(href);
+      titles.push(stripHtmlTags(m[2]));
     }
 
     const snippets: string[] = [];
     while ((m = snippetRegex.exec(html)) !== null) {
-      snippets.push(m[1].replace(/<[^>]+>/g, '').trim());
+      snippets.push(stripHtmlTags(m[1]));
     }
 
-    for (let i = 0; i < Math.min(links.length, 8); i++) {
+    const results: WebSearchResult[] = [];
+    let unsupportedUrlCount = 0;
+
+    for (let i = 0; i < links.length && results.length < 8; i++) {
+      const normalizedUrl = normalizeDuckDuckGoUrl(links[i]);
+      if (!normalizedUrl) {
+        unsupportedUrlCount += 1;
+        continue;
+      }
+
       results.push({
-        title: titles[i] || 'Без названия',
-        url: links[i].startsWith('http') ? links[i] : `https://${links[i]}`,
-        snippet: snippets[i] || '',
+        title: decodeHtmlEntities(titles[i] || 'Без названия'),
+        url: normalizedUrl,
+        snippet: decodeHtmlEntities(snippets[i] || ''),
       });
     }
 
-    return results;
-  } catch {
-    return [];
+    if (results.length > 0) return { results };
+
+    if (links.length > 0) {
+      return {
+        results,
+        diagnostic: `DuckDuckGo вернул ${links.length} ссылок, но ${unsupportedUrlCount} из них были отброшены из-за неподдерживаемой схемы или ошибки нормализации URL. Возможно, изменился формат выдачи.`,
+      };
+    }
+
+    if (/result-link|result-snippet|uddg=/i.test(html)) {
+      return {
+        results,
+        diagnostic: 'DuckDuckGo вернул HTML, похожий на страницу результатов, но парсер не смог извлечь ссылки. Возможно, изменился формат выдачи.',
+      };
+    }
+
+    return { results };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'неизвестная ошибка';
+    return { results: [], diagnostic: `Не удалось выполнить веб-поиск: ${message}` };
   }
 };
 
