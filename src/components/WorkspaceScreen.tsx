@@ -19,7 +19,7 @@ import { requestChatCompletion } from '../services/openaiClient';
 import { TOOL_DEFINITIONS } from '../services/tools';
 import { AgentSettings, AgentStatus, ChatCompletionMessage, ChatMessage, StoredChat } from '../types';
 import { colors, motion, radius, spacing, typography } from '../styles/theme';
-import { DocumentContext, pickAndParseDocument, searchContext } from '../services/rag';
+import { DocumentContext, PDF_UNSUPPORTED_MESSAGE, pickAndParseDocument, searchContext } from '../services/rag';
 import * as VoiceService from '../services/voice';
 import { searchContacts } from '../services/contacts';
 import { loadChats, saveChats } from '../services/storage';
@@ -471,6 +471,15 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
         setAttachedDocs((prev) => [...prev, doc]);
       }
     } catch (e) {
+      const message = e instanceof Error ? e.message : '';
+      if (message === PDF_UNSUPPORTED_MESSAGE) {
+        Alert.alert(
+          'PDF пока не поддерживается',
+          'RAG сейчас читает только текстовые файлы. Выберите .txt, .md, .json или другой текстовый формат.',
+        );
+        return;
+      }
+
       Alert.alert('Ошибка', 'Не удалось загрузить файл');
     }
   };
