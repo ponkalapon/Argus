@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Directory, File, Paths } from 'expo-file-system';
+import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { ArrowLeft, File as FileIcon, FileText, Folder, Image, Search, Trash2 } from 'lucide-react-native';
 import { colors, radius, spacing, typography } from '../styles/theme';
@@ -22,11 +22,65 @@ type Props = {
 };
 
 const ICON_SIZE = 20;
+const MAX_PREVIEW_CHARS = 20_000;
+const MAX_ATTACH_CHARS = 50_000;
+const BYTES_PER_CHAR_READ_BUFFER = 4;
+
+const TEXT_FILE_EXTENSIONS = [
+  'txt',
+  'md',
+  'json',
+  'xml',
+  'html',
+  'css',
+  'js',
+  'ts',
+  'tsx',
+  'jsx',
+  'py',
+  'java',
+  'kt',
+  'swift',
+  'log',
+  'env',
+  'yml',
+  'yaml',
+  'toml',
+  'cfg',
+  'ini',
+];
+
+const IMAGE_FILE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+const KNOWN_BINARY_EXTENSIONS = [
+  ...IMAGE_FILE_EXTENSIONS,
+  'pdf',
+  'zip',
+  'gz',
+  'tar',
+  'rar',
+  '7z',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'mp3',
+  'mp4',
+  'mov',
+  'avi',
+  'apk',
+  'exe',
+  'bin',
+];
+
+const PREVIEW_TRUNCATION_NOTICE = `\n\n[Предпросмотр обрезан: показаны первые ${MAX_PREVIEW_CHARS.toLocaleString('ru-RU')} символов.]`;
+const ATTACH_TRUNCATION_NOTICE = `\n\n[Файл обрезан при прикреплении: переданы первые ${MAX_ATTACH_CHARS.toLocaleString('ru-RU')} символов.]`;
 
 const getFileIcon = (name: string) => {
   const ext = name.split('.').pop()?.toLowerCase();
-  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext || '')) return Image;
-  if (['txt', 'md', 'json', 'xml', 'html', 'css', 'js', 'ts', 'tsx', 'jsx', 'py', 'java', 'kt', 'swift'].includes(ext || '')) return FileText;
+  if (IMAGE_FILE_EXTENSIONS.includes(ext || '')) return Image;
+  if (TEXT_FILE_EXTENSIONS.includes(ext || '')) return FileText;
   return FileIcon;
 };
 
@@ -35,6 +89,61 @@ const formatSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+
+const getFileExtension = (name: string) => name.split('.').pop()?.toLowerCase() || '';
+
+const isLikelyBinaryExtension = (name: string) => KNOWN_BINARY_EXTENSIONS.includes(getFileExtension(name));
+
+const hasBinaryBytes = (bytes: Uint8Array): boolean => {
+  if (bytes.includes(0)) return true;
+
+  let suspiciousControlBytes = 0;
+  bytes.forEach((byte) => {
+    const isAllowedWhitespace = byte === 9 || byte === 10 || byte === 13;
+    const isControlByte = byte < 32 || byte === 127;
+    if (isControlByte && !isAllowedWhitespace) {
+      suspiciousControlBytes += 1;
+    }
+  });
+
+  return bytes.length > 0 && suspiciousControlBytes / bytes.length > 0.05;
+};
+
+const decodeUtf8 = (bytes: Uint8Array): string | null => {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+};
+
+const readTextPrefix = (entry: FileEntry, maxChars: number): { text: string; truncated: boolean; unreadable: boolean; binary: boolean } => {
+  const maxBytes = Math.min(entry.size, Math.max(maxChars * BYTES_PER_CHAR_READ_BUFFER, maxChars));
+  const handle = new File(entry.path).open(FileMode.ReadOnly);
+
+  try {
+    const bytes = handle.readBytes(maxBytes);
+    if (hasBinaryBytes(bytes)) {
+      return { text: '', truncated: false, unreadable: false, binary: true };
+    }
+
+    const decoded = decodeUtf8(bytes);
+    if (decoded === null) {
+      return { text: '', truncated: false, unreadable: true, binary: false };
+    }
+
+    const text = decoded.slice(0, maxChars);
+    return {
+      text,
+      truncated: entry.size > maxBytes || decoded.length > maxChars,
+      unreadable: false,
+      binary: false,
+    };
+  } finally {
+    handle.close();
+  }
 };
 
 export const FileManagerScreen = ({ onBack, onAttach, initialPath }: Props) => {
@@ -102,18 +211,30 @@ export const FileManagerScreen = ({ onBack, onAttach, initialPath }: Props) => {
       return;
     }
 
-    const ext = entry.name.split('.').pop()?.toLowerCase();
-    const isViewable = ['txt', 'md', 'json', 'xml', 'html', 'css', 'js', 'ts', 'tsx', 'jsx', 'py', 'java', 'kt', 'swift', 'log', 'env', 'yml', 'yaml', 'toml', 'cfg', 'ini'].includes(ext || '');
+    const ext = getFileExtension(entry.name);
+    const isViewable = TEXT_FILE_EXTENSIONS.includes(ext);
 
     if (isViewable) {
+      if (entry.size > MAX_PREVIEW_CHARS) {
+        Alert.alert(
+          'Большой файл',
+          `Файл ${formatSize(entry.size)}. Для предпросмотра будет показано только начало.`
+        );
+      }
+
       try {
-        const content = await new File(entry.path).text();
+        const result = readTextPrefix(entry, MAX_PREVIEW_CHARS);
+        if (result.binary || result.unreadable) {
+          Alert.alert('Неподдерживаемый файл', 'Файл не удалось прочитать как UTF-8 текст.');
+          return;
+        }
+
         setPreviewTitle(entry.name);
-        setPreviewContent(content);
+        setPreviewContent(result.truncated ? `${result.text}${PREVIEW_TRUNCATION_NOTICE}` : result.text);
       } catch {
         Alert.alert('Ошибка', 'Не удалось прочитать файл');
       }
-    } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext || '')) {
+    } else if (IMAGE_FILE_EXTENSIONS.includes(ext)) {
       try {
         Linking.openURL(entry.path);
       } catch {
@@ -129,8 +250,26 @@ export const FileManagerScreen = ({ onBack, onAttach, initialPath }: Props) => {
   };
 
   const handleAttach = async (entry: FileEntry) => {
+    if (isLikelyBinaryExtension(entry.name)) {
+      Alert.alert('Неподдерживаемый файл', 'Бинарные файлы нельзя прикреплять как текст.');
+      return;
+    }
+
+    if (entry.size > MAX_ATTACH_CHARS) {
+      Alert.alert(
+        'Большой файл',
+        `Файл ${formatSize(entry.size)}. Будет прикреплена только сокращенная текстовая версия.`
+      );
+    }
+
     try {
-      const content = await new File(entry.path).text();
+      const result = readTextPrefix(entry, MAX_ATTACH_CHARS);
+      if (result.binary || result.unreadable) {
+        Alert.alert('Неподдерживаемый файл', 'Файл не удалось прочитать как UTF-8 текст, поэтому он не будет прикреплен.');
+        return;
+      }
+
+      const content = result.truncated ? `${result.text}${ATTACH_TRUNCATION_NOTICE}` : result.text;
       setExternalSearchRoot(currentPath);
       onAttach(entry.name, content);
       onBack();
