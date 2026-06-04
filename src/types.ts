@@ -18,6 +18,7 @@ export type StoredChat = {
 export type AgentSettings = {
   baseUrl: string;
   model: string;
+  allowAssistantContacts: boolean;
 };
 
 export type StoredSettings = AgentSettings;
@@ -36,6 +37,12 @@ export type ChatCompletionContext = {
   workspaceId?: string;
   memoryContext?: string;
   workspaceContext?: string;
+  contactsAccessEnabled?: boolean;
+  requestContactDisclosure?: (payload: {
+    query: string;
+    results: { id: string; name: string; phoneCount: number; maskedPhones: string[] }[];
+  }) => Promise<boolean>;
+  confirmCommunication?: (payload: { action: 'call' | 'sms'; phone: string; name?: string }) => Promise<boolean>;
 };
 
 export type ChatCompletionRequest = {

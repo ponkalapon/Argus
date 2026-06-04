@@ -7,6 +7,32 @@ export type ContactResult = {
   phones: string[];
 };
 
+export type ContactSafePreview = {
+  id: string;
+  name: string;
+  phoneCount: number;
+  maskedPhones: string[];
+};
+
+export const normalizePhone = (phone: string) => phone.replace(/[^+\d]/g, '');
+
+const maskPhone = (phone: string) => {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return 'скрыт';
+  const hasPlus = normalized.startsWith('+');
+  const digits = normalized.replace(/\D/g, '');
+  const tail = digits.slice(-2);
+  const hidden = '•'.repeat(Math.max(4, Math.min(digits.length - tail.length, 8)));
+  return `${hasPlus ? '+' : ''}${hidden}${tail}`;
+};
+
+export const toSafeContactPreview = (contact: ContactResult): ContactSafePreview => ({
+  id: contact.id,
+  name: contact.name,
+  phoneCount: contact.phones.length,
+  maskedPhones: contact.phones.map(maskPhone),
+});
+
 export const searchContacts = async (query: string): Promise<ContactResult[]> => {
   const { status } = await Contacts.requestPermissionsAsync();
   if (status !== 'granted') throw new Error('Нет доступа к контактам');
@@ -23,18 +49,19 @@ export const searchContacts = async (query: string): Promise<ContactResult[]> =>
     .filter((c) => {
       const name = (c.name || '').toLowerCase();
       const phones = (c.phoneNumbers || []).map((p) => p.number || '').join(' ');
-      return name.includes(q) || phones.includes(q);
+      return !q || name.includes(q) || phones.includes(q);
     })
     .map((c) => ({
       id: c.id || '',
       name: c.name || 'Без имени',
       phones: (c.phoneNumbers || []).map((p) => p.number || '').filter(Boolean),
     }))
+    .filter((c) => c.phones.length > 0)
     .slice(0, 10);
 };
 
 export const openDialer = (phone: string) => {
-  const url = `tel:${encodeURIComponent(phone.replace(/[^+\d]/g, ''))}`;
+  const url = `tel:${encodeURIComponent(normalizePhone(phone))}`;
   Linking.canOpenURL(url).then((ok) => {
     if (ok) Linking.openURL(url);
     else Alert.alert('Ошибка', 'Телефон не поддерживает звонки');
@@ -42,7 +69,7 @@ export const openDialer = (phone: string) => {
 };
 
 export const openSms = (phone: string, body?: string) => {
-  const url = `sms:${encodeURIComponent(phone.replace(/[^+\d]/g, ''))}${body ? `?body=${encodeURIComponent(body)}` : ''}`;
+  const url = `sms:${encodeURIComponent(normalizePhone(phone))}${body ? `?body=${encodeURIComponent(body)}` : ''}`;
   Linking.canOpenURL(url).then((ok) => {
     if (ok) Linking.openURL(url);
     else Alert.alert('Ошибка', 'Не удалось открыть SMS');

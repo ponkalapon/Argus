@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -40,6 +41,7 @@ type SectionsState = {
 export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
   const [baseUrl, setBaseUrl] = useState(initialSettings.baseUrl);
   const [model, setModel] = useState(initialSettings.model);
+  const [allowAssistantContacts, setAllowAssistantContacts] = useState(initialSettings.allowAssistantContacts);
   const [apiKey, setApiKey] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isKeyLoaded, setIsKeyLoaded] = useState(false);
@@ -110,7 +112,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
   }, [baseUrl]);
 
   const handleSave = async () => {
-    const settings = sanitizeSettings({ baseUrl, model });
+    const settings = sanitizeSettings({ baseUrl, model, allowAssistantContacts });
 
     if (!settings.baseUrl.trim()) {
       Alert.alert('Нужен Base URL', 'Укажи адрес OpenAI-compatible API.');
@@ -300,6 +302,22 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                     value={apiKey}
                   />
                   <Text style={styles.fieldHint}>Оставь пустым, если endpoint не требует ключ.</Text>
+                </View>
+              </View>
+              <View style={styles.cardGap} />
+
+              <View style={styles.card}>
+                <View style={styles.toggleRow}>
+                  <View style={styles.toggleTextBlock}>
+                    <Text style={styles.fieldLabel}>Разрешать ассистенту доступ к контактам</Text>
+                    <Text style={styles.fieldHint}>Выключено по умолчанию. Даже при включении номера и звонки/SMS требуют отдельного подтверждения.</Text>
+                  </View>
+                  <Switch
+                    onValueChange={setAllowAssistantContacts}
+                    value={allowAssistantContacts}
+                    trackColor={{ false: colors.surfaceMuted, true: colors.success }}
+                    thumbColor={colors.text}
+                  />
                 </View>
               </View>
             </>
@@ -503,6 +521,16 @@ const styles = StyleSheet.create({
   },
 
   /* Field row */
+  toggleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.lg,
+    justifyContent: 'space-between',
+    padding: spacing.xl,
+  },
+  toggleTextBlock: {
+    flex: 1,
+  },
   fieldRow: {
     padding: spacing.xl,
   },

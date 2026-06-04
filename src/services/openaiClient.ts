@@ -321,7 +321,12 @@ export const requestChatCompletion = async ({
       tool_calls: toolCalls,
     });
 
-    const handlerCtx = { workspaceId: context?.workspaceId };
+    const handlerCtx = {
+      workspaceId: context?.workspaceId,
+      contactsAccessEnabled: context?.contactsAccessEnabled,
+      requestContactDisclosure: context?.requestContactDisclosure,
+      confirmCommunication: context?.confirmCommunication,
+    };
 
     for (const toolCall of toolCalls) {
       const handler = TOOL_HANDLERS[toolCall.function.name];

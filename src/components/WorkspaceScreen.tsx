@@ -21,7 +21,7 @@ import { AgentSettings, AgentStatus, ChatCompletionMessage, ChatMessage, StoredC
 import { colors, motion, radius, spacing, typography } from '../styles/theme';
 import { DocumentContext, pickAndParseDocument, searchContext } from '../services/rag';
 import * as VoiceService from '../services/voice';
-import { searchContacts } from '../services/contacts';
+import { ContactSafePreview, normalizePhone, searchContacts, toSafeContactPreview } from '../services/contacts';
 import { loadChats, saveChats } from '../services/storage';
 import { setWidgetData } from '@bittingz/expo-widgets';
 
@@ -168,6 +168,7 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
   const [internetEnabled, setInternetEnabled] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const streamedTextRef = useRef('');
+  const confirmedContactPhonesRef = useRef<Set<string>>(new Set());
   const tokenPulse = useRef(new Animated.Value(1)).current;
 
   const animInputTokens = useAnimatedValue(inputTokens);
@@ -502,15 +503,71 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     }
   };
 
+  const requestContactDisclosure = useCallback((payload: { query: string; results: ContactSafePreview[] }) => {
+    const preview = payload.results
+      .slice(0, 5)
+      .map((contact) => `${contact.name} (${contact.phoneCount})`)
+      .join('\n');
+
+    return new Promise<boolean>((resolve) => {
+      Alert.alert(
+        'Разрешить номера контактов?',
+        `Ассистент хочет получить полные номера по запросу «${payload.query}».
+
+${preview}
+
+Без разрешения модель увидит только имена и скрытые номера.`,
+        [
+          { text: 'Не разрешать', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Разрешить', onPress: () => resolve(true) },
+        ],
+      );
+    });
+  }, []);
+
+  const confirmCommunication = useCallback((payload: { action: 'call' | 'sms'; phone: string; name?: string }) => {
+    const normalizedPhone = normalizePhone(payload.phone);
+    const actionLabel = payload.action === 'call' ? 'Позвонить' : 'Написать SMS';
+
+    return new Promise<boolean>((resolve) => {
+      Alert.alert(
+        'Подтвердить действие',
+        `Контакт: ${payload.name || 'Без имени'}
+Номер: ${payload.phone}
+Действие: ${payload.action}`,
+        [
+          { text: 'Отмена', style: 'cancel', onPress: () => resolve(false) },
+          {
+            text: actionLabel,
+            onPress: () => {
+              if (normalizedPhone) confirmedContactPhonesRef.current.add(normalizedPhone);
+              resolve(true);
+            },
+          },
+        ],
+      );
+    });
+  }, []);
+
   const handleContactsSearch = async () => {
+    if (!settings.allowAssistantContacts) {
+      Alert.alert('Доступ к контактам выключен', 'Включи «Разрешать ассистенту доступ к контактам» в настройках.', [
+        { text: 'Отмена', style: 'cancel' },
+        { text: 'Настройки', onPress: onOpenSettings },
+      ]);
+      return;
+    }
+
     try {
       const results = await searchContacts('');
       if (results.length === 0) {
         Alert.alert('Контакты не найдены');
         return;
       }
-      const names = results.map((c) => `${c.name} — ${c.phones.join(', ')}`).join('\n');
-      setDraft(`Найди контакт:\n${names}`);
+      const safeResults = results.map(toSafeContactPreview);
+      const names = safeResults.map((c) => `${c.name} — ${c.maskedPhones.join(', ')}`).join('\n');
+      setDraft(`Найди контакт (номера скрыты до подтверждения):
+${names}`);
     } catch {
       Alert.alert('Ошибка', 'Не удалось загрузить контакты');
     }
@@ -582,7 +639,12 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
         settings,
         apiKey,
         messages: apiMessages,
-        context: { workspaceId: chatId },
+        context: {
+          workspaceId: chatId,
+          contactsAccessEnabled: settings.allowAssistantContacts,
+          requestContactDisclosure,
+          confirmCommunication,
+        },
         tools: activeTools,
         onToken: (token) => {
           streamQueue.current += token;
