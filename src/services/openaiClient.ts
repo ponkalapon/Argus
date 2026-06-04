@@ -1,4 +1,5 @@
 import { ChatCompletionContext, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResult } from '../types';
+import { ChatCompletionResponse, extractTextFromJson, extractToolCalls, readStreamingResponse } from './openaiStream';
 import { formatMemoryContext, searchMemory } from './memory';
 import { formatSkillIndex, listSkills } from './skills';
 import { getSoul } from './soul';
@@ -64,45 +65,6 @@ const buildSystemPrompt = async (
 
   return finalPrompt;
 };
-
-type ChatCompletionResponse = {
-  choices?: Array<{
-    message?: ChatCompletionMessage;
-    delta?: Partial<ChatCompletionMessage>;
-    text?: string | null;
-    finish_reason?: string;
-  }>;
-  output_text?: string;
-  error?: { message?: string; type?: string };
-  message?: string;
-  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
-};
-
-const extractTextFromJson = (data: ChatCompletionResponse) =>
-  data.choices?.[0]?.message?.content ||
-  data.choices?.[0]?.delta?.content ||
-  data.choices?.[0]?.text ||
-  data.output_text ||
-  '';
-
-const extractToolCalls = (data: ChatCompletionResponse) =>
-  data.choices?.[0]?.message?.tool_calls ||
-  data.choices?.[0]?.delta?.tool_calls;
-
-const splitSseEvents = (buffer: string) => {
-  const normalized = buffer.replace(/\r\n/g, '\n');
-  const parts = normalized.split('\n\n');
-  const rest = parts.pop() || '';
-  return { events: parts, rest };
-};
-
-const extractSseDataLines = (event: string) =>
-  event
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.replace(/^data:\s*/, '').trim())
-    .filter(Boolean);
 
 const parseJsonOrSsePayload = (rawText: string): ChatCompletionResponse => {
   const trimmed = rawText.trim();
@@ -185,82 +147,6 @@ const createHeaders = (apiKey: string): Record<string, string> => {
   }
 
   return headers;
-};
-
-const readStreamingResponse = async (response: Response, onToken: (token: string) => void) => {
-  const body = response.body;
-  const reader = body?.getReader?.();
-
-  if (!reader) {
-    const data = await parseResponsePayload(response);
-    const text = extractTextFromJson(data);
-    if (text) {
-      onToken(text);
-    }
-    return { text, toolCalls: extractToolCalls(data), usage: data.usage };
-  }
-
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let fullText = '';
-  let toolCalls: any[] = [];
-  let finalUsage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | undefined;
-
-  const handleData = (rawData: string) => {
-    if (!rawData || rawData === '[DONE]') return;
-
-    const data = JSON.parse(rawData) as ChatCompletionResponse;
-    const token = extractTextFromJson(data);
-    const deltaToolCalls = extractToolCalls(data);
-
-    if (data.usage) {
-      finalUsage = data.usage;
-    }
-
-    if (token) {
-      fullText += token;
-      onToken(token);
-    }
-
-    if (deltaToolCalls) {
-      for (const call of deltaToolCalls) {
-        const index = call.index ?? 0;
-        if (!toolCalls[index]) {
-          toolCalls[index] = { ...call, function: { ...call.function } };
-        } else {
-          if (call.function?.arguments) {
-            toolCalls[index].function.arguments += call.function.arguments;
-          }
-        }
-      }
-    }
-  };
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-
-    if (!buffer.trimStart().startsWith('data:')) continue;
-
-    const { events, rest } = splitSseEvents(buffer);
-    buffer = rest;
-
-    for (const event of events) {
-      const lines = extractSseDataLines(event);
-      for (const line of lines) {
-        handleData(line);
-      }
-    }
-  }
-
-  return {
-    text: fullText,
-    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-    usage: finalUsage,
-  };
 };
 
 const summarizeMiddle = async (
@@ -402,9 +288,16 @@ export const requestChatCompletion = async ({
 
     if (onToken) {
       const streamResult = await readStreamingResponse(response, onToken);
-      text = streamResult.text;
-      toolCalls = streamResult.toolCalls;
-      streamUsage = streamResult.usage;
+      if (!streamResult) {
+        const data = await parseResponsePayload(response);
+        text = extractTextFromJson(data);
+        toolCalls = extractToolCalls(data);
+        streamUsage = data.usage;
+      } else {
+        text = streamResult.text;
+        toolCalls = streamResult.toolCalls;
+        streamUsage = streamResult.usage;
+      }
     } else {
       const data = await parseResponsePayload(response);
       text = extractTextFromJson(data);
