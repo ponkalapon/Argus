@@ -836,8 +836,10 @@ export const TOOL_HANDLERS: Record<
   },
   web_search: async ({ query }) => {
     if (!query) throw new Error('Запрос обязателен');
-    const results = await webSearch(query);
-    return { results };
+    const searchResponse = await webSearch(query);
+    return searchResponse.diagnostic
+      ? { results: searchResponse.results, diagnostic: searchResponse.diagnostic }
+      : { results: searchResponse.results };
   },
   visit_page: async ({ url }) => {
     if (!url) throw new Error('URL обязателен');
