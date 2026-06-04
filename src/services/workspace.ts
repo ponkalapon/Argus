@@ -149,10 +149,25 @@ export const exportWorkspaceArchive = async (workspaceId: string, title = 'works
     zip.file(file.path, file.content);
   });
 
-  const base64 = await zip.generateAsync({ type: 'base64' });
+  const archiveBytes = await zip.generateAsync({ type: 'uint8array' });
   const fileName = `${safeSegment(title || workspaceId)}.zip`;
   const cacheFile = new File(Paths.cache, fileName);
-  cacheFile.write(base64);
+  cacheFile.write(archiveBytes);
+
+  const writtenArchive = await JSZip.loadAsync(await cacheFile.bytes());
+  const expectedPaths = files.map((file) => file.path).sort();
+  const actualPaths = Object.values(writtenArchive.files)
+    .filter((entry) => !entry.dir)
+    .map((entry) => entry.name)
+    .sort();
+
+  const pathsMismatch =
+    expectedPaths.length !== actualPaths.length ||
+    expectedPaths.some((path, index) => path !== actualPaths[index]);
+
+  if (pathsMismatch) {
+    throw new Error('ZIP archive validation failed: exported paths do not match workspace files');
+  }
 
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(cacheFile.uri);
