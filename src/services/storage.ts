@@ -11,11 +11,13 @@ const CHATS_KEY = 'argus.chats.v1';
 export const defaultSettings: AgentSettings = {
   baseUrl: 'https://api.openai.com',
   model: '',
+  allowAssistantContacts: false,
 };
 
 export const sanitizeSettings = (settings: Partial<AgentSettings> | null | undefined): AgentSettings => ({
   baseUrl: String(settings?.baseUrl || defaultSettings.baseUrl).trim(),
   model: String(settings?.model || defaultSettings.model).trim(),
+  allowAssistantContacts: settings?.allowAssistantContacts === true,
 });
 
 export const loadSettings = async (): Promise<AgentSettings> => {

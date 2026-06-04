@@ -438,7 +438,7 @@ export const TOOL_DEFINITIONS = [
     type: 'function',
     function: {
       name: 'search_contacts',
-      description: 'Ищет контакты в телефонной книге по имени или номеру. Возвращает имя и номер телефона.',
+      description: 'Ищет контакты в телефонной книге. Без согласия пользователя возвращает только безопасный предпросмотр без полных номеров.',
       parameters: {
         type: 'object',
         properties: {
@@ -452,7 +452,7 @@ export const TOOL_DEFINITIONS = [
     type: 'function',
     function: {
       name: 'initiate_communication',
-      description: 'Открывает звонилку или SMS для указанного номера. Используй после search_contacts.',
+      description: 'Открывает звонилку или SMS только после подтверждения пользователем имени, номера и действия.',
       parameters: {
         type: 'object',
         properties: {
@@ -539,7 +539,15 @@ const fuzzyFindMemory = async (text: string, items: any[]) => {
 
 export const TOOL_HANDLERS: Record<
   string,
-  (args: any, ctx?: { workspaceId?: string }) => Promise<any>
+  (args: any, ctx?: {
+    workspaceId?: string;
+    contactsAccessEnabled?: boolean;
+    requestContactDisclosure?: (payload: {
+      query: string;
+      results: ContactsService.ContactSafePreview[];
+    }) => Promise<boolean>;
+    confirmCommunication?: (payload: { action: 'call' | 'sms'; phone: string; name?: string }) => Promise<boolean>;
+  }) => Promise<any>
 > = {
   list_calendar_events: async ({ startDate, endDate }) => {
     const { status } = await Calendar.requestCalendarPermissionsAsync();
@@ -734,28 +742,74 @@ export const TOOL_HANDLERS: Record<
     if (!sandboxId || !path) throw new Error('sandboxId и path обязательны');
     return sandboxDeleteFile(sandboxId, path);
   },
-  search_contacts: async ({ query }) => {
+  search_contacts: async ({ query }, ctx) => {
     if (!query) throw new Error('Запрос обязателен');
+    if (!ctx?.contactsAccessEnabled) {
+      return {
+        error: 'Доступ ассистента к контактам выключен в настройках',
+        requiresSettings: true,
+        safe: true,
+      };
+    }
+
     const results = await ContactsService.searchContacts(query);
+    const safeResults = results.map(ContactsService.toSafeContactPreview);
+
+    if (results.length === 0) {
+      return { results: [], safe: true };
+    }
+
+    const approved = ctx.requestContactDisclosure
+      ? await ctx.requestContactDisclosure({ query, results: safeResults })
+      : false;
+
+    if (!approved) {
+      return {
+        results: safeResults,
+        safe: true,
+        requiresUserApproval: true,
+        message: 'Полные номера скрыты. Попроси пользователя подтвердить выдачу номеров в интерфейсе.',
+      };
+    }
+
     return {
       results: results.map((c) => ({
         id: c.id,
         name: c.name,
         phones: c.phones,
       })),
+      safe: false,
+      userApprovedPhoneDisclosure: true,
     };
   },
-  initiate_communication: async ({ action, phone, name }) => {
+  initiate_communication: async ({ action, phone, name }, ctx) => {
+    if (action !== 'call' && action !== 'sms') {
+      throw new Error('Неизвестное действие. Используй call или sms.');
+    }
     if (!phone) throw new Error('Номер телефона обязателен');
+    if (!ctx?.contactsAccessEnabled) {
+      return { error: 'Доступ ассистента к контактам выключен в настройках', requiresSettings: true };
+    }
+    if (!ctx.confirmCommunication) {
+      return { error: 'Нужно подтверждение пользователя в текущей сессии перед звонком или SMS' };
+    }
+
+    const confirmed = await ctx.confirmCommunication({ action, phone, name });
+    if (!confirmed) {
+      return {
+        error: 'Пользователь не подтвердил номер и действие в текущей сессии',
+        action,
+        contact: name || phone,
+      };
+    }
+
     if (action === 'call') {
       ContactsService.openDialer(phone);
       return { status: 'opened_dialer', contact: name || phone, action: 'call' };
     }
-    if (action === 'sms') {
-      ContactsService.openSms(phone);
-      return { status: 'opened_sms', contact: name || phone, action: 'sms' };
-    }
-    throw new Error('Неизвестное действие. Используй call или sms.');
+
+    ContactsService.openSms(phone);
+    return { status: 'opened_sms', contact: name || phone, action: 'sms' };
   },
   phone_search_files: async ({ query, directory }) => {
     if (!query) throw new Error('Запрос обязателен');
