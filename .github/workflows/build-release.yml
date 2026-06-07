@@ -101,13 +101,26 @@ jobs:
           EOF
           fi
 
-      - name: Build Android APK
-        run: cd android && ./gradlew assembleRelease -x checkReleaseDuplicateClasses --no-daemon -Dorg.gradle.jvmargs="-Xmx4g"
+      - name: Install essential Linux tools (uname, xargs)
+        run: |
+          echo "Installing uname and xargs..."
+          sudo apt-get update -y && sudo apt-get install -y coreutils findutils
+          which uname && uname -a
+          which xargs && xargs --version
+
+      - name: Build Android APK (FINAL attempt)
+        run: |
+          cd android
+          echo "Running gradlew with bash (not sh)..."
+          bash ./gradlew assembleRelease -x checkReleaseDuplicateClasses --no-daemon -Dorg.gradle.jvmargs="-Xmx4g" \
+            -Porg.gradle.java.home=$JAVA_HOME \
+            -Dorg.gradle.logging.level=debug
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           CI: "false"
           NODE_PATH: ${{ github.workspace }}/node_modules
           PATH: /opt/hostedtoolcache/node/24.x.x/x64/bin:$PATH
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.logging.level=debug"
 
       - name: Upload APK artifact
         if: success()
