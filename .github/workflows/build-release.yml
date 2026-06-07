@@ -101,20 +101,27 @@ jobs:
           EOF
           fi
 
-      - name: Install essential Linux tools (uname, xargs)
+      - name: Install essential Linux tools (bash, uname, xargs)
         run: |
-          echo "Installing uname and xargs..."
-          sudo apt-get update -y && sudo apt-get install -y coreutils findutils
+          echo "Installing bash, uname, and xargs..."
+          sudo apt-get update -y && sudo apt-get install -y bash coreutils findutils
+          which bash && bash --version
           which uname && uname -a
           which xargs && xargs --version
 
       - name: Build Android APK (FINAL attempt)
         run: |
           cd android
-          echo "Running gradlew with bash (not sh)..."
-          bash ./gradlew assembleRelease -x checkReleaseDuplicateClasses --no-daemon -Dorg.gradle.jvmargs="-Xmx4g" \
-            -Porg.gradle.java.home=$JAVA_HOME \
-            -Dorg.gradle.logging.level=debug
+          echo "Running gradlew with sh (fallback to bash if available)..."
+          if command -v bash >/dev/null 2>&1; then
+            bash ./gradlew assembleRelease -x checkReleaseDuplicateClasses --no-daemon -Dorg.gradle.jvmargs="-Xmx4g" \
+              -Porg.gradle.java.home=$JAVA_HOME \
+              -Dorg.gradle.logging.level=debug
+          else
+            sh ./gradlew assembleRelease -x checkReleaseDuplicateClasses --no-daemon -Dorg.gradle.jvmargs="-Xmx4g" \
+              -Porg.gradle.java.home=$JAVA_HOME \
+              -Dorg.gradle.logging.level=debug
+          fi
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           CI: "false"
