@@ -7,29 +7,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-desktop:
-    name: Build Desktop (Windows)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      
-      - name: Install dependencies
-        run: npm install
-      
-      - name: Build desktop app
-        run: npm run dist
-      
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Argus-Setup-Windows
-          path: release/Argus*.exe
-
   build-android:
     name: Build Android (APK)
     runs-on: ubuntu-latest
@@ -50,6 +27,15 @@ jobs:
       - name: Install dependencies
         run: npm install
       
+      - name: Patch react-native-voice
+        run: |
+          # Fix jcenter() and compileSdk errors in react-native-voice
+          VOICE_BUILD_GRADLE="node_modules/@react-native-voice/voice/android/build.gradle"
+          if [ -f "$VOICE_BUILD_GRADLE" ]; then
+            sed -i 's/jcenter()/mavenCentral()/g' "$VOICE_BUILD_GRADLE"
+            sed -i '/android {/a \    compileSdk 34\n    defaultConfig {\n        minSdk 24\n        targetSdk 34\n    }' "$VOICE_BUILD_GRADLE"
+          fi
+      
       - name: Make gradlew executable
         run: chmod +x android/gradlew
       
@@ -66,15 +52,10 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: [build-desktop, build-android]
+    needs: [build-android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: Argus-Setup-Windows
-      
       - name: Download Android artifact
         uses: actions/download-artifact@v4
         with:
@@ -86,9 +67,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            Argus*.exe
-            Argus.apk
+          files: Argus.apk
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
