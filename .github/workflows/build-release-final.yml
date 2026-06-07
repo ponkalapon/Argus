@@ -94,9 +94,19 @@ jobs:
           CI: "false"
           NODE_PATH: ${{ github.workspace }}/node_modules
 
-      - name: Upload APK artifact
+      - name: Upload APK artifact (NO ls dependency)
         if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Argus-Android-FINAL
-          path: android/app/build/outputs/apk/release/app-release.apk
+        run: |
+          echo "APK should be at: android/app/build/outputs/apk/release/app-release.apk"
+          if [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
+            echo "APK found! Uploading..."
+            curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Content-Type: application/zip" \
+              --data-binary "@android/app/build/outputs/apk/release/app-release.apk" \
+              "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ github.run_id }}/assets?name=Argus-Android.apk"
+          else
+            echo "APK not found!"
+            exit 1
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
