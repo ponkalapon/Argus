@@ -24,8 +24,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
       
-      - name: Install dependencies
-        run: npm install
+      - name: Clean Gradle and Node cache
+        run: |
+          cd android
+          ./gradlew clean
+          rm -rf ~/.gradle/caches/
+          npm cache clean --force
+      
+      - name: Install dependencies (with --legacy-peer-deps)
+        run: npm install --legacy-peer-deps
       
       - name: Patch react-native-voice
         run: |
@@ -57,9 +64,10 @@ jobs:
         run: chmod +x android/gradlew
       
       - name: Build Android APK
-        run: cd android && ./gradlew assembleRelease -x checkReleaseDuplicateClasses
+        run: cd android && ./gradlew assembleRelease -x checkReleaseDuplicateClasses --stacktrace --info
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          CI: "false"  # Отключает CI-режим для более подробных логов
       
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
