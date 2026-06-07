@@ -1,0 +1,23 @@
+name: Build and Release - DEBUG
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        run: |
+          git clone ${{ github.server_url }}/${{ github.repository }}.git .
+          git checkout ${{ github.sha }}
+
+      - name: Build APK (DEBUG MODE)
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --stacktrace --info
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
