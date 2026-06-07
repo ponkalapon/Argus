@@ -31,8 +31,16 @@ jobs:
           rm -rf ~/.gradle/caches/
           npm cache clean --force
       
-      - name: Install dependencies (with --legacy-peer-deps)
-        run: npm install --legacy-peer-deps
+      - name: Disable problematic dependencies temporarily
+        run: |
+          # Temporarily remove react-native-voice from dependencies
+          npm uninstall @react-native-voice/voice 2>/dev/null || true
+          
+          # Or comment it out in package.json if uninstall fails
+          sed -i 's/"@react-native-voice\/voice"/#"@react-native-voice\/voice"/g' package.json
+          
+          # Reinstall after modification
+          npm install --legacy-peer-deps --no-save
       
       - name: Patch react-native-voice
         run: |
