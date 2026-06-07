@@ -34,14 +34,16 @@ jobs:
           which node
           which npm
 
-      - name: Install npm dependencies FIRST
+      - name: Install npm dependencies (including missing worklets)
         run: |
           echo "Installing npm dependencies..."
           npm install --legacy-peer-deps
-          echo "Verifying react-native installation..."
-          npm list react-native 2>/dev/null | head -20 || echo "react-native not found in direct deps"
-          echo "Checking if node_modules/@react-native exists..."
-          ls -la node_modules/@react-native 2>/dev/null | head -5 || echo "node_modules/@react-native not found"
+          echo "Installing react-native-worklets (required by react-native-reanimated)..."
+          npm install react-native-worklets --legacy-peer-deps --no-save
+          echo "Verifying react-native-worklets installation..."
+          npm list react-native-worklets 2>/dev/null | head -5 || echo "react-native-worklets not found in tree"
+          echo "Checking node_modules/react-native-worklets..."
+          ls -la node_modules/react-native-worklets 2>/dev/null | head -5 || echo "node_modules/react-native-worklets not found"
 
       - name: Clean Gradle cache (NOT node_modules)
         run: |
