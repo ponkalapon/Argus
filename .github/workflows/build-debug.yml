@@ -10,11 +10,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        run: |
-          git clone ${{ github.server_url }}/${{ github.repository }}.git .
-          git checkout ${{ github.sha }}
+        uses: actions/checkout@v4
 
-      - name: Build APK (DEBUG MODE)
+      - name: Setup Node.js (Required for node_modules)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build APK
         run: |
           cd android
           chmod +x gradlew
