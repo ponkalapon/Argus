@@ -109,19 +109,17 @@ jobs:
           which uname && uname -a
           which xargs && xargs --version
 
-      - name: Build Android APK (FINAL attempt)
+      - name: Build Android APK (DIRECT gradlew execution)
         run: |
           cd android
-          echo "Running gradlew with sh (fallback to bash if available)..."
-          if command -v bash >/dev/null 2>&1; then
-            bash ./gradlew assembleRelease -x checkReleaseDuplicateClasses --no-daemon -Dorg.gradle.jvmargs="-Xmx4g" \
-              -Porg.gradle.java.home=$JAVA_HOME \
-              -Dorg.gradle.logging.level=debug
-          else
-            sh ./gradlew assembleRelease -x checkReleaseDuplicateClasses --no-daemon -Dorg.gradle.jvmargs="-Xmx4g" \
-              -Porg.gradle.java.home=$JAVA_HOME \
-              -Dorg.gradle.logging.level=debug
-          fi
+          echo "Checking gradlew permissions and existence..."
+          ls -la gradlew
+          chmod +x gradlew
+          
+          echo "Running gradlew DIRECTLY (no bash/sh wrapper)..."
+          ./gradlew assembleRelease -x checkReleaseDuplicateClasses --no-daemon -Dorg.gradle.jvmargs="-Xmx4g" \
+            -Porg.gradle.java.home=$JAVA_HOME \
+            -Dorg.gradle.logging.level=debug
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           CI: "false"
