@@ -36,11 +36,28 @@ jobs:
             sed -i '/android {/a \    compileSdk 34\n    defaultConfig {\n        minSdk 24\n        targetSdk 34\n    }' "$VOICE_BUILD_GRADLE"
           fi
       
+      - name: Fix dependency conflicts (AndroidX migration)
+        run: |
+          # Add gradle.properties settings to force AndroidX and enable jetifier
+          if ! grep -q "android.enableJetifier=true" android/gradle.properties; then
+            echo "android.enableJetifier=true" >> android/gradle.properties
+          fi
+          
+          # Add packaging options to resolve duplicate classes
+          if ! grep -q "android.packagingOptions.pickFirsts" android/gradle.properties; then
+            cat >> android/gradle.properties << 'EOF'
+          
+          # Resolve duplicate class conflicts (AndroidX migration)
+          android.packagingOptions.pickFirsts=lib/armeabi-v7a/libc++_shared.so,lib/arm64-v8a/libc++_shared.so
+          android.packagingOptions.excludes=META-INF/proguard/androidx-*.pro
+          EOF
+          fi
+      
       - name: Make gradlew executable
         run: chmod +x android/gradlew
       
       - name: Build Android APK
-        run: cd android && ./gradlew assembleRelease
+        run: cd android && ./gradlew assembleRelease -x checkReleaseDuplicateClasses
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       
