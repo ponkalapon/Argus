@@ -15,14 +15,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Полная очистка окружения (резервный вариант)
-      - name: Full environment reset
-        run: |
-          echo "Resetting environment..."
-          sudo rm -rf /usr/local/bin/bash /usr/bin/bash /bin/bash || true
-          sudo apt-get update -y && sudo apt-get install -y --reinstall bash coreutils findutils
-          which bash && bash --version
-          which ls && ls --version
+
 
       - name: Set up Node.js 24 (LTS)
         uses: actions/setup-node@v4
@@ -94,19 +87,9 @@ jobs:
           CI: "false"
           NODE_PATH: ${{ github.workspace }}/node_modules
 
-      - name: Upload APK artifact (NO ls dependency)
+      - name: Upload APK artifact
         if: success()
-        run: |
-          echo "APK should be at: android/app/build/outputs/apk/release/app-release.apk"
-          if [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
-            echo "APK found! Uploading..."
-            curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Content-Type: application/zip" \
-              --data-binary "@android/app/build/outputs/apk/release/app-release.apk" \
-              "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ github.run_id }}/assets?name=Argus-Android.apk"
-          else
-            echo "APK not found!"
-            exit 1
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Argus-Android-FINAL
+          path: android/app/build/outputs/apk/release/app-release.apk
