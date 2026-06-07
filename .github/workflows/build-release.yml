@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Полный клон репозитория
+          fetch-depth: 0
 
       - name: Set up Node.js 24 (LTS)
         uses: actions/setup-node@v4
@@ -34,23 +34,31 @@ jobs:
           which node
           which npm
 
-      - name: Clean Gradle and Node cache
+      - name: Install npm dependencies FIRST
+        run: |
+          echo "Installing npm dependencies..."
+          npm install --legacy-peer-deps
+          echo "Verifying react-native installation..."
+          npm list react-native 2>/dev/null | head -20 || echo "react-native not found in direct deps"
+          echo "Checking if node_modules/@react-native exists..."
+          ls -la node_modules/@react-native 2>/dev/null | head -5 || echo "node_modules/@react-native not found"
+
+      - name: Clean Gradle cache (NOT node_modules)
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew clean
+          ./gradlew clean --no-daemon
           rm -rf ~/.gradle/caches/
-          npm cache clean --force
 
-      - name: Install dependencies (with --legacy-peer-deps)
-        run: npm install --legacy-peer-deps
-
-      - name: Debug - List node_modules
-        run: ls -la node_modules/ || true
-
-      - name: Patch react-native-voice
+      - name: Verify Gradle can find Node.js and dependencies
         run: |
-          # Fix jcenter() and compileSdk errors in react-native-voice
+          echo "Testing Node.js from Android directory..."
+          cd android
+          node --version
+          npm list react-native --depth=0 2>/dev/null || echo "react-native check from android/ - not critical"
+
+      - name: Patch react-native-voice (if exists)
+        run: |
           VOICE_BUILD_GRADLE="node_modules/@react-native-voice/voice/android/build.gradle"
           if [ -f "$VOICE_BUILD_GRADLE" ]; then
             sed -i 's/jcenter()/mavenCentral()/g' "$VOICE_BUILD_GRADLE"
@@ -59,12 +67,10 @@ jobs:
 
       - name: Fix dependency conflicts (AndroidX migration)
         run: |
-          # Add gradle.properties settings to force AndroidX and enable jetifier
           if ! grep -q "android.enableJetifier=true" android/gradle.properties; then
             echo "android.enableJetifier=true" >> android/gradle.properties
           fi
           
-          # Add packaging options to resolve duplicate classes
           if ! grep -q "android.packagingOptions.pickFirsts" android/gradle.properties; then
             cat >> android/gradle.properties << 'EOF'
 
@@ -77,15 +83,13 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Debug - Check gradlew permissions
-        run: ls -la android/gradlew
-
       - name: Build Android APK
-        run: cd android && ./gradlew assembleRelease -x checkReleaseDuplicateClasses --stacktrace --info
+        run: cd android && ./gradlew assembleRelease -x checkReleaseDuplicateClasses --no-daemon -Dorg.gradle.jvmargs="-Xmx2g"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           CI: "false"
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"  # Принудительно используем Node.js 24
+          NODE_PATH: /home/runner/work/Argus/Argus/node_modules  # Явно указываем путь к node_modules
+          PATH: /opt/hostedtoolcache/node/24.x.x/x64/bin:$PATH  # Гарантируем Node.js 24 в PATH
 
       - name: Upload APK artifact
         if: success()
