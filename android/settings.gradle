@@ -1,21 +1,11 @@
-pluginManagement {
-  def reactNativeGradlePlugin = new File(
-    providers.exec {
-      workingDir(rootDir)
-      commandLine("node", "--print", "require.resolve('@react-native/gradle-plugin/package.json', { paths: [require.resolve('react-native/package.json')] })")
-    }.standardOutput.asText.get().trim()
-  ).getParentFile().absolutePath
-  includeBuild(reactNativeGradlePlugin)
-  
-  def expoPluginsPath = new File(
-    providers.exec {
-      workingDir(rootDir)
-      commandLine("node", "--print", "require.resolve('expo-modules-autolinking/package.json', { paths: [require.resolve('expo/package.json')] })")
-    }.standardOutput.asText.get().trim(),
-    "../android/expo-gradle-plugin"
-  ).absolutePath
-  includeBuild(expoPluginsPath)
-}
+// android/settings.gradle
+
+rootProject.name = "Argus"
+include ":"
+
+// Статические пути для Gradle-плагинов (замена автолинкингу)
+includeBuild("../node_modules/@react-native/gradle-plugin")
+includeBuild("../node_modules/expo-modules-autolinking/expo-gradle-plugin")
 
 plugins {
   id("com.facebook.react.settings")
@@ -23,17 +13,11 @@ plugins {
 }
 
 extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
-  if (System.getenv('EXPO_USE_COMMUNITY_AUTOLINKING') == '1') {
-    ex.autolinkLibrariesFromCommand()
-  } else {
-    ex.autolinkLibrariesFromCommand(expoAutolinking.rnConfigCommand)
-  }
+  ex.autolinkLibrariesFromCommand()
 }
+
 expoAutolinking.useExpoModules()
 
-rootProject.name = 'AgentAI Phone'
-
-expoAutolinking.useExpoVersionCatalog()
-
-include ':app'
-includeBuild(expoAutolinking.reactNativeGradlePlugin)
+include ":app"
+include ":expo"
+project(":expo").projectDir = new File(rootProject.projectDir, "../node_modules/expo/android")
