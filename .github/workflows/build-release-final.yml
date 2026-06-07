@@ -6,30 +6,31 @@ on:
     tags: [ 'v*' ]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # Принудительно используем Node.js 24
+
 jobs:
   build-android:
     name: Build Android (APK) - FINAL
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.1.7
         with:
           fetch-depth: 0
 
-
-
       - name: Set up Node.js 24 (LTS)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Set up Node.js 24 (LTS) with explicit PATH
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v4.0.3
         with:
           node-version: '24'
           cache: 'npm'
         env:
           PATH: /opt/hostedtoolcache/node/24.x.x/x64/bin:$PATH
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4.3.0
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
       - name: Verify Node.js installation
         run: |
@@ -101,7 +102,7 @@ jobs:
 
       - name: Upload APK artifact
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.3.4
         with:
           name: Argus-Android-FINAL
           path: android/app/build/outputs/apk/release/app-release.apk
