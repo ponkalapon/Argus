@@ -39,45 +39,24 @@ jobs:
           echo "Installing npm dependencies..."
           npm install --legacy-peer-deps
           
-          echo "Installing react-native-worklets (required by react-native-reanimated)..."
-          npm install react-native-worklets --legacy-peer-deps --no-save
+          echo "Ensuring expo-modules-autolinking is installed..."
+          npm install expo-modules-autolinking --legacy-peer-deps --save-dev
+          
+          echo "Installing react-native-worklets@0.8.0 (compatible with reanimated@4.3.1)..."
+          npm install react-native-worklets@0.8.0 --legacy-peer-deps --no-save
           
           echo "Verifying critical dependencies..."
-          npm list react-native react-native-worklets @react-native-voice/voice 2>/dev/null | head -10
+          npm list react-native react-native-worklets expo-modules-autolinking 2>/dev/null | head -10
 
-      - name: Fix react-native-voice (jcenter + compileSdk)
+      - name: Create required widget directory structure
         run: |
-          VOICE_BUILD_GRADLE="node_modules/@react-native-voice/voice/android/build.gradle"
-          if [ -f "$VOICE_BUILD_GRADLE" ]; then
-            echo "Patching react-native-voice..."
-            # Replace jcenter() with mavenCentral()
-            sed -i 's/jcenter()/mavenCentral()/g' "$VOICE_BUILD_GRADLE"
-            
-            # Add compileSdk and defaultConfig if missing
-            if ! grep -q "compileSdk" "$VOICE_BUILD_GRADLE"; then
-              sed -i '/android {/a \    compileSdk 34\n    defaultConfig {\n        minSdk 24\n        targetSdk 34\n    }' "$VOICE_BUILD_GRADLE"
-            fi
-            
-            echo "Patched react-native-voice:"
-            grep -A 5 "android {" "$VOICE_BUILD_GRADLE"
-          else
-            echo "react-native-voice not found - skipping patch"
-          fi
+          mkdir -p widgets/android/src/main/java/package_name
+          echo "Widget directory structure created"
 
-      - name: Temporarily disable problematic libraries (if needed)
+      - name: Run expo prebuild to generate correct Android structure
         run: |
-          # Option 1: Remove react-native-voice if it causes issues
-          if [ -d "node_modules/@react-native-voice" ]; then
-            echo "Temporarily removing react-native-voice to avoid build errors..."
-            rm -rf node_modules/@react-native-voice
-            
-            # Remove from package.json to prevent reinstall
-            sed -i 's/"@react-native-voice\/voice":.*//g' package.json
-            sed -i '/^$/d' package.json  # Remove empty lines
-          fi
-          
-          # Option 2: Remove react-native-reanimated if still failing
-          # rm -rf node_modules/react-native-reanimated
+          echo "Running expo prebuild..."
+          npx expo prebuild --clean --platform android --no-install
 
       - name: Clean Gradle cache
         run: |
@@ -109,23 +88,21 @@ jobs:
           which uname && uname -a
           which xargs && xargs --version
 
-      - name: Build Android APK (DIRECT gradlew execution)
+      - name: Build Android APK (Release)
         run: |
           cd android
           echo "Checking gradlew permissions and existence..."
           ls -la gradlew
           chmod +x gradlew
           
-          echo "Running gradlew DIRECTLY (no bash/sh wrapper)..."
-          ./gradlew assembleRelease -x checkReleaseDuplicateClasses --no-daemon -Dorg.gradle.jvmargs="-Xmx4g" \
-            -Porg.gradle.java.home=$JAVA_HOME \
-            -Dorg.gradle.logging.level=debug
+          echo "Running Gradle build..."
+          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4g"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           CI: "false"
           NODE_PATH: ${{ github.workspace }}/node_modules
           PATH: /opt/hostedtoolcache/node/24.x.x/x64/bin:$PATH
-          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.logging.level=debug"
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
 
       - name: Upload APK artifact
         if: success()

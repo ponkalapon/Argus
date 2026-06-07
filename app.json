@@ -51,8 +51,7 @@
         }
       ],
       "expo-sharing",
-      "expo-splash-screen",
-      "@react-native-voice/voice"
+      "expo-splash-screen"
     ]
   }
 }
