@@ -10,7 +10,7 @@ import { SandboxScreen } from './src/components/SandboxScreen';
 import { WorkspaceScreen } from './src/components/WorkspaceScreen';
 import { FileManagerScreen } from './src/components/FileManagerScreen';
 
-import { loadApiKey, loadSettings, saveSettings } from './src/services/storage';
+import { loadApiKey, loadSettings, saveSettings } from './src/api';
 import { AgentSettings } from './src/types';
 import { colors, spacing, typography } from './src/styles/theme';
 

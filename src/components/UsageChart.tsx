@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Dimensions, Text, View } from 'react-native';
 import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
-import type { DailyRecord } from '../services/tokenStats';
+import type { DailyRecord } from '../api';
 import { colors, spacing, typography } from '../styles/theme';
 
 type Props = {

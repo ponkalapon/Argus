@@ -13,32 +13,22 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { MessageBubble } from './MessageBubble';
-import { requestChatCompletion } from '../services/openaiClient';
-import { TOOL_DEFINITIONS } from '../services/tools';
-import { AgentSettings, AgentStatus, ChatCompletionMessage, ChatMessage, StoredChat } from '../types';
+import { requestChatCompletion, loadChats } from '../api';
+import { AgentSettings, AgentStatus, ChatMessage, StoredChat, ChatCompletionMessage } from '../types';
 import { colors, motion, radius, spacing, typography } from '../styles/theme';
 import { DocumentContext, PDF_UNSUPPORTED_MESSAGE, pickAndParseDocument, searchContext } from '../services/rag';
 import * as VoiceService from '../services/voice';
 import { ContactSafePreview, normalizePhone, searchContacts, toSafeContactPreview } from '../services/contacts';
-import { loadChats, saveChats } from '../services/storage';
 import { setWidgetData } from '@bittingz/expo-widgets';
 
-import {
-  listWorkspaceFiles,
-  readWorkspaceFile,
-  exportWorkspaceFile,
-  exportWorkspaceArchive,
-} from '../services/workspace';
-import type { WorkspaceFile } from '../services/workspace';
-import * as ImagePicker from 'expo-image-picker';
 import { estimateTokens, estimateMessagesTokens } from '../services/context';
-import { searchSessions } from '../services/sessionSearch';
+import * as ImagePicker from 'expo-image-picker';
+import { ArrowLeft, ArrowUp, Bot, Camera, Check, ChevronDown, Download, Folder, Globe, Image, Layers, Menu, Mic, Paperclip, Plus, Search, Settings, Trash2, Users, X } from 'lucide-react-native';
 import { WebView } from 'react-native-webview';
 import { SvgXml } from 'react-native-svg';
 import { GestureBottomSheet, BOTTOM_SHEET_HEIGHT } from './GestureBottomSheet';
-import { ArrowLeft, ArrowUp, Bot, Camera, Check, ChevronDown, Download, Folder, Globe, Image, Layers, Menu, Mic, Paperclip, Plus, Search, Settings, Trash2, Users, X } from 'lucide-react-native';
 
 const useAnimatedValue = (target: number): number => {
   const [current, setCurrent] = useState(target);
@@ -374,7 +364,7 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     chatsRef.current = sorted;
     setChats(sorted);
     try {
-      await saveChats(sorted);
+      await AsyncStorage.setItem('@chats', JSON.stringify(sorted));
     } catch {
       // Keep the UI responsive even if local persistence fails.
     }
@@ -640,10 +630,6 @@ ${names}`);
     streamedTextRef.current = '';
 
     try {
-      const activeTools = internetEnabled
-        ? TOOL_DEFINITIONS
-        : TOOL_DEFINITIONS.filter((t) => !['web_search', 'visit_page'].includes(t.function?.name));
-
       const result = await requestChatCompletion({
         settings,
         apiKey,
@@ -654,7 +640,6 @@ ${names}`);
           requestContactDisclosure,
           confirmCommunication,
         },
-        tools: activeTools,
         onToken: (token) => {
           streamQueue.current += token;
           streamedTextRef.current += token;
@@ -677,12 +662,6 @@ ${names}`);
       // Update message list and persistent chat
       setMessages(finalMessages);
       void saveChatSnapshot(chatId, chatTitle, finalMessages);
-
-      // Record token usage for cumulative stats
-      if (result.usage) {
-        const { recordTokenUsage } = await import('../services/tokenStats');
-        void recordTokenUsage(result.usage.input, result.usage.output);
-      }
 
       // Update Android home-screen widget data. Never block chat if widget update fails.
       try {

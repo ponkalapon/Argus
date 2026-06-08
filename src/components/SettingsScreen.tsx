@@ -17,9 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trash2, ChevronDown, ChevronRight, BarChart3, ArrowLeft } from 'lucide-react-native';
 import { AgentSettings } from '../types';
-import { loadApiKey, saveApiKey, sanitizeSettings } from '../services/storage';
-import { getTokenStats, getDailyStats, resetTokenStats, TokenStats, DailyRecord } from '../services/tokenStats';
-import { listSkills, deleteSkill, Skill } from '../services/skills';
+import { loadApiKey, saveApiKey, sanitizeSettings, getTokenStats, getDailyStats, resetTokenStats, listSkills, deleteSkill, type Skill, type TokenStatsType as TokenStats, type DailyRecord } from '../api';
 import { UsageChart } from './UsageChart';
 import { colors, motion, radius, spacing, typography } from '../styles/theme';
 
@@ -147,7 +145,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
         style: 'destructive',
         onPress: async () => {
           await resetTokenStats();
-          setTokenStats({ totalInput: 0, totalOutput: 0, totalRequests: 0 });
+          setTokenStats({ input: 0, output: 0, total: 0 });
           setDailyStats([]);
         },
       },
@@ -337,21 +335,21 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                 <View style={styles.card}>
                   <View style={styles.statsGrid}>
                     <View style={styles.statItem}>
-                      <Text style={styles.statValue}>{formatLargeNumber(tokenStats.totalInput)}</Text>
+                      <Text style={styles.statValue}>{formatLargeNumber(tokenStats.input)}</Text>
                       <Text style={styles.statLabel}>входных</Text>
                     </View>
                     <View style={styles.statItem}>
-                      <Text style={styles.statValue}>{formatLargeNumber(tokenStats.totalOutput)}</Text>
+                      <Text style={styles.statValue}>{formatLargeNumber(tokenStats.output)}</Text>
                       <Text style={styles.statLabel}>выходных</Text>
                     </View>
                     <View style={styles.statDivider} />
                     <View style={styles.statItem}>
-                      <Text style={styles.statValue}>{formatLargeNumber(tokenStats.totalInput + tokenStats.totalOutput)}</Text>
+                      <Text style={styles.statValue}>{formatLargeNumber(tokenStats.total)}</Text>
                       <Text style={styles.statLabel}>всего</Text>
                     </View>
                     <View style={styles.statItem}>
-                      <Text style={styles.statValue}>{tokenStats.totalRequests}</Text>
-                      <Text style={styles.statLabel}>запросов</Text>
+                      <Text style={styles.statValue}>{tokenStats.total}</Text>
+                      <Text style={styles.statLabel}>токенов</Text>
                     </View>
                   </View>
                   <View style={styles.divider} />

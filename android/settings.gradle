@@ -3,9 +3,9 @@
 rootProject.name = "Argus"
 include ":app"
 
-// Статические пути к плагинам (без Node.js)
-includeBuild("node_modules/@react-native/gradle-plugin")
-includeBuild("node_modules/expo-modules-autolinking/expo-gradle-plugin")
+// Указываем путь к корню проекта (..), чтобы найти node_modules
+includeBuild("../node_modules/@react-native/gradle-plugin")
+includeBuild("../node_modules/expo-modules-autolinking/expo-gradle-plugin")
 
 // Подключение Expo модуля
 include ":expo"
