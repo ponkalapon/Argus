@@ -6,3 +6,5 @@ data/
 .expo/
 *.tsbuildinfo
 .DS_Store
+argus_desktop_backup/
+dist-android/
