@@ -1,0 +1,48 @@
+{
+  "name": "argus",
+  "version": "1.0.0",
+  "private": true,
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "start:clear": "expo start --clear",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "test:stream": "rm -rf .tmp-test && tsc --ignoreConfig --target ES2022 --module Node16 --moduleResolution node16 --esModuleInterop --skipLibCheck --outDir .tmp-test src/services/openaiStream.ts && node --test tests/openaiStream.test.js"
+  },
+  "dependencies": {
+    "@bittingz/expo-widgets": "^3.0.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-voice/voice": "^3.2.4",
+    "expo": "56.0.8",
+    "expo-calendar": "~56.0.8",
+    "expo-clipboard": "~56.0.3",
+    "expo-contacts": "~56.0.7",
+    "expo-document-picker": "~56.0.4",
+    "expo-file-system": "~56.0.7",
+    "expo-image-picker": "~56.0.15",
+    "expo-linear-gradient": "~56.0.4",
+    "expo-secure-store": "56.0.4",
+    "expo-sharing": "~56.0.15",
+    "expo-splash-screen": "~56.0.10",
+    "expo-status-bar": "56.0.4",
+    "jszip": "^3.10.1",
+    "lucide-react-native": "^1.17.0",
+    "punycode": "^2.3.1",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-gesture-handler": "~2.31.1",
+    "react-native-markdown-display": "^7.0.2",
+    "react-native-reanimated": "4.3.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-webview": "13.16.1"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/react": "19.2.15",
+    "fs-extra": "^11.3.5",
+    "typescript": "6.0.3"
+  }
+}
