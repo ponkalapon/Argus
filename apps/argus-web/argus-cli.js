@@ -43,9 +43,15 @@ function start() {
         console.error("[Error] 'start' command is only available for desktop.");
         process.exit(1);
     }
-    
-    console.log("[Start] Launching Argus Desktop...");
-    execSync('npm start', { stdio: 'inherit' });
+
+    const coreDir = path.join(__dirname, '..', '..', 'packages', 'argus-core');
+    if (!fs.existsSync(path.join(coreDir, 'dist', 'index.js'))) {
+        console.log("[Start] Building core first...");
+        execSync('npm run build', { cwd: coreDir, stdio: 'inherit' });
+    }
+
+    console.log("[Start] Launching Argus CLI...");
+    execSync('node dist/index.js cli', { cwd: coreDir, stdio: 'inherit' });
 }
 
 // --- Bootstrap Helpers ---

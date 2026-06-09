@@ -37,7 +37,7 @@ cd Argus
 echo "[4/4] Installing dependencies and building..."
 
 # Run the CLI update command
-node argus-cli.js update
+node apps/argus-web/argus-cli.js update
 if [ $? -ne 0 ]; then
     echo "[ERROR] Update failed."
     exit 1
@@ -54,5 +54,5 @@ echo "  2. Run: npm start"
 echo "  3. Scan QR code with your device"
 echo ""
 echo "To update in the future, run:"
-echo "  node argus-cli.js update"
+echo "  node apps/argus-web/argus-cli.js update"
 echo ""

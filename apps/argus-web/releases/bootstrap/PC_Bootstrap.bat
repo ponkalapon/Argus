@@ -38,7 +38,7 @@ cd Argus
 echo [2/3] Installing dependencies...
 
 REM Run the CLI update command
-node argus-cli.js update
+node apps\argus-web\argus-cli.js update
 if %errorlevel% neq 0 (
     echo [ERROR] Update failed.
     pause
@@ -52,6 +52,6 @@ echo ===============================================
 echo.
 echo To start Argus, run:
 echo   cd Argus
-echo   node argus-cli.js start
+echo   node apps\argus-web\argus-cli.js start
 echo.
 pause

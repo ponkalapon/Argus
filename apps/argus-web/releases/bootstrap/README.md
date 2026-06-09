@@ -16,7 +16,7 @@
 5. После этого запускайте приложение командой:
    ```
    cd Argus
-   node argus-cli.js start
+   node apps\argus-web\argus-cli.js start
    ```
 
 ## 🐧 Linux / macOS
@@ -36,7 +36,7 @@
 5. После этого запускайте приложение командой:
    ```bash
    cd Argus
-   node argus-cli.js start
+   node apps/argus-web/argus-cli.js start
    ```
 
 ## 📱 Android (Termux)
