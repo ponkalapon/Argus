@@ -107,11 +107,24 @@ npx expo start
 ```
 
 ### Мобильное приложение (автономное)
+
+#### Установка из APK (рекомендуется)
+
+Скачайте последнюю версию APK со страницы [Releases](https://github.com/ponkalapon/Argus/releases):
+- Откройте на телефоне скачанный APK
+- Разрешите установку из неизвестных источников
+- При запуске приложение автоматически проверит наличие обновлений на GitHub
+
+#### Сборка из исходников
 ```bash
 cd apps/argus-mobile
 npm install --legacy-peer-deps
-npx expo start
+cd android
+export ANDROID_HOME=/path/to/android/sdk
+./gradlew assembleRelease
 ```
+
+APK будет в `apps/argus-mobile/android/app/build/outputs/apk/release/app-release.apk`
 
 ## API Endpoints (@argus/core, порт 3456)
 

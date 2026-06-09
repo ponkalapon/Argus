@@ -11,6 +11,7 @@ import { WorkspaceScreen } from './src/components/WorkspaceScreen';
 import { FileManagerScreen } from './src/components/FileManagerScreen';
 
 import { loadApiKey, loadSettings, saveSettings } from './src/services/storage';
+import { checkAndPromptUpdate } from './src/services/autoUpdate';
 import { AgentSettings } from './src/types';
 import { colors, spacing, typography } from './src/styles/theme';
 
@@ -38,6 +39,8 @@ export default function App() {
         if (mounted) {
           setSettings(storedSettings);
           setApiKey(storedApiKey);
+          // Check for app updates on startup
+          checkAndPromptUpdate().catch(() => {});
         }
       })
       .catch((error) => {
