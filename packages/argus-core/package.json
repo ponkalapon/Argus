@@ -1,0 +1,48 @@
+{
+  "name": "@argus/core",
+  "version": "1.0.0",
+  "description": "Argus AI Agent Core Engine",
+  "type": "module",
+  "main": "./dist/core/index.js",
+  "types": "./dist/core/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/core/index.js",
+      "types": "./dist/core/index.d.ts"
+    },
+    "./cli": {
+      "import": "./dist/cli/index.js"
+    },
+    "./api": {
+      "import": "./dist/api/server.js"
+    }
+  },
+  "bin": {
+    "argus": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "cli": "node dist/index.js cli",
+    "api": "node dist/index.js api",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "memory",
+    "rag",
+    "tools",
+    "llm"
+  ],
+  "dependencies": {
+    "sql.js": "^1.11.0",
+    "whatwg-url": "^14.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "typescript": "^5.8.0"
+  }
+}
