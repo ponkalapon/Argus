@@ -1,7 +1,7 @@
 {
   "tag_name": "v1.0.0-build1",
   "name": "v1.0.0-build1",
-  "body": "## Argus Mobile v1.0.0 - Первый релиз\n\n**Установка:** скачайте APK и откройте на телефоне. Разрешите установку из неизвестных источников.\n\n**Возможности:**\n- Чат с AI-агентом (OpenAI / OpenRouter)\n- Работа с файлами\n- Сохранение истории сессий\n- Sandbox для выполнения кода\n- Поиск в интернете\n- Автообновление через GitHub Releases\n\n**Сборка:** build1 (Android SDK 36, Hermes, New Architecture)",
+  "body": "## Argus Mobile v1.0.0 — Первый релиз\n\n**Установка:** скачайте APK и откройте на телефоне. Разрешите установку из неизвестных источников.\n\n**Возможности:**\n- Чат с AI-агентом (OpenAI / OpenRouter)\n- Работа с файлами\n- Сохранение истории сессий\n- Sandbox для выполнения кода\n- Поиск в интернете\n- Автообновление через GitHub Releases\n\n**Сборка:** build1 (Android SDK 36, Hermes, Legacy Architecture)\n\n**Известные проблемы:**\n- New Architecture (Fabric) отключена из-за несовместимости @react-native-voice/voice\n- Для последующих сборок: обновить CURRENT_BUILD в autoUpdate.ts и app.json",
   "draft": false,
   "prerelease": false
 }
