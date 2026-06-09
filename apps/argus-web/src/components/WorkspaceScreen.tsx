@@ -15,20 +15,19 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { requestChatCompletion, loadChats, WorkspaceFile, searchSessions, listWorkspaceFiles } from '../api';
+import { requestChatCompletion, loadChats, WorkspaceFile, searchSessions, listWorkspaceFiles, exportWorkspaceArchive, exportWorkspaceFile } from '../api';
 import { AgentSettings, AgentStatus, ChatMessage, StoredChat, ChatCompletionMessage } from '../types';
 import { colors, motion, radius, spacing, typography } from '../styles/theme';
 import { DocumentContext, PDF_UNSUPPORTED_MESSAGE, pickAndParseDocument, searchContext } from '../services/rag';
 import * as VoiceService from '../services/voice';
 import { ContactSafePreview, normalizePhone, searchContacts, toSafeContactPreview } from '../services/contacts';
 import { setWidgetData } from '@bittingz/expo-widgets';
-
+import { MessageBubble } from './MessageBubble';
 import { estimateTokens, estimateMessagesTokens } from '../services/context';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft, ArrowUp, Bot, Camera, Check, ChevronDown, Download, Folder, Globe, Image, Layers, Menu, Mic, Paperclip, Plus, Search, Settings, Trash2, Users, X } from 'lucide-react-native';
 import { WebView } from 'react-native-webview';
 import { SvgXml } from 'react-native-svg';
-import { GestureBottomSheet, BOTTOM_SHEET_HEIGHT } from './GestureBottomSheet';
 
 const useAnimatedValue = (target: number): number => {
   const [current, setCurrent] = useState(target);

@@ -400,8 +400,8 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                         <Text style={styles.skillDesc}>{skill.description}</Text>
                         <View style={styles.skillMeta}>
                           <Text style={styles.skillMetaText}>использован {skill.usageCount} раз</Text>
-                          {skill.triggerKeywords.length > 0 && (
-                            <Text style={styles.skillMetaText}> · {skill.triggerKeywords.slice(0, 3).join(', ')}</Text>
+                          {skill.triggerKeywords?.length > 0 && (
+                                    <Text style={styles.skillMetaText}> · {skill.triggerKeywords?.slice(0, 3).join(', ')}</Text>
                           )}
                         </View>
                       </View>

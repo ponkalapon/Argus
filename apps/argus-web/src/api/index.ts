@@ -203,7 +203,7 @@ export type { ChatCompletionResult, ChatCompletionMessage, TokenUsage } from '..
 
 // ─── Skills compatibility ───
 
-export interface Skill { name: string; description: string; content: string; category: string; id?: string; usageCount?: number; triggerKeywords?: string[] }
+export interface Skill { name: string; description: string; content: string; category: string; id: string; usageCount: number; triggerKeywords: string[] }
 
 export const listSkills = async (): Promise<Skill[]> => {
   // Skills live on server; for now return empty
@@ -219,6 +219,8 @@ export const deleteSkill = async (_name: string): Promise<void> => {
 
 export interface WorkspaceFile {
   path: string;
+  size: number;
+  content: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -259,7 +261,7 @@ export const workspaceSummary = async (_workspaceId: string): Promise<string> =>
 
 // ─── Session search compatibility ───
 
-export const searchSessions = async (_query: string): Promise<{ sessionId: string; title: string; content: string }[]> => {
+export const searchSessions = async (query: string, limit?: number): Promise<{ chatId: string; title: string; excerpt: string; score: number; updatedAt: number }[]> => {
   // Server-side search
   return [];
 };
