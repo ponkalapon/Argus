@@ -9,8 +9,7 @@
   ],
   "scripts": {
     "build": "npm --workspaces run build",
-    "dev": "npm --workspaces run dev",
-    "install": "npm install --workspaces"
+    "dev": "npm --workspaces run dev"
   },
   "devDependencies": {
     "typescript": "^5.8.0"
