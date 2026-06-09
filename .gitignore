@@ -13,3 +13,4 @@ argus_cli/
 argus_desktop_backup/
 android/
 apps/*-old/
+.apk
