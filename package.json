@@ -8,8 +8,8 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm --workspaces run build",
-    "dev": "npm --workspaces run dev"
+    "build": "npm -w @argus/core run build",
+    "dev": "npm -w @argus/core run dev"
   },
   "devDependencies": {
     "typescript": "^5.8.0"
