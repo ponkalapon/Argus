@@ -7,18 +7,45 @@
 ```
 argus/
 ├── packages/
-│   └── argus-core/          ← Ядро (Core Engine)
+│   └── argus-core/              ← Ядро (AI, память, API)
 │       ├── src/
-│       │   ├── core/        ← Основные модули (DB, LLM, Memory, RAG, Session)
-│       │   ├── api/         ← HTTP API сервер
-│       │   ├── cli/         ← CLI REPL
-│       │   └── types.ts     ← Типы
-│       ├── dist/            ← Скомпилированный JS
+│       │   ├── core/            ← 14 модулей
+│       │   │   ├── db.ts        — SQLite через sql.js
+│       │   │   ├── llm.ts       — OpenAI API (streaming)
+│       │   │   ├── memory.ts    — Key-value хранилище
+│       │   │   ├── session.ts   — Сессии чатов
+│       │   │   ├── rag.ts       — Поиск по ключевым словам
+│       │   │   ├── skills.ts    — CRUD навыков
+│       │   │   ├── soul.ts      — Сборка system prompt
+│       │   │   ├── tools.ts     — Инструменты (read, write, web, memory)
+│       │   │   ├── workspace.ts — Работа с файлами
+│       │   │   ├── trajectory.ts— Логирование действий
+│       │   │   ├── tokenStats.ts— Учёт токенов
+│       │   │   ├── webSearch.ts — DuckDuckGo + Google fallback
+│       │   │   ├── index.ts     — ArgusCore (оркестратор)
+│       │   │   └── context.ts   — Контекст сессии
+│       │   ├── api/server.ts    — REST + SSE на порту 3456
+│       │   ├── cli/index.ts     — REPL с /командами
+│       │   ├── index.ts         — Точка входа: `argus [cli|api]`
+│       │   └── types.ts         — Все типы
+│       ├── dist/                — Скомпилированный JS
 │       └── package.json
 ├── apps/
-│   ├── argus-web/           ← Веб-интерфейс (React/Next.js) — в разработке
-│   └── argus-mobile/        ← Мобильное приложение (React Native)
-├── package.json             ← Root monorepo
+│   ├── argus-mobile/            ← React Native (автономный)
+│   │   └── src/
+│   │       ├── components/      — 10 экранов (Workspace, Settings, Chat…)
+│   │       ├── services/        — 19 сервисов (OpenAI, RAG, память, файлы…)
+│   │       ├── styles/theme.ts  — Тёмная тема
+│   │       └── types.ts
+│   │
+│   └── argus-web/               ← React Native (тонкий клиент)
+│       └── src/
+│           ├── api/             — HTTP-клиент к argus-core (:3456)
+│           ├── components/      — Те же 10 экранов
+│           ├── services/        — 19 сервисов (stub/совместимый слой)
+│           ├── styles/theme.ts
+│           └── types.ts
+├── package.json                 — npm workspaces (root monorepo)
 └── README.md
 ```
 
@@ -26,9 +53,33 @@ argus/
 
 | Компонент | Технология | Роль |
 |-----------|-----------|------|
-| **@argus/core** | TypeScript, Node.js, SQLite | Ядро: AI-логика, память, RAG, сессии, инструменты, API |
-| **argus-web** | React, Next.js | Веб-интерфейс (десктоп) — тонкий клиент к core API |
-| **argus-mobile** | React Native | Мобильное приложение (телефон) — автономное, AI напрямую |
+| **@argus/core** | TypeScript, Node.js, SQLite | Ядро: AI-логика, память, RAG, сессии, инструменты, HTTP API |
+| **argus-mobile** | React Native (Expo) | Мобильное приложение — **автономное**, AI напрямую через OpenAI API |
+| **argus-web** | React Native (Expo) | Десктоп/веб — **тонкий клиент** к argus-core через REST API на порту 3456 |
+
+## Архитектура
+
+```
+┌─────────────────────────────────────────────────────┐
+│  apps/argus-mobile        apps/argus-web            │
+│  (React Native)           (React Native)            │
+│  ┌──────────────────┐    ┌───────────────────┐      │
+│  │ services/*       │    │ api/client.ts ──────┐   │
+│  │ (OpenAI прямой)  │    │ services/* (stub)   │   │
+│  └──────┬───────────┘    └──────────┬──────────┘   │
+│         │ AI напрямую               │ HTTP :3456    │
+└─────────┼───────────────────────────┼───────────────┘
+          │                           │
+          │              ┌───────────────────────────┐
+          │              │  packages/argus-core       │
+          │              │  (CLI + API сервер)        │
+          │              │  ┌─────────────────────┐   │
+          └──────────────│  │ LLM → Memory → RAG  │   │
+                         │  │ Session → Tools     │   │
+                         │  │ SQLite (sql.js)     │   │
+                         │  └─────────────────────┘   │
+                         └───────────────────────────┘
+```
 
 ## Быстрый старт
 
@@ -41,20 +92,21 @@ npm install
 ```bash
 cd packages/argus-core
 
-# CLI режим
+# CLI режим (REPL)
 npm run cli
 
 # API сервер (порт 3456)
 ARGUS_API_KEY=sk-... npm run api
 ```
 
-### Веб-интерфейс (в разработке)
+### Десктоп/веб (тонкий клиент)
 ```bash
 cd apps/argus-web
-npm run dev
+npm install --legacy-peer-deps
+npx expo start
 ```
 
-### Мобильное приложение
+### Мобильное приложение (автономное)
 ```bash
 cd apps/argus-mobile
 npm install --legacy-peer-deps
@@ -66,7 +118,7 @@ npx expo start
 | Метод | Путь | Описание |
 |-------|------|---------|
 | GET | `/health` | Health check |
-| POST | `/chat` | Отправить сообщение |
+| POST | `/chat` | Отправить сообщение (SSE stream) |
 | GET | `/sessions` | Список сессий |
 | POST | `/sessions` | Создать сессию |
 | GET | `/memory` | Получить память |
