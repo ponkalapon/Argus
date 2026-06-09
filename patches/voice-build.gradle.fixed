@@ -1,0 +1,43 @@
+apply plugin: 'com.android.library'
+
+repositories {
+    mavenLocal()
+    maven {
+        // For developing the library outside the context of the example app, expect `react-native`
+        // to be installed at `./node_modules`.
+        url "$projectDir/../node_modules/react-native/android"
+    }
+    maven {
+        // For developing the example app.
+        url "$projectDir/../../react-native/android"
+    }
+}
+
+def DEFAULT_COMPILE_SDK_VERSION = 36
+def DEFAULT_BUILD_TOOLS_VERSION = "36.0.0"
+def DEFAULT_TARGET_SDK_VERSION = 36
+
+android {
+    compileSdk rootProject.hasProperty('compileSdk') ? rootProject.compileSdk : DEFAULT_COMPILE_SDK_VERSION
+
+    defaultConfig {
+        minSdkVersion 24
+        targetSdkVersion rootProject.hasProperty('targetSdkVersion') ? rootProject.targetSdkVersion : DEFAULT_TARGET_SDK_VERSION
+        versionCode 1
+        versionName "1.0"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    namespace "com.wenkesj.voice"
+}
+
+def supportVersion = rootProject.hasProperty('supportLibVersion') ? rootProject.supportLibVersion : DEFAULT_TARGET_SDK_VERSION
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'com.facebook.react:react-native:+'
+}

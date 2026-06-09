@@ -9,9 +9,11 @@
   ],
   "scripts": {
     "build": "npm -w @argus/core run build",
-    "dev": "npm -w @argus/core run dev"
+    "dev": "npm -w @argus/core run dev",
+    "postinstall": "node scripts/postinstall.js"
   },
   "devDependencies": {
+    "patch-package": "^8.0.1",
     "typescript": "^5.8.0"
   }
 }

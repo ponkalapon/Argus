@@ -38,18 +38,6 @@
           "remindersPermission": "Allow AgentAI to access your reminders"
         }
       ],
-      [
-        "@bittingz/expo-widgets",
-        {
-          "android": [
-            {
-              "name": "LastResponseWidget",
-              "resourceName": "last_response_widget",
-              "label": "Последний ответ AI"
-            }
-          ]
-        }
-      ],
       "expo-sharing",
       "expo-splash-screen",
       "@react-native-voice/voice"
