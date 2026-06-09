@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { requestChatCompletion, loadChats } from '../api';
+import { requestChatCompletion, loadChats, WorkspaceFile, searchSessions, listWorkspaceFiles } from '../api';
 import { AgentSettings, AgentStatus, ChatMessage, StoredChat, ChatCompletionMessage } from '../types';
 import { colors, motion, radius, spacing, typography } from '../styles/theme';
 import { DocumentContext, PDF_UNSUPPORTED_MESSAGE, pickAndParseDocument, searchContext } from '../services/rag';

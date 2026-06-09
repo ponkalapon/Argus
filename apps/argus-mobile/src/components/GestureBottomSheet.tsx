@@ -73,15 +73,15 @@ export const GestureBottomSheet = ({
   };
 
   useEffect(() => {
-    if (visible) {
-      canCloseRef.current = false;
-      snapTo('partial');
-      const timer = setTimeout(() => { canCloseRef.current = true; }, 300);
-      return () => clearTimeout(timer);
-    } else {
+    if (!visible) {
       canCloseRef.current = false;
       snapTo('closed');
+      return;
     }
+    canCloseRef.current = false;
+    snapTo('partial');
+    const timer = setTimeout(() => { canCloseRef.current = true; }, 300);
+    return () => clearTimeout(timer);
   }, [visible]);
 
   const panGesture = Gesture.Pan()

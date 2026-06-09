@@ -14,6 +14,7 @@ export * from './client';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { chatStream, chat, listSessions, createSession, setBaseUrl, getBaseUrl } from './client';
+import type { StoredChat, ChatMessage } from '../types';
 
 export const requestChatCompletion = async (opts: {
   settings: { baseUrl: string; model: string };
@@ -21,7 +22,15 @@ export const requestChatCompletion = async (opts: {
   messages: { role: string; content: string | null }[];
   onToken?: (token: string) => void;
   tools?: unknown[];
-  context?: { workspaceId?: string };
+  context?: {
+    workspaceId?: string;
+    contactsAccessEnabled?: boolean;
+    requestContactDisclosure?: (payload: {
+      query: string;
+      results: { id: string; name: string; phoneCount: number; maskedPhones: string[] }[];
+    }) => Promise<boolean>;
+    confirmCommunication?: (payload: { action: 'call' | 'sms'; phone: string; name?: string }) => Promise<boolean>;
+  };
 }): Promise<{ text: string; usage?: { input: number; output: number; total: number } }> => {
   const { onToken, messages, settings } = opts;
 
@@ -74,7 +83,7 @@ export const getTokenStats = async (): Promise<{ input: number; output: number; 
   }
 };
 
-export const getDailyStats = async (): Promise<unknown[]> => {
+export const getDailyStats = async (): Promise<DailyRecord[]> => {
   // Server manages stats; daily detail TBD
   return [];
 };
@@ -154,10 +163,11 @@ export const saveSettings = async (settings: { baseUrl: string; model: string; a
   }).catch(() => {});
 };
 
-export const loadChats = async (): Promise<{ id: string; title: string; messages: { id: string; role: string; content: string; createdAt: number }[]; createdAt: number; updatedAt: number }[]> => {
+export const loadChats = async (): Promise<StoredChat[]> => {
   try {
     const raw = await AsyncStorage.getItem(CHATS_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const chats: StoredChat[] = raw ? JSON.parse(raw) : [];
+    return chats;
   } catch {
     return [];
   }
@@ -193,7 +203,7 @@ export type { ChatCompletionResult, ChatCompletionMessage, TokenUsage } from '..
 
 // ─── Skills compatibility ───
 
-export interface Skill { name: string; description: string; content: string; category: string }
+export interface Skill { name: string; description: string; content: string; category: string; id?: string; usageCount?: number; triggerKeywords?: string[] }
 
 export const listSkills = async (): Promise<Skill[]> => {
   // Skills live on server; for now return empty

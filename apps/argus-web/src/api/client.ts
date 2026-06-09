@@ -3,7 +3,7 @@
  * All AI logic, memory, RAG, tools, sessions run on the server.
  */
 
-import type { AgentSettings, ChatCompletionResult, MemoryEntry, Skill, TokenUsage } from '../types';
+import type { AgentSettings, ChatCompletionResult, TokenUsage } from '../types';
 
 // Default backend URL; can be overridden per-call
 let _baseUrl = 'http://localhost:3456';
@@ -173,6 +173,12 @@ export const addMessageToSession = (sessionId: string, role: string, content: st
   }).then(r => r.json());
 
 // ─── Memory ───
+
+export interface MemoryEntry {
+  key: string;
+  value: string;
+  type: string;
+}
 
 export const listMemory = (type?: string): Promise<{ ok: boolean; entries: MemoryEntry[] }> => {
   const params = type ? `?type=${encodeURIComponent(type)}` : '';
