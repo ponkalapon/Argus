@@ -1,6 +1,4 @@
 import { Platform, Alert } from 'react-native';
-import { File, Directory, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 
 const REPO_OWNER = 'ponkalapon';
 const REPO_NAME = 'Argus';
@@ -67,6 +65,10 @@ export async function checkForUpdate(): Promise<{
 
 export async function downloadAndInstallUpdate(url: string): Promise<void> {
   try {
+    // Lazy-require native modules to avoid crash on startup
+    const { File, Directory, Paths } = require('expo-file-system');
+    const Sharing = require('expo-sharing');
+
     const cacheDir = new Directory(Paths.cache, 'argus-updates');
     await cacheDir.create();
 
