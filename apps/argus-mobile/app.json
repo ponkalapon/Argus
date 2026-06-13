@@ -40,7 +40,8 @@
       ],
       "expo-sharing",
       "expo-splash-screen",
-      "@react-native-voice/voice"
+      "@react-native-voice/voice",
+      "react-native-svg"
     ]
   }
 }
