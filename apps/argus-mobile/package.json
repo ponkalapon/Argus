@@ -37,7 +37,8 @@
     "react-native-reanimated": "4.3.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-webview": "13.16.1",
-    "react-native-worklets": "^0.8.3"
+    "react-native-worklets": "^0.8.3",
+    "react-native-svg": "15.11.2"
   },
   "devDependencies": {
     "@react-native-community/cli": "^20.1.3",
