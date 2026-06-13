@@ -1,6 +1,6 @@
 # Argus — AI Agent Platform
 
-Архитектура вдохновлена [Hermes Agent](https://github.com/ponkalapon/hermes-agent), но реализована на TypeScript/Node.js.
+Архитектура вдохновлена [Hermes Agent](https://github.com/ponkalapon/hermes-agent), реализована на TypeScript/Node.js.
 
 ## Структура проекта
 
@@ -9,11 +9,13 @@ argus/
 ├── packages/
 │   └── argus-core/              ← Ядро (AI, память, API)
 │       ├── src/
-│       │   ├── core/            ← 14 модулей
+│       │   ├── core/            ← 16 модулей
 │       │   │   ├── db.ts        — SQLite через sql.js
-│       │   │   ├── llm.ts       — OpenAI API (streaming)
+│       │   │   ├── llm.ts       — LLMClient с retry (до 90 попыток)
+│       │   │   ├── retry.ts     — Утилита withRetry (exponential backoff)
 │       │   │   ├── memory.ts    — Key-value хранилище
 │       │   │   ├── session.ts   — Сессии чатов
+│       │   │   ├── sessionExport.ts — Экспорт/импорт сессий и памяти
 │       │   │   ├── rag.ts       — Поиск по ключевым словам
 │       │   │   ├── skills.ts    — CRUD навыков
 │       │   │   ├── soul.ts      — Сборка system prompt
@@ -34,7 +36,8 @@ argus/
 │   ├── argus-mobile/            ← React Native (автономный)
 │   │   └── src/
 │   │       ├── components/      — 10 экранов (Workspace, Settings, Chat…)
-│   │       ├── services/        — 19 сервисов (OpenAI, RAG, память, файлы…)
+│   │       ├── services/        — 20 сервисов (OpenAI, RAG, память, файлы…)
+│   │       │   └── offlineQueue.ts — Офлайн-очередь запросов
 │   │       ├── styles/theme.ts  — Тёмная тема
 │   │       └── types.ts
 │   │
@@ -45,6 +48,7 @@ argus/
 │           ├── services/        — 19 сервисов (stub/совместимый слой)
 │           ├── styles/theme.ts
 │           └── types.ts
+├── .env.example                 — Пример конфигурации
 ├── package.json                 — npm workspaces (root monorepo)
 └── README.md
 ```
@@ -54,7 +58,7 @@ argus/
 | Компонент | Технология | Роль |
 |-----------|-----------|------|
 | **@argus/core** | TypeScript, Node.js, SQLite | Ядро: AI-логика, память, RAG, сессии, инструменты, HTTP API |
-| **argus-mobile** | React Native (Expo) | Мобильное приложение — **автономное**, AI напрямую через OpenAI API |
+| **argus-mobile** | React Native (Expo) | Мобильное приложение — **автономное**, AI напрямую через endpoint пользователя |
 | **argus-web** | React Native (Expo) | Десктоп/веб — **тонкий клиент** к argus-core через REST API на порту 3456 |
 
 ## Архитектура
@@ -65,30 +69,39 @@ argus/
 │  (React Native)           (React Native)            │
 │  ┌──────────────────┐    ┌───────────────────┐      │
 │  │ services/*       │    │ api/client.ts ──────┐   │
-│  │ (OpenAI прямой)  │    │ services/* (stub)   │   │
-│  └──────┬───────────┘    └──────────┬──────────┘   │
-│         │ AI напрямую               │ HTTP :3456    │
+│  │ (AI напрямую)    │    │ services/* (stub)   │   │
+│  │ offlineQueue.ts  │    └──────────┬──────────┘   │
+│  └──────┬───────────┘               │ HTTP :3456    │
 └─────────┼───────────────────────────┼───────────────┘
           │                           │
-          │              ┌───────────────────────────┐
-          │              │  packages/argus-core       │
-          │              │  (CLI + API сервер)        │
-          │              │  ┌─────────────────────┐   │
-          └──────────────│  │ LLM → Memory → RAG  │   │
-                         │  │ Session → Tools     │   │
-                         │  │ SQLite (sql.js)     │   │
-                         │  └─────────────────────┘   │
-                         └───────────────────────────┘
+          ▼                           ▼
+    Endpoint пользователя   packages/argus-core
+    (OpenAI / OpenRouter /  (CLI + API сервер)
+     любой /v1 прокси)      ┌─────────────────────┐
+                             │ LLM → Memory → RAG  │
+                             │ Session → Tools     │
+                             │ SQLite (sql.js)     │
+                             │ retry (90 попыток)  │
+                             └─────────────────────┘
 ```
 
 ## Быстрый старт
 
-### Установка зависимостей (весь monorepo)
+### 1. Конфигурация
+
+```bash
+cp .env.example .env
+# Заполни ARGUS_API_KEY и ARGUS_BASE_URL
+```
+
+### 2. Установка зависимостей (весь monorepo)
+
 ```bash
 npm install
 ```
 
-### Ядро (@argus/core)
+### 3. Ядро (@argus/core)
+
 ```bash
 cd packages/argus-core
 
@@ -99,14 +112,15 @@ npm run cli
 ARGUS_API_KEY=sk-... npm run api
 ```
 
-### Десктоп/веб (тонкий клиент)
+### 4. Десктоп/веб (тонкий клиент)
+
 ```bash
 cd apps/argus-web
 npm install --legacy-peer-deps
 npx expo start
 ```
 
-### Мобильное приложение (автономное)
+### 5. Мобильное приложение (автономное)
 
 #### Установка из APK (рекомендуется)
 
@@ -116,6 +130,7 @@ npx expo start
 - При запуске приложение автоматически проверит наличие обновлений на GitHub
 
 #### Сборка из исходников
+
 ```bash
 cd apps/argus-mobile
 npm install --legacy-peer-deps
@@ -134,10 +149,58 @@ APK будет в `apps/argus-mobile/android/app/build/outputs/apk/release/app-r
 | POST | `/chat` | Отправить сообщение (SSE stream) |
 | GET | `/sessions` | Список сессий |
 | POST | `/sessions` | Создать сессию |
+| GET | `/sessions/:id` | Получить сессию с сообщениями |
+| POST | `/sessions/:id/message` | Добавить сообщение |
 | GET | `/memory` | Получить память |
 | POST | `/memory` | Добавить в память |
 | GET | `/stats` | Статистика токенов |
-| GET | `/config` | Конфигурация |
+| GET | `/export` | Экспортировать все сессии и память в JSON |
+| POST | `/import` | Импортировать сессии и память из JSON |
+
+## Экспорт / Импорт данных
+
+```bash
+# Экспорт всех сессий и памяти
+curl http://localhost:3456/export > argus-backup.json
+
+# Импорт на другой машине
+curl -X POST http://localhost:3456/import \
+  -H "Content-Type: application/json" \
+  -d @argus-backup.json
+```
+
+## Офлайн-режим (argus-mobile)
+
+При отсутствии сети запросы автоматически попадают в очередь (`offlineQueue.ts`) и отправляются при восстановлении соединения. Максимум 90 попыток на каждый запрос.
+
+```typescript
+import { enqueueRequest, processQueue } from './services/offlineQueue';
+
+// При потере сети
+await enqueueRequest(sessionId, userMessage);
+
+// При восстановлении (NetInfo event)
+NetInfo.addEventListener(state => {
+  if (state.isConnected) processQueue(sendFn);
+});
+```
+
+## Retry и таймауты
+
+`LLMClient.chat()` автоматически повторяет запросы при сетевых ошибках и 5xx:
+- **90 попыток** максимум
+- **30 секунд** таймаут на попытку
+- Exponential backoff с jitter между попытками
+
+```typescript
+// Опциональные параметры
+await core.llm.chat({
+  ...opts,
+  maxRetries: 90,    // по умолчанию
+  timeoutMs: 30000,  // по умолчанию
+  onRetry: (attempt, err) => console.log(`Retry ${attempt}: ${err.message}`),
+});
+```
 
 ## Разработка
 
