@@ -1,0 +1,134 @@
+name: Build Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name (e.g. 1.2.0)'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    name: Build release APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/argus-mobile
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Node ──────────────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      # ── Java ──────────────────────────────────────────────────────────────
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # ── Android SDK ───────────────────────────────────────────────────────
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # ── Dependencies ──────────────────────────────────────────────────────
+      - name: Install root dependencies
+        working-directory: .
+        run: npm install --legacy-peer-deps
+
+      - name: Install mobile dependencies
+        run: npm install --legacy-peer-deps
+
+      # ── Expo prebuild (generates android/) ────────────────────────────────
+      - name: Expo prebuild
+        run: npx expo prebuild --platform android --clean --no-install
+        env:
+          CI: true
+
+      # ── Keystore from secret ──────────────────────────────────────────────
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/argus-release.keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      # ── Version from tag or input ─────────────────────────────────────────
+      - name: Set version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version_name }}" ]; then
+            VERSION="${{ github.event.inputs.version_name }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      # ── Gradle build ──────────────────────────────────────────────────────
+      - name: Build release APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/apps/argus-mobile/android/app/argus-release.keystore" \
+            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
+        env:
+          GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false'
+
+      # ── Rename APK ────────────────────────────────────────────────────────
+      - name: Rename APK
+        id: apk
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          APK_NAME="argus-mobile-v${VERSION}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$APK_NAME"
+          echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
+          echo "apk_path=$GITHUB_WORKSPACE/apps/argus-mobile/$APK_NAME" >> $GITHUB_OUTPUT
+          ls -lh "$APK_NAME"
+
+      # ── Upload artifact (всегда) ──────────────────────────────────────────
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.apk_name }}
+          path: apps/argus-mobile/${{ steps.apk.outputs.apk_name }}
+          retention-days: 30
+
+      # ── Create GitHub Release (только для тегов v*) ───────────────────────
+      - name: Read release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: notes
+        run: |
+          BODY=$(node -e "const r=require('../../release.json'); console.log(r.body || '')" 2>/dev/null || echo "")
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        working-directory: apps/argus-mobile
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: ${{ steps.notes.outputs.body }}
+          draft: false
+          prerelease: false
+          files: apps/argus-mobile/${{ steps.apk.outputs.apk_name }}
