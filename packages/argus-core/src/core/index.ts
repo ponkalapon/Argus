@@ -109,3 +109,5 @@ export class ArgusCore {
     return result.text;
   }
 }
+
+export { SessionExporter, ArgusExport } from './sessionExport.js';
