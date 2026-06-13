@@ -34,8 +34,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
+          # no cache: project has no package-lock.json
 
       # ── Java 17 ─────────────────────────────────────────────────────────
       - name: Setup JDK 17
@@ -60,7 +59,7 @@ jobs:
 
       # ── Install dependencies ─────────────────────────────────────────────
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm install --legacy-peer-deps --no-package-lock
         working-directory: apps/argus-mobile
 
       # ── Expo prebuild ────────────────────────────────────────────────────
@@ -69,6 +68,11 @@ jobs:
         working-directory: apps/argus-mobile
         env:
           CI: true
+          EXPO_NO_DOTENV: 1
+
+      # ── Write local.properties ───────────────────────────────────────────
+      - name: Write local.properties
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > apps/argus-mobile/android/local.properties
 
       # ── Keystore ─────────────────────────────────────────────────────────
       - name: Setup keystore
@@ -120,7 +124,7 @@ jobs:
             -Pandroid.injected.signing.key.password="${KS_KEY_PASS}" \
             --no-daemon
         env:
-          GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m" -Dorg.gradle.parallel=false -Dorg.gradle.configureondemand=false
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.parallel=false
 
       # ── Rename & stage APK ────────────────────────────────────────────────
       - name: Rename APK
