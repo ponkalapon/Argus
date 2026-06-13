@@ -35,7 +35,7 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
-          cache-dependency-path: apps/argus-mobile/package-lock.json
+          cache-dependency-path: package-lock.json
 
       # ── Java 17 ─────────────────────────────────────────────────────────
       - name: Setup JDK 17
@@ -77,17 +77,19 @@ jobs:
           if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
             echo "Using keystore from secrets"
             echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/argus-release.keystore
+            echo "KS_PASS=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "KS_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
+            echo "KS_KEY_PASS=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
           else
-            echo "No keystore secret found — generating debug keystore"
+            echo "No keystore secret — generating debug keystore"
             keytool -genkey -v \
               -keystore android/app/argus-release.keystore \
-              -alias argus \
-              -keyalg RSA -keysize 2048 -validity 10000 \
+              -alias argus -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass android -keypass android \
-              -dname "CN=Argus, OU=Dev, O=Argus, L=Unknown, S=Unknown, C=US"
-            echo "KEYSTORE_PASS=android" >> $GITHUB_ENV
-            echo "KEY_ALIAS_VAL=argus" >> $GITHUB_ENV
-            echo "KEY_PASS=android" >> $GITHUB_ENV
+              -dname "CN=Argus,OU=Dev,O=Argus,L=Unknown,S=Unknown,C=US"
+            echo "KS_PASS=android" >> $GITHUB_ENV
+            echo "KS_ALIAS=argus" >> $GITHUB_ENV
+            echo "KS_KEY_PASS=android" >> $GITHUB_ENV
           fi
 
       # ── Version ──────────────────────────────────────────────────────────
@@ -113,15 +115,12 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease \
             -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/apps/argus-mobile/android/app/argus-release.keystore" \
-            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD || env.KEYSTORE_PASS }}" \
-            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS || env.KEY_ALIAS_VAL }}" \
-            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD || env.KEY_PASS }}" \
+            -Pandroid.injected.signing.store.password="${KS_PASS}" \
+            -Pandroid.injected.signing.key.alias="${KS_ALIAS}" \
+            -Pandroid.injected.signing.key.password="${KS_KEY_PASS}" \
             --no-daemon
         env:
-          GRADLE_OPTS: >-
-            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
-            -Dorg.gradle.parallel=false
-            -Dorg.gradle.configureondemand=false
+          GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m" -Dorg.gradle.parallel=false -Dorg.gradle.configureondemand=false
 
       # ── Rename & stage APK ────────────────────────────────────────────────
       - name: Rename APK
@@ -142,7 +141,7 @@ jobs:
           path: apps/argus-mobile/${{ steps.apk.outputs.apk_name }}
           retention-days: 30
 
-      # ── GitHub Release (тег v* или ручной запуск с флагом) ────────────────
+      # ── GitHub Release ────────────────────────────────────────────────────
       - name: Read release notes
         if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.create_release == 'true'
         id: notes
