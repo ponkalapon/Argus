@@ -1,5 +1,5 @@
 import { ChatCompletionContext, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResult } from '../types';
-import { ChatCompletionResponse, extractTextFromJson, extractToolCalls, readStreamingResponse } from './openaiStream';
+import { ChatCompletionResponse, extractTextFromJson, extractToolCalls, readStreamingResponse, fetchWithRetry } from './openaiStream';
 import { formatMemoryContext, searchMemory } from './memory';
 import { formatSkillIndex, listSkills } from './skills';
 import { getSoul } from './soul';
@@ -173,7 +173,7 @@ const summarizeMiddle = async (
     },
   ];
 
-  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+  const response = await fetchWithRetry(`${baseUrl}/v1/chat/completions`, {
     method: 'POST',
     headers: createHeaders(apiKey),
     body: JSON.stringify({
@@ -183,9 +183,9 @@ const summarizeMiddle = async (
       temperature: 0.3,
       stream: false,
     }),
-  });
+  }).catch(() => null);
 
-  if (!response.ok) {
+  if (!response || !response.ok) {
     return '';
   }
 
@@ -261,7 +261,7 @@ export const requestChatCompletion = async ({
       ];
     }
 
-    const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    const response = await fetchWithRetry(`${baseUrl}/v1/chat/completions`, {
       method: 'POST',
       headers: createHeaders(apiKey),
       body: JSON.stringify({
