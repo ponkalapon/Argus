@@ -1,6 +1,7 @@
 import * as http from 'node:http';
 import { ArgusCore } from '../core/index.js';
 import { ChatMessage } from '../types.js';
+import { SessionExporter } from '../core/sessionExport.js';
 
 /**
  * HTTP API Server for Argus Core.
@@ -230,6 +231,24 @@ export function startApiServer(core: ArgusCore): void {
         return;
       }
 
+      // ─── Export ───
+      if (path === '/export' && method === 'GET') {
+        const exporter = new SessionExporter(core.db, core.memory, core.sessions);
+        const json = exporter.toJson();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(json);
+        return;
+      }
+
+      if (path === '/import' && method === 'POST') {
+        const body = await readBody(req);
+        const exporter = new SessionExporter(core.db, core.memory, core.sessions);
+        const result = exporter.importFromJson(body);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, imported: result }));
+        return;
+      }
+
       // ─── 404 ───
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: false, error: 'Not found' }));
@@ -253,6 +272,8 @@ export function startApiServer(core: ArgusCore): void {
     console.log(`${'[API]'}   GET  /memory`);
     console.log(`${'[API]'}   POST /memory`);
     console.log(`${'[API]'}   GET  /stats`);
+    console.log(`${'[API]'}   GET  /export`);
+    console.log(`${'[API]'}   POST /import`);
     console.log(`\n${'[API]'} Press Ctrl+C to stop\n`);
   });
 }
