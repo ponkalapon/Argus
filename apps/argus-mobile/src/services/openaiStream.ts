@@ -129,3 +129,53 @@ export const readStreamingResponse = async (response: Response, onToken: (token:
     usage: finalUsage,
   };
 };
+
+// ─── Retry wrapper ──────────────────────────────────────────────────────────
+// Wraps the raw fetch call with up to 90 retries + 30 s per-attempt timeout.
+// Used by openaiClient.ts instead of calling fetch() directly.
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+export async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  opts: {
+    maxRetries?: number;
+    timeoutMs?: number;
+    onRetry?: (attempt: number, error: Error) => void;
+  } = {},
+): Promise<Response> {
+  const maxRetries = opts.maxRetries ?? 90;
+  const timeoutMs  = opts.timeoutMs  ?? 30000;
+  let lastError!: Error;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), timeoutMs);
+
+    // Merge caller signal with timeout signal
+    const callerSignal = init.signal as AbortSignal | undefined;
+    if (callerSignal?.aborted) throw new Error('Request aborted by caller');
+
+    callerSignal?.addEventListener('abort', () => controller.abort(), { once: true });
+
+    try {
+      const response = await fetch(url, { ...init, signal: controller.signal });
+      clearTimeout(tid);
+      // 429 / 5xx — retryable; 4xx others — not retryable
+      if (!response.ok && (response.status === 429 || response.status >= 500)) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response;
+    } catch (err) {
+      clearTimeout(tid);
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt === maxRetries) break;
+      opts.onRetry?.(attempt, lastError);
+      const delay = Math.min(1000 * 2 ** (attempt - 1), 60000);
+      await sleep(delay + Math.random() * 1000);
+    }
+  }
+
+  throw new Error(`Failed after ${maxRetries} attempts. Last: ${lastError.message}`);
+}
