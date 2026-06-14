@@ -13,6 +13,7 @@
     "test:stream": "rm -rf .tmp-test && tsc --ignoreConfig --target ES2022 --module Node16 --moduleResolution node16 --esModuleInterop --skipLibCheck --outDir .tmp-test src/services/openaiStream.ts && node --test tests/openaiStream.test.js"
   },
   "dependencies": {
+    "@bittingz/expo-widgets": "3.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-voice/voice": "^3.2.4",
     "expo": "56.0.8",
@@ -36,9 +37,9 @@
     "react-native-markdown-display": "^7.0.2",
     "react-native-reanimated": "4.3.1",
     "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4",
     "react-native-webview": "13.16.1",
-    "react-native-worklets": "^0.8.3",
-    "react-native-svg": "15.11.2"
+    "react-native-worklets": "^0.8.3"
   },
   "devDependencies": {
     "@react-native-community/cli": "^20.1.3",
