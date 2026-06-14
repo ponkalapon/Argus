@@ -38,7 +38,7 @@ import { searchSessions } from '../services/sessionSearch';
 import { WebView } from 'react-native-webview';
 import { SvgXml } from 'react-native-svg';
 import { GestureBottomSheet, BOTTOM_SHEET_HEIGHT } from './GestureBottomSheet';
-import { ArrowLeft, ArrowUp, Bot, Camera, Check, ChevronDown, Download, Folder, Globe, Image, Layers, Menu, Mic, Paperclip, Plus, Search, Settings, Trash2, Users, X } from 'lucide-react-native';
+import { ArrowLeft, ArrowUp, Bot, Camera, Check, ChevronDown, Download, Folder, Globe, Image, Layers, Menu, Mic, Paperclip, Plus, RefreshCw, Search, Settings, Trash2, Users, X } from 'lucide-react-native';
 
 const useAnimatedValue = (target: number): number => {
   const [current, setCurrent] = useState(target);
@@ -328,70 +328,72 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
   }, [entrance]);
 
   const [modelLoadError, setModelLoadError] = useState('');
+  // Счётчик для принудительного перезапуска fetch при нажатии "Повторить"
+  const [modelFetchTrigger, setModelFetchTrigger] = useState(0);
+
+  const fetchModels = useCallback(() => {
+    setModelFetchTrigger((n) => n + 1);
+  }, []);
 
   useEffect(() => {
-      if (!showModelPicker || !settings.baseUrl.trim()) return;
-      let cancelled = false;
-      setModelLoadError('');
-      setIsLoadingModels(true);
-      const baseUrl = settings.baseUrl.trim().replace(/\/+$/, '');
+    if (!showModelPicker || !settings.baseUrl.trim()) return;
+    let cancelled = false;
+    setModelLoadError('');
+    setIsLoadingModels(true);
+    setModelGroups([]);
+    const baseUrl = settings.baseUrl.trim().replace(/\/+$/, '');
 
-      // Для HTTP (не HTTPS) — может быть заблокирован Android cleartext
-      if (baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
-        setModelLoadError('HTTP без шифрования может быть заблокирован Android. Используй HTTPS или добавь android:usesCleartextTraffic="true" в манифест.');
-        setIsLoadingModels(false);
-        return;
-      }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут
-
-      fetch(`${baseUrl}/v1/models`, {
-        headers: apiKey.trim() ? { Authorization: `Bearer ${apiKey.trim()}` } : undefined,
-        signal: controller.signal,
-      })
-        .then(async (r) => {
-          clearTimeout(timeout);
-          if (!r.ok) {
-            const text = await r.text();
-            throw new Error(`HTTP ${r.status}: ${text.slice(0, 200)}`);
-          }
-          const json = await r.json();
-          // Поддерживаем разные форматы API:
-          // 1. OpenAI: { data: [{ id: "..." }, ...] }
-          // 2. Ollama: { models: [{ name: "..." }, ...] }
-          // 3. Simple array: ["model1", "model2"]
-          let modelIds: string[] = [];
-          if (Array.isArray(json)) {
-            modelIds = json.map((item) => typeof item === 'string' ? item : item.id || item.name || String(item));
-          } else if (json.data && Array.isArray(json.data)) {
-            modelIds = json.data.map((m: any) => m.id || m.name || String(m));
-          } else if (json.models && Array.isArray(json.models)) {
-            modelIds = json.models.map((m: any) => m.name || m.id || String(m));
-          } else {
-            throw new Error('Неизвестный формат ответа сервера');
-          }
-          if (cancelled) return;
-          if (modelIds.length === 0) {
-            setModelLoadError('Сервер вернул пустой список моделей');
-          }
-          setModelGroups(groupModels(modelIds));
-          if (!cancelled) setIsLoadingModels(false);
-        })
-        .catch((err) => {
-          clearTimeout(timeout);
-          if (cancelled) return;
-          const message = err instanceof Error ? err.message : 'Не удалось загрузить модели';
-          setModelLoadError(message);
-          setModelGroups([]);
-          if (!cancelled) setIsLoadingModels(false);
-        });
-      return () => {
-        cancelled = true;
+    fetch(`${baseUrl}/v1/models`, {
+      headers: apiKey.trim() ? { Authorization: `Bearer ${apiKey.trim()}` } : undefined,
+      signal: controller.signal,
+    })
+      .then(async (r) => {
         clearTimeout(timeout);
-        controller.abort();
-      };
-    }, [showModelPicker, settings.baseUrl, apiKey]);
+        if (!r.ok) {
+          const text = await r.text();
+          throw new Error(`HTTP ${r.status}: ${text.slice(0, 200)}`);
+        }
+        const json = await r.json();
+        let modelIds: string[] = [];
+        if (Array.isArray(json)) {
+          modelIds = json.map((item) => typeof item === 'string' ? item : item.id || item.name || String(item));
+        } else if (json.data && Array.isArray(json.data)) {
+          modelIds = json.data.map((m: any) => m.id || m.name || String(m));
+        } else if (json.models && Array.isArray(json.models)) {
+          modelIds = json.models.map((m: any) => m.name || m.id || String(m));
+        } else {
+          throw new Error('Неизвестный формат ответа сервера');
+        }
+        if (cancelled) return;
+        if (modelIds.length === 0) {
+          setModelLoadError('Сервер вернул пустой список моделей');
+        } else {
+          setModelGroups(groupModels(modelIds));
+        }
+        if (!cancelled) setIsLoadingModels(false);
+      })
+      .catch((err) => {
+        clearTimeout(timeout);
+        if (cancelled) return;
+        let message = err instanceof Error ? err.message : 'Не удалось загрузить модели';
+        if (err.name === 'AbortError') {
+          message = 'Таймаут: сервер не ответил за 15 секунд. Проверь Base URL в настройках.';
+        } else if (message.includes('Network request failed') || message.includes('fetch')) {
+          message = `Нет соединения с сервером.\n${baseUrl}\n\nПроверь Base URL и что сервер доступен с телефона.`;
+        }
+        setModelLoadError(message);
+        setModelGroups([]);
+        if (!cancelled) setIsLoadingModels(false);
+      });
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [showModelPicker, settings.baseUrl, apiKey, modelFetchTrigger]);
 
   useEffect(() => {
     loadChats().then((storedChats) => {
@@ -564,11 +566,7 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     return new Promise<boolean>((resolve) => {
       Alert.alert(
         'Разрешить номера контактов?',
-        `Ассистент хочет получить полные номера по запросу «${payload.query}».
-
-${preview}
-
-Без разрешения модель увидит только имена и скрытые номера.`,
+        `Ассистент хочет получить полные номера по запросу «${payload.query}».\n\n${preview}\n\nБез разрешения модель увидит только имена и скрытые номера.`,
         [
           { text: 'Не разрешать', style: 'cancel', onPress: () => resolve(false) },
           { text: 'Разрешить', onPress: () => resolve(true) },
@@ -584,9 +582,7 @@ ${preview}
     return new Promise<boolean>((resolve) => {
       Alert.alert(
         'Подтвердить действие',
-        `Контакт: ${payload.name || 'Без имени'}
-Номер: ${payload.phone}
-Действие: ${payload.action}`,
+        `Контакт: ${payload.name || 'Без имени'}\nНомер: ${payload.phone}\nДействие: ${payload.action}`,
         [
           { text: 'Отмена', style: 'cancel', onPress: () => resolve(false) },
           {
@@ -618,8 +614,7 @@ ${preview}
       }
       const safeResults = results.map(toSafeContactPreview);
       const names = safeResults.map((c) => `${c.name} — ${c.maskedPhones.join(', ')}`).join('\n');
-      setDraft(`Найди контакт (номера скрыты до подтверждения):
-${names}`);
+      setDraft(`Найди контакт (номера скрыты до подтверждения):\n${names}`);
     } catch {
       Alert.alert('Ошибка', 'Не удалось загрузить контакты');
     }
@@ -1438,7 +1433,21 @@ ${names}`);
                         {modelLoadError ? (
                           <>
                             <Text style={[styles.modelEmptyText, { color: colors.danger }]}>Ошибка загрузки</Text>
-                            <Text style={[styles.modelEmptySubtext, { color: colors.danger, fontSize: 12, marginTop: 4, paddingHorizontal: 16, textAlign: 'center' }]}>{modelLoadError}</Text>
+                            <Text style={styles.modelEmptySubtext}>{modelLoadError}</Text>
+                            <Pressable
+                              onPress={fetchModels}
+                              style={({ pressed }) => [styles.modelRetryBtn, pressed && styles.pressed]}
+                            >
+                              <RefreshCw size={14} color={colors.textMuted} />
+                              <Text style={styles.modelRetryText}>Повторить</Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => { setShowModelPicker(false); onOpenSettings(); }}
+                              style={({ pressed }) => [styles.modelRetryBtn, { marginTop: spacing.xs }, pressed && styles.pressed]}
+                            >
+                              <Settings size={14} color={colors.textMuted} />
+                              <Text style={styles.modelRetryText}>Настройки</Text>
+                            </Pressable>
                           </>
                         ) : (
                           <Text style={styles.modelEmptyText}>Нет моделей</Text>
@@ -1698,6 +1707,30 @@ const styles = StyleSheet.create({
   modelEmptyText: {
     color: colors.textDim,
     fontSize: typography.body,
+  },
+  modelEmptySubtext: {
+    color: colors.danger,
+    fontSize: 12,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    textAlign: 'center',
+    lineHeight: 17,
+  },
+  modelRetryBtn: {
+    alignItems: 'center',
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  modelRetryText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: '500',
   },
 
   /* Chat history */
