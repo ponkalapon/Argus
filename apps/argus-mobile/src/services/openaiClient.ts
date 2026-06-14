@@ -22,7 +22,8 @@ const MEMORY_NUDGE_INTERVAL = 3;
 const trimTrailingSlashes = (value: string) => value.replace(/\/+$/, '');
 
 export const normalizeBaseUrl = (baseUrl: string) => {
-  const trimmed = trimTrailingSlashes(baseUrl.trim());
+  // Strip trailing slashes first
+  let trimmed = trimTrailingSlashes(baseUrl.trim());
 
   if (!trimmed) {
     throw new Error('Укажи Base URL в настройках.');
@@ -31,6 +32,10 @@ export const normalizeBaseUrl = (baseUrl: string) => {
   if (!/^https?:\/\//i.test(trimmed)) {
     throw new Error('Base URL должен начинаться с http:// или https://.');
   }
+
+  // Strip trailing /v1 (or /v1/) so callers can safely append /v1/...
+  // e.g. http://host:port/v1 → http://host:port
+  trimmed = trimmed.replace(/\/v1$/i, '');
 
   return trimmed;
 };

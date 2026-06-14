@@ -4,6 +4,7 @@ import {
   Animated,
   Dimensions,
   KeyboardAvoidingView,
+  Linking,
   PermissionsAndroid,
   Platform,
   Pressable,
@@ -16,9 +17,9 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Trash2, ChevronRight, BarChart3, ArrowLeft, RefreshCw, Check, X, X as XIcon, Download } from 'lucide-react-native';
+import { Trash2, ChevronRight, BarChart3, ArrowLeft, RefreshCw, Check, X, X as XIcon, Download, ExternalLink } from 'lucide-react-native';
 import { AgentSettings, LLMProvider } from '../types';
-import { loadApiKey, saveApiKey, sanitizeSettings, PROVIDER_DEFAULTS } from '../services/storage';
+import { loadApiKey, saveApiKey, sanitizeSettings, PROVIDER_META, ALL_PROVIDERS, PROVIDER_DEFAULTS } from '../services/storage';
 import { getTokenStats, getDailyStats, resetTokenStats, TokenStats, DailyRecord } from '../services/tokenStats';
 import { listSkills, deleteSkill, Skill } from '../services/skills';
 import { checkForUpdate, downloadAndInstallUpdate, CURRENT_BUILD } from '../services/autoUpdate';
@@ -31,19 +32,21 @@ type Props = {
   onSave: (settings: AgentSettings, apiKey: string) => Promise<void>;
 };
 
-const MODEL_SUGGESTIONS: Record<LLMProvider, string[]> = {
+const MODEL_SUGGESTIONS: Partial<Record<LLMProvider, string[]>> = {
   openai: ['gpt-4.1-mini', 'gpt-4o-mini', 'gpt-4o', 'o4-mini'],
   anthropic: ['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022', 'claude-opus-4-5'],
-  gemini: ['gemini-2.0-flash', 'gemini-2.5-pro', 'gemini-2.5-flash'],
+  gemini: ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'],
+  openrouter: ['openai/gpt-4o-mini', 'anthropic/claude-3-haiku', 'meta-llama/llama-3.1-8b-instruct:free'],
+  ollama: ['llama3.2', 'mistral', 'qwen2.5', 'phi3', 'gemma3'],
+  mistral: ['mistral-small-latest', 'mistral-medium-latest', 'mistral-large-latest'],
+  cohere: ['command-r-plus', 'command-r', 'command-light'],
+  groq: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'gemma2-9b-it'],
+  together: ['meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo', 'mistralai/Mistral-7B-Instruct-v0.3'],
+  xai: ['grok-3-mini', 'grok-3', 'grok-2-1212'],
+  deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+  azure: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
+  custom: [],
 };
-
-const PROVIDER_LABELS: Record<LLMProvider, string> = {
-  openai: 'OpenAI',
-  anthropic: 'Anthropic',
-  gemini: 'Google Gemini',
-};
-
-const ALL_PROVIDERS: LLMProvider[] = ['openai', 'anthropic', 'gemini'];
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -53,6 +56,9 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
   const [model, setModel] = useState(initialSettings.model);
   const [allowAssistantContacts, setAllowAssistantContacts] = useState(initialSettings.allowAssistantContacts);
   const [apiKey, setApiKey] = useState('');
+  const [azureResourceName, setAzureResourceName] = useState(initialSettings.azureResourceName ?? '');
+  const [azureDeploymentId, setAzureDeploymentId] = useState(initialSettings.azureDeploymentId ?? '');
+  const [azureApiVersion, setAzureApiVersion] = useState(initialSettings.azureApiVersion ?? '2024-02-01');
   const [isKeyLoaded, setIsKeyLoaded] = useState(false);
   const [tokenStats, setTokenStats] = useState<TokenStats | null>(null);
   const [dailyStats, setDailyStats] = useState<DailyRecord[]>([]);
@@ -66,6 +72,12 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
   const entrance = useRef(new Animated.Value(0)).current;
   const modalScale = useRef(new Animated.Value(0)).current;
   const modalOpacity = useRef(new Animated.Value(0)).current;
+
+  const meta = PROVIDER_META[provider];
+  const primaryAuth = meta.authSchemes[0];
+  const supportsOAuth = meta.authSchemes.includes('oauth');
+  const needsKey = primaryAuth !== 'none';
+  const isAzure = provider === 'azure';
 
   const loadDaily = useCallback(async () => {
     const stats = await getDailyStats();
@@ -204,7 +216,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
       useNativeDriver: true,
     }).start();
 
-    loadApiKey()
+    loadApiKey(provider)
       .then((key) => {
         if (mounted) { setApiKey(key); setIsKeyLoaded(true); }
       })
@@ -218,6 +230,15 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
 
     return () => { mounted = false; };
   }, [entrance]);
+
+  // При смене провайдера — перезагружаем ключ
+  useEffect(() => {
+    setIsKeyLoaded(false);
+    loadApiKey(provider).then((key) => {
+      setApiKey(key);
+      setIsKeyLoaded(true);
+    });
+  }, [provider]);
 
   const openModal = (section: string) => {
     setModalSection(section);
@@ -254,26 +275,37 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
   };
 
   const endpointPreview = useMemo(() => {
+    if (isAzure && azureResourceName && azureDeploymentId) {
+      return `https://${azureResourceName}.openai.azure.com/openai/deployments/${azureDeploymentId}/chat/completions?api-version=${azureApiVersion || '2024-02-01'}`;
+    }
     const normalized = baseUrl.trim().replace(/\/+$/, '');
     return normalized ? `${normalized}/v1/chat/completions` : 'Base URL не задан';
-  }, [baseUrl]);
+  }, [baseUrl, isAzure, azureResourceName, azureDeploymentId, azureApiVersion]);
 
-  // When provider changes, auto-fill baseUrl and model with defaults (if user hasn't customised)
   const handleProviderChange = (newProvider: LLMProvider) => {
     setProvider(newProvider);
-    setBaseUrl(PROVIDER_DEFAULTS[newProvider].baseUrl);
-    setModel(PROVIDER_DEFAULTS[newProvider].model);
+    const m = PROVIDER_META[newProvider];
+    setBaseUrl(m.baseUrl);
+    setModel(m.model);
   };
 
   useEffect(() => {
     const timer = setTimeout(async () => {
-      const settings = sanitizeSettings({ provider, baseUrl, model, allowAssistantContacts });
-      if (!settings.baseUrl.trim() || !settings.model.trim()) return;
-      await saveApiKey(apiKey);
+      const settings = sanitizeSettings({
+        provider,
+        baseUrl,
+        model,
+        allowAssistantContacts,
+        azureResourceName: azureResourceName || undefined,
+        azureDeploymentId: azureDeploymentId || undefined,
+        azureApiVersion: azureApiVersion || undefined,
+      });
+      if (!isAzure && (!settings.baseUrl.trim() || !settings.model.trim())) return;
+      await saveApiKey(apiKey, provider);
       await onSave(settings, apiKey.trim());
     }, 600);
     return () => clearTimeout(timer);
-  }, [provider, baseUrl, model, apiKey, allowAssistantContacts]);
+  }, [provider, baseUrl, model, apiKey, allowAssistantContacts, azureResourceName, azureDeploymentId, azureApiVersion]);
 
   const handleResetStats = () => {
     Alert.alert('Сбросить статистику', 'Обнулить счётчики токенов?', [
@@ -355,6 +387,16 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
     setShowStatsDetail(false);
   };
 
+  const authSchemeLabel = (scheme: string) => {
+    switch (scheme) {
+      case 'apiKey': return 'API Key';
+      case 'oauth': return 'OAuth 2.0';
+      case 'none': return 'Без авторизации';
+      case 'azure': return 'Azure API Key';
+      default: return scheme;
+    }
+  };
+
   const renderModalContent = () => {
     switch (modalSection) {
       case 'provider':
@@ -362,42 +404,31 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
           <>
             <Text style={styles.modalTitle}>ПРОВАЙДЕР</Text>
             <View style={styles.card}>
-              {ALL_PROVIDERS.map((p, index) => (
-                <View key={p}>
-                  {index > 0 && <View style={styles.divider} />}
-                  <Pressable
-                    onPress={() => handleProviderChange(p)}
-                    style={({ pressed }) => [styles.providerRow, pressed && styles.pressed]}
-                  >
-                    <View style={styles.providerRowLeft}>
-                      <View style={[styles.providerDot, provider === p && styles.providerDotActive]} />
-                      <Text style={[styles.providerLabel, provider === p && styles.providerLabelActive]}>
-                        {PROVIDER_LABELS[p]}
-                      </Text>
-                    </View>
-                    {provider === p && <Check size={16} color={colors.success} />}
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.cardGap} />
-
-            <View style={styles.card}>
-              <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>API Key</Text>
-                <TextInput
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  onChangeText={setApiKey}
-                  placeholder={isKeyLoaded ? 'sk-...' : 'Загружается…'}
-                  placeholderTextColor={colors.textDim}
-                  secureTextEntry
-                  style={styles.fieldInput}
-                  value={apiKey}
-                />
-                <Text style={styles.fieldHint}>Оставь пустым, если endpoint не требует ключ.</Text>
-              </View>
+              {ALL_PROVIDERS.map((p, index) => {
+                const m = PROVIDER_META[p];
+                return (
+                  <View key={p}>
+                    {index > 0 && <View style={styles.divider} />}
+                    <Pressable
+                      onPress={() => handleProviderChange(p)}
+                      style={({ pressed }) => [styles.providerRow, pressed && styles.pressed]}
+                    >
+                      <View style={styles.providerRowLeft}>
+                        <View style={[styles.providerDot, provider === p && styles.providerDotActive]} />
+                        <View>
+                          <Text style={[styles.providerLabel, provider === p && styles.providerLabelActive]}>
+                            {m.label}
+                          </Text>
+                          <Text style={styles.providerAuthHint}>
+                            {m.authSchemes.map(authSchemeLabel).join(' / ')}
+                          </Text>
+                        </View>
+                      </View>
+                      {provider === p && <Check size={16} color={colors.success} />}
+                    </Pressable>
+                  </View>
+                );
+              })}
             </View>
           </>
         );
@@ -406,22 +437,169 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
         return (
           <>
             <Text style={styles.modalTitle}>ПОДКЛЮЧЕНИЕ</Text>
+
+            {/* Auth section */}
             <View style={styles.card}>
+              {/* Auth scheme badge */}
               <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>Base URL</Text>
-                <TextInput
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                  onChangeText={setBaseUrl}
-                  placeholder={PROVIDER_DEFAULTS[provider].baseUrl}
-                  placeholderTextColor={colors.textDim}
-                  style={styles.fieldInput}
-                  value={baseUrl}
-                />
-                <Text style={styles.fieldHint}>{endpointPreview}</Text>
+                <Text style={styles.fieldLabel}>Авторизация</Text>
+                <View style={styles.authBadgeRow}>
+                  {meta.authSchemes.map((scheme) => (
+                    <View key={scheme} style={styles.authBadge}>
+                      <Text style={styles.authBadgeText}>{authSchemeLabel(scheme)}</Text>
+                    </View>
+                  ))}
+                </View>
               </View>
+
+              {/* API Key field */}
+              {needsKey && !isAzure && (
+                <>
+                  <View style={styles.divider} />
+                  <View style={styles.fieldRow}>
+                    <View style={styles.fieldLabelRow}>
+                      <Text style={styles.fieldLabel}>API Key</Text>
+                      {meta.keyUrl && (
+                        <Pressable
+                          onPress={() => Linking.openURL(meta.keyUrl!)}
+                          hitSlop={8}
+                          style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+                        >
+                          <ExternalLink size={13} color={colors.accent} />
+                        </Pressable>
+                      )}
+                    </View>
+                    <TextInput
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      onChangeText={setApiKey}
+                      placeholder={isKeyLoaded ? (meta.keyHint ?? 'токен...') : 'Загружается…'}
+                      placeholderTextColor={colors.textDim}
+                      secureTextEntry
+                      style={styles.fieldInput}
+                      value={apiKey}
+                    />
+                    {meta.authHeader && (
+                      <Text style={styles.fieldHint}>
+                        Передаётся как: <Text style={{ color: colors.textMuted }}>{meta.authHeader}{meta.authHeader === 'Authorization' ? ': Bearer …' : ': …'}</Text>
+                      </Text>
+                    )}
+                    {meta.keyAsQuery && (
+                      <Text style={styles.fieldHint}>
+                        Передаётся как query: <Text style={{ color: colors.textMuted }}>?{meta.keyAsQuery}=…</Text>
+                      </Text>
+                    )}
+                    {primaryAuth === 'none' && (
+                      <Text style={styles.fieldHint}>Авторизация не требуется</Text>
+                    )}
+                  </View>
+                </>
+              )}
+
+              {/* OAuth hint */}
+              {supportsOAuth && (
+                <>
+                  <View style={styles.divider} />
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldLabel}>OAuth 2.0</Text>
+                    <Text style={styles.fieldHint}>
+                      Поддерживается. Для OAuth вставь access token в поле API Key выше.
+                    </Text>
+                  </View>
+                </>
+              )}
+
+              {/* Azure-specific fields */}
+              {isAzure && (
+                <>
+                  <View style={styles.divider} />
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldLabel}>API Key</Text>
+                    <TextInput
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      onChangeText={setApiKey}
+                      placeholder="ваш Azure API ключ"
+                      placeholderTextColor={colors.textDim}
+                      secureTextEntry
+                      style={styles.fieldInput}
+                      value={apiKey}
+                    />
+                    <Text style={styles.fieldHint}>Передаётся как: <Text style={{ color: colors.textMuted }}>api-key: …</Text></Text>
+                  </View>
+                  <View style={styles.divider} />
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldLabel}>Resource Name</Text>
+                    <TextInput
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      onChangeText={setAzureResourceName}
+                      placeholder="my-resource"
+                      placeholderTextColor={colors.textDim}
+                      style={styles.fieldInput}
+                      value={azureResourceName}
+                    />
+                  </View>
+                  <View style={styles.divider} />
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldLabel}>Deployment ID</Text>
+                    <TextInput
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      onChangeText={setAzureDeploymentId}
+                      placeholder="gpt-4o"
+                      placeholderTextColor={colors.textDim}
+                      style={styles.fieldInput}
+                      value={azureDeploymentId}
+                    />
+                  </View>
+                  <View style={styles.divider} />
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldLabel}>API Version</Text>
+                    <TextInput
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      onChangeText={setAzureApiVersion}
+                      placeholder="2024-02-01"
+                      placeholderTextColor={colors.textDim}
+                      style={styles.fieldInput}
+                      value={azureApiVersion}
+                    />
+                  </View>
+                </>
+              )}
             </View>
+
+            <View style={styles.cardGap} />
+
+            {/* Base URL (not for Azure) */}
+            {!isAzure && (
+              <View style={styles.card}>
+                <View style={styles.fieldRow}>
+                  <Text style={styles.fieldLabel}>Base URL</Text>
+                  <TextInput
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                    onChangeText={setBaseUrl}
+                    placeholder={PROVIDER_DEFAULTS[provider].baseUrl || 'https://...'}
+                    placeholderTextColor={colors.textDim}
+                    style={styles.fieldInput}
+                    value={baseUrl}
+                  />
+                  <Text style={styles.fieldHint}>{endpointPreview}</Text>
+                </View>
+              </View>
+            )}
+
+            {isAzure && (
+              <View style={styles.card}>
+                <View style={styles.fieldRow}>
+                  <Text style={styles.fieldLabel}>Endpoint preview</Text>
+                  <Text style={[styles.fieldHint, { fontFamily: 'monospace' }]}>{endpointPreview}</Text>
+                </View>
+              </View>
+            )}
 
             <View style={styles.cardGap} />
 
@@ -432,22 +610,24 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                   autoCapitalize="none"
                   autoCorrect={false}
                   onChangeText={setModel}
-                  placeholder={PROVIDER_DEFAULTS[provider].model}
+                  placeholder={PROVIDER_DEFAULTS[provider].model || 'model-name'}
                   placeholderTextColor={colors.textDim}
                   style={styles.fieldInput}
                   value={model}
                 />
-                <View style={styles.chipRow}>
-                  {MODEL_SUGGESTIONS[provider].map((item) => (
-                    <Pressable
-                      key={item}
-                      onPress={() => setModel(item)}
-                      style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
-                    >
-                      <Text style={styles.chipText}>{item}</Text>
-                    </Pressable>
-                  ))}
-                </View>
+                {(MODEL_SUGGESTIONS[provider]?.length ?? 0) > 0 && (
+                  <View style={styles.chipRow}>
+                    {(MODEL_SUGGESTIONS[provider] ?? []).map((item) => (
+                      <Pressable
+                        key={item}
+                        onPress={() => setModel(item)}
+                        style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+                      >
+                        <Text style={styles.chipText}>{item}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
               </View>
             </View>
           </>
@@ -755,7 +935,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
           >
             <Text style={styles.menuItemLabel}>ПРОВАЙДЕР</Text>
             <View style={styles.menuItemRight}>
-              <Text style={styles.menuItemBadge}>{PROVIDER_LABELS[provider]}</Text>
+              <Text style={styles.menuItemBadge}>{PROVIDER_META[provider].label}</Text>
               <ChevronRight size={16} color={colors.textDim} />
             </View>
           </Pressable>
@@ -766,7 +946,12 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
             style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
           >
             <Text style={styles.menuItemLabel}>ПОДКЛЮЧЕНИЕ</Text>
-            <ChevronRight size={16} color={colors.textDim} />
+            <View style={styles.menuItemRight}>
+              <Text style={styles.menuItemBadge}>
+                {meta.authSchemes.map(authSchemeLabel).join(' / ')}
+              </Text>
+              <ChevronRight size={16} color={colors.textDim} />
+            </View>
           </Pressable>
 
           {/* Section: Разрешения */}
@@ -936,7 +1121,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.xl + 4,
     elevation: 24,
-    maxHeight: SCREEN_HEIGHT * 0.8,
+    maxHeight: SCREEN_HEIGHT * 0.85,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.35,
@@ -995,6 +1180,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.md,
+    flex: 1,
   },
   providerDot: {
     backgroundColor: colors.border,
@@ -1012,6 +1198,38 @@ const styles = StyleSheet.create({
   providerLabelActive: {
     color: colors.text,
     fontWeight: '600',
+  },
+  providerAuthHint: {
+    color: colors.textDim,
+    fontSize: typography.caption - 1,
+    marginTop: 2,
+  },
+
+  /* Auth badges */
+  authBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  authBadge: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  authBadgeText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: '600',
+  },
+
+  /* Field label row with link */
+  fieldLabelRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
 
   /* Field row */
