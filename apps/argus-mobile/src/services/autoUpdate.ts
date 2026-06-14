@@ -1,4 +1,4 @@
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, Linking } from 'react-native';
 
 const REPO_OWNER = 'ponkalapon';
 const REPO_NAME = 'Argus';
@@ -23,6 +23,7 @@ export type CheckUpdateResult = {
   size?: number;
   changelog?: string;
   error?: string;
+  info?: string;
 };
 
 export async function checkForUpdate(): Promise<CheckUpdateResult> {
@@ -81,25 +82,32 @@ export async function checkForUpdate(): Promise<CheckUpdateResult> {
 export async function downloadAndInstallUpdate(url: string): Promise<void> {
   try {
     const { File, Directory, Paths } = require('expo-file-system');
-    const Sharing = require('expo-sharing');
 
+    // Создаём папку только если её нет
     const cacheDir = new Directory(Paths.cache, 'argus-updates');
-    await cacheDir.create();
+    if (!cacheDir.exists) {
+      await cacheDir.create({ intermediates: true });
+    }
+
+    // Удаляем старый APK если был
+    const oldFile = new File(cacheDir, 'argus-update.apk');
+    if (oldFile.exists) {
+      await oldFile.delete();
+    }
 
     console.log('[Update] Downloading APK...');
     const apkFile = await File.downloadFileAsync(url, cacheDir, { idempotent: true });
     console.log('[Update] Download complete.');
 
-    const isShareAvailable = await Sharing.isAvailableAsync();
-    if (isShareAvailable) {
-      await Sharing.shareAsync(apkFile.uri, {
-        mimeType: 'application/vnd.android.package-archive',
-        dialogTitle: 'Установить обновление Argus?',
-      });
-    } else {
+    // Открываем APK через системный установщик
+    // На Android это запускает Package Installer
+    try {
+      await Linking.openURL(apkFile.uri);
+    } catch {
+      // Если Linking не сработал — показываем путь
       Alert.alert(
         'Обновление скачано',
-        `Файл: ${apkFile.uri}\nОткройте его в файловом менеджере для установки.`
+        `Найди файл в проводнике и открой его для установки:\n${apkFile.uri}`
       );
     }
   } catch (error) {

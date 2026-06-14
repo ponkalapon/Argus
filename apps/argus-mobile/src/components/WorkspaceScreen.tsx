@@ -330,33 +330,68 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
   const [modelLoadError, setModelLoadError] = useState('');
 
   useEffect(() => {
-    if (!showModelPicker || !settings.baseUrl.trim()) return;
-    let cancelled = false;
-    setModelLoadError('');
-    setIsLoadingModels(true);
-    const baseUrl = settings.baseUrl.trim().replace(/\/+$/, '');
-    fetch(`${baseUrl}/v1/models`, {
-      headers: apiKey.trim() ? { Authorization: `Bearer ${apiKey.trim()}` } : undefined,
-    })
-      .then((r) => (r.ok ? r.json() : r.text().then((t) => Promise.reject(new Error(`HTTP ${r.status}: ${t.slice(0, 200)}`)))))
-      .then((json: { data?: { id: string }[] }) => {
-        if (cancelled) return;
-        const ids = json.data?.map((m) => m.id).filter(Boolean) || [];
-        if (ids.length === 0) {
-          setModelLoadError('Сервер вернул пустой список моделей');
-        }
-        setModelGroups(groupModels(ids));
-        if (!cancelled) setIsLoadingModels(false);
+      if (!showModelPicker || !settings.baseUrl.trim()) return;
+      let cancelled = false;
+      setModelLoadError('');
+      setIsLoadingModels(true);
+      const baseUrl = settings.baseUrl.trim().replace(/\/+$/, '');
+
+      // Для HTTP (не HTTPS) — может быть заблокирован Android cleartext
+      if (baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+        setModelLoadError('HTTP без шифрования может быть заблокирован Android. Используй HTTPS или добавь android:usesCleartextTraffic="true" в манифест.');
+        setIsLoadingModels(false);
+        return;
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут
+
+      fetch(`${baseUrl}/v1/models`, {
+        headers: apiKey.trim() ? { Authorization: `Bearer ${apiKey.trim()}` } : undefined,
+        signal: controller.signal,
       })
-      .catch((err) => {
-        if (cancelled) return;
-        const message = err instanceof Error ? err.message : 'Не удалось загрузить модели';
-        setModelLoadError(message);
-        setModelGroups([]);
-        if (!cancelled) setIsLoadingModels(false);
-      });
-    return () => { cancelled = true; };
-  }, [showModelPicker, settings.baseUrl, apiKey]);
+        .then(async (r) => {
+          clearTimeout(timeout);
+          if (!r.ok) {
+            const text = await r.text();
+            throw new Error(`HTTP ${r.status}: ${text.slice(0, 200)}`);
+          }
+          const json = await r.json();
+          // Поддерживаем разные форматы API:
+          // 1. OpenAI: { data: [{ id: "..." }, ...] }
+          // 2. Ollama: { models: [{ name: "..." }, ...] }
+          // 3. Simple array: ["model1", "model2"]
+          let modelIds: string[] = [];
+          if (Array.isArray(json)) {
+            modelIds = json.map((item) => typeof item === 'string' ? item : item.id || item.name || String(item));
+          } else if (json.data && Array.isArray(json.data)) {
+            modelIds = json.data.map((m: any) => m.id || m.name || String(m));
+          } else if (json.models && Array.isArray(json.models)) {
+            modelIds = json.models.map((m: any) => m.name || m.id || String(m));
+          } else {
+            throw new Error('Неизвестный формат ответа сервера');
+          }
+          if (cancelled) return;
+          if (modelIds.length === 0) {
+            setModelLoadError('Сервер вернул пустой список моделей');
+          }
+          setModelGroups(groupModels(modelIds));
+          if (!cancelled) setIsLoadingModels(false);
+        })
+        .catch((err) => {
+          clearTimeout(timeout);
+          if (cancelled) return;
+          const message = err instanceof Error ? err.message : 'Не удалось загрузить модели';
+          setModelLoadError(message);
+          setModelGroups([]);
+          if (!cancelled) setIsLoadingModels(false);
+        });
+      return () => {
+        cancelled = true;
+        clearTimeout(timeout);
+        controller.abort();
+      };
+    }, [showModelPicker, settings.baseUrl, apiKey]);
 
   useEffect(() => {
     loadChats().then((storedChats) => {
