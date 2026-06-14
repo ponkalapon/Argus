@@ -16,16 +16,19 @@ interface GitHubRelease {
   }>;
 }
 
-export async function checkForUpdate(): Promise<{
+export type CheckUpdateResult = {
   hasUpdate: boolean;
   version?: string;
   url?: string;
   size?: number;
   changelog?: string;
-}> {
+  error?: string;
+};
+
+export async function checkForUpdate(): Promise<CheckUpdateResult> {
   try {
     if (Platform.OS !== 'android') {
-      return { hasUpdate: false };
+      return { hasUpdate: false, error: 'Не Android' };
     }
 
     const response = await fetch(GITHUB_API, {
@@ -35,20 +38,32 @@ export async function checkForUpdate(): Promise<{
       },
     });
 
+    if (response.status === 403) {
+      return { hasUpdate: false, error: 'GitHub API лимит (403). Попробуй позже.' };
+    }
+    if (response.status === 404) {
+      return { hasUpdate: false, error: 'Релизы не найдены на GitHub' };
+    }
     if (!response.ok) {
-      return { hasUpdate: false };
+      return { hasUpdate: false, error: `GitHub API: HTTP ${response.status}` };
     }
 
     const release: GitHubRelease = await response.json();
 
     const tagMatch = release.tag_name.match(/build(\d+)$/i);
-    if (!tagMatch) return { hasUpdate: false };
+    if (!tagMatch) {
+      return { hasUpdate: false, error: `Тег "${release.tag_name}" не содержит номер сборки` };
+    }
 
     const latestBuild = parseInt(tagMatch[1], 10);
-    if (latestBuild <= CURRENT_BUILD) return { hasUpdate: false };
+    if (latestBuild <= CURRENT_BUILD) {
+      return { hasUpdate: false, info: `Установлена актуальная версия (build ${CURRENT_BUILD})` };
+    }
 
     const apkAsset = release.assets.find((a) => a.name.endsWith('.apk'));
-    if (!apkAsset) return { hasUpdate: false };
+    if (!apkAsset) {
+      return { hasUpdate: false, error: 'APK не найден в релизе' };
+    }
 
     return {
       hasUpdate: true,
@@ -58,14 +73,13 @@ export async function checkForUpdate(): Promise<{
       changelog: release.body,
     };
   } catch (error) {
-    console.error('[Update] Check failed:', error);
-    return { hasUpdate: false };
+    const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
+    return { hasUpdate: false, error: `Ошибка: ${message}` };
   }
 }
 
 export async function downloadAndInstallUpdate(url: string): Promise<void> {
   try {
-    // Lazy-require native modules to avoid crash on startup
     const { File, Directory, Paths } = require('expo-file-system');
     const Sharing = require('expo-sharing');
 

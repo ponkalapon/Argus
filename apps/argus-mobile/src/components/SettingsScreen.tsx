@@ -279,8 +279,13 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
         setUpdateStatus('available');
       } else {
         setUpdateInfo(null);
-        setUpdateStatus('idle');
-        Alert.alert('Обновлений нет', 'У вас актуальная версия.');
+        if (result.error) {
+          setUpdateError(result.error);
+          setUpdateStatus('error');
+        } else {
+          setUpdateStatus('idle');
+          Alert.alert('Обновлений нет', result.info || 'У вас актуальная версия.');
+        }
       }
     } catch (e) {
       setUpdateError(e instanceof Error ? e.message : 'Ошибка проверки');
