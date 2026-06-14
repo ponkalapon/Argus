@@ -7,9 +7,11 @@ on:
       - 'apps/argus-mobile/**'
       - 'package.json'
       - 'package-lock.json'
+      - '.github/workflows/build-apk.yml'
 
 permissions:
   contents: write
+  workflows: write
 
 jobs:
   build:
@@ -23,6 +25,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Determine version
         id: version
