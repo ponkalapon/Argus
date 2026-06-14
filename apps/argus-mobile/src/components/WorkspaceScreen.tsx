@@ -327,28 +327,36 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     }).start();
   }, [entrance]);
 
+  const [modelLoadError, setModelLoadError] = useState('');
+
   useEffect(() => {
     if (!showModelPicker || !settings.baseUrl.trim()) return;
     let cancelled = false;
+    setModelLoadError('');
     setIsLoadingModels(true);
     const baseUrl = settings.baseUrl.trim().replace(/\/+$/, '');
     fetch(`${baseUrl}/v1/models`, {
       headers: apiKey.trim() ? { Authorization: `Bearer ${apiKey.trim()}` } : undefined,
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((r) => (r.ok ? r.json() : r.text().then((t) => Promise.reject(new Error(`HTTP ${r.status}: ${t.slice(0, 200)}`)))))
       .then((json: { data?: { id: string }[] }) => {
         if (cancelled) return;
         const ids = json.data?.map((m) => m.id).filter(Boolean) || [];
+        if (ids.length === 0) {
+          setModelLoadError('Сервер вернул пустой список моделей');
+        }
         setModelGroups(groupModels(ids));
         if (!cancelled) setIsLoadingModels(false);
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return;
+        const message = err instanceof Error ? err.message : 'Не удалось загрузить модели';
+        setModelLoadError(message);
         setModelGroups([]);
         if (!cancelled) setIsLoadingModels(false);
       });
     return () => { cancelled = true; };
-  }, [showModelPicker]);
+  }, [showModelPicker, settings.baseUrl, apiKey]);
 
   useEffect(() => {
     loadChats().then((storedChats) => {
@@ -730,8 +738,16 @@ ${names}`);
     setStatus('idle');
   };
 
-  const openChat = (chat: StoredChat) => {
+  const openChat = async (chat: StoredChat) => {
     if (status === 'thinking') return;
+    // Сохраняем текущий чат перед переключением
+    if (activeChatId) {
+      const currentMessages = messages.filter((m) => m.id !== 'welcome');
+      if (currentMessages.length > 0) {
+        const currentTitle = chatsRef.current.find((c) => c.id === activeChatId)?.title || createChatTitle(currentMessages[0]?.content || '');
+        await saveChatSnapshot(activeChatId, currentTitle, messages);
+      }
+    }
     setActiveChatId(chat.id);
     setMessages(chat.messages.length ? chat.messages : [initialAssistantMessage]);
     setAttachedDocs([]);
@@ -1384,7 +1400,14 @@ ${names}`);
 
                     {filteredGroups.length === 0 && modelSearch.trim().length === 0 && (
                       <View style={styles.modelEmpty}>
-                        <Text style={styles.modelEmptyText}>Нет моделей</Text>
+                        {modelLoadError ? (
+                          <>
+                            <Text style={[styles.modelEmptyText, { color: colors.danger }]}>Ошибка загрузки</Text>
+                            <Text style={[styles.modelEmptySubtext, { color: colors.danger, fontSize: 12, marginTop: 4, paddingHorizontal: 16, textAlign: 'center' }]}>{modelLoadError}</Text>
+                          </>
+                        ) : (
+                          <Text style={styles.modelEmptyText}>Нет моделей</Text>
+                        )}
                       </View>
                     )}
                   </>
