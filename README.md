@@ -162,29 +162,42 @@ curl -X POST http://localhost:3456/import \
 ```
 argus/
 ├── .env.example
+├── release.json                 ← метаданные последнего релиза (для auto-update)
+├── scripts/                     ← вспомогательные скрипты сборки
+├── patches/                     ← патчи зависимостей (patch-package)
 ├── packages/
-│   └── argus-core/          ← Ядро (AI, память, API)
-│       └── src/core/        ← 16 модулей
-│           ├── llm.ts       — LLM-клиент (retry, multi-provider)
-│           ├── memory.ts    — Память
-│           ├── session.ts   — Сессии
-│           ├── sessionExport.ts — Экспорт/импорт
-│           ├── rag.ts       — Поиск по базе
-│           ├── tools.ts     — Инструменты агента
-│           ├── retry.ts     — Retry (90 попыток, backoff)
-│           ├── providers/   — OpenAI / Anthropic / Gemini
-│           └── ...          — ещё модули
+│   └── argus-core/              ← Ядро (AI, память, API)
+│       └── src/core/            ← 15 модулей
+│           ├── llm.ts           — LLM-клиент (multi-provider, retry)
+│           ├── memory.ts        — Долгосрочная память
+│           ├── session.ts       — Сессии и история чатов
+│           ├── sessionExport.ts — Экспорт/импорт данных
+│           ├── rag.ts           — Семантический поиск по базе
+│           ├── tools.ts         — Инструменты агента
+│           ├── retry.ts         — Retry (90 попыток, exponential backoff)
+│           ├── skills.ts        — Система скиллов
+│           ├── soul.ts          — Личность и системный промпт
+│           ├── trajectory.ts    — Трекинг шагов агента
+│           ├── webSearch.ts     — Веб-поиск
+│           ├── workspace.ts     — Файловое рабочее пространство
+│           ├── tokenStats.ts    — Статистика токенов
+│           ├── db.ts            — SQLite база данных
+│           └── index.ts         — Реэкспорт всех модулей
 ├── apps/
-│   ├── argus-mobile/        ← React Native (Expo), автономный
+│   ├── argus-mobile/            ← React Native (Expo), автономный
 │   │   └── src/
-│   │       ├── types.ts     — AgentSettings (+ provider: LLMProvider)
+│   │       ├── types.ts         — AgentSettings (+ provider: LLMProvider)
 │   │       ├── services/
-│   │       │   ├── storage.ts      — настройки + PROVIDER_DEFAULTS
-│   │       │   └── offlineQueue.ts — очередь офлайн-запросов (90 ретраев)
+│   │       │   ├── storage.ts       — настройки + PROVIDER_DEFAULTS
+│   │       │   ├── offlineQueue.ts  — очередь офлайн-запросов (90 ретраев)
+│   │       │   ├── tokenStats.ts    — статистика токенов (мобильная)
+│   │       │   ├── skills.ts        — управление скиллами (мобильная)
+│   │       │   └── autoUpdate.ts    — автообновление APK
 │   │       └── components/
-│   │           └── SettingsScreen.tsx — UI настроек (провайдер, ключ, модель)
-│   └── argus-web/           ← React Native (Expo), тонкий клиент
-└── package.json             ← npm workspaces
+│   │           ├── SettingsScreen.tsx — UI настроек (провайдер, ключ, модель)
+│   │           └── UsageChart.tsx     — график использования токенов
+│   └── argus-web/               ← React Native (Expo), тонкий клиент
+└── package.json                 ← npm workspaces
 ```
 
 </details>
