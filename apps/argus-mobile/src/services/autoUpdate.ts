@@ -3,7 +3,7 @@ import { Platform, Alert } from 'react-native';
 const REPO_OWNER = 'ponkalapon';
 const REPO_NAME = 'Argus';
 const GITHUB_API = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest`;
-export const CURRENT_BUILD = 2; // increment for each release
+export const CURRENT_BUILD = 3; // increment for each release
 
 interface GitHubRelease {
   tag_name: string;
