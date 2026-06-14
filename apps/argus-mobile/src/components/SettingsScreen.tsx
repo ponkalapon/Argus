@@ -17,8 +17,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trash2, ChevronRight, BarChart3, ArrowLeft, RefreshCw, Check, X, X as XIcon, Download } from 'lucide-react-native';
-import { AgentSettings } from '../types';
-import { loadApiKey, saveApiKey, sanitizeSettings } from '../services/storage';
+import { AgentSettings, LLMProvider } from '../types';
+import { loadApiKey, saveApiKey, sanitizeSettings, PROVIDER_DEFAULTS } from '../services/storage';
 import { getTokenStats, getDailyStats, resetTokenStats, TokenStats, DailyRecord } from '../services/tokenStats';
 import { listSkills, deleteSkill, Skill } from '../services/skills';
 import { checkForUpdate, downloadAndInstallUpdate, CURRENT_BUILD } from '../services/autoUpdate';
@@ -31,10 +31,24 @@ type Props = {
   onSave: (settings: AgentSettings, apiKey: string) => Promise<void>;
 };
 
-const MODEL_SUGGESTIONS = ['gpt-4.1-mini', 'gpt-4o-mini', 'qwen/qwen3-coder'];
+const MODEL_SUGGESTIONS: Record<LLMProvider, string[]> = {
+  openai: ['gpt-4.1-mini', 'gpt-4o-mini', 'gpt-4o', 'o4-mini'],
+  anthropic: ['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022', 'claude-opus-4-5'],
+  gemini: ['gemini-2.0-flash', 'gemini-2.5-pro', 'gemini-2.5-flash'],
+};
+
+const PROVIDER_LABELS: Record<LLMProvider, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  gemini: 'Google Gemini',
+};
+
+const ALL_PROVIDERS: LLMProvider[] = ['openai', 'anthropic', 'gemini'];
+
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
+  const [provider, setProvider] = useState<LLMProvider>(initialSettings.provider ?? 'openai');
   const [baseUrl, setBaseUrl] = useState(initialSettings.baseUrl);
   const [model, setModel] = useState(initialSettings.model);
   const [allowAssistantContacts, setAllowAssistantContacts] = useState(initialSettings.allowAssistantContacts);
@@ -244,15 +258,22 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
     return normalized ? `${normalized}/v1/chat/completions` : 'Base URL не задан';
   }, [baseUrl]);
 
+  // When provider changes, auto-fill baseUrl and model with defaults (if user hasn't customised)
+  const handleProviderChange = (newProvider: LLMProvider) => {
+    setProvider(newProvider);
+    setBaseUrl(PROVIDER_DEFAULTS[newProvider].baseUrl);
+    setModel(PROVIDER_DEFAULTS[newProvider].model);
+  };
+
   useEffect(() => {
     const timer = setTimeout(async () => {
-      const settings = sanitizeSettings({ baseUrl, model, allowAssistantContacts });
+      const settings = sanitizeSettings({ provider, baseUrl, model, allowAssistantContacts });
       if (!settings.baseUrl.trim() || !settings.model.trim()) return;
       await saveApiKey(apiKey);
       await onSave(settings, apiKey.trim());
     }, 600);
     return () => clearTimeout(timer);
-  }, [baseUrl, model, apiKey, allowAssistantContacts]);
+  }, [provider, baseUrl, model, apiKey, allowAssistantContacts]);
 
   const handleResetStats = () => {
     Alert.alert('Сбросить статистику', 'Обнулить счётчики токенов?', [
@@ -336,53 +357,28 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
 
   const renderModalContent = () => {
     switch (modalSection) {
-      case 'connection':
+      case 'provider':
         return (
           <>
-            <Text style={styles.modalTitle}>ПОДКЛЮЧЕНИЕ</Text>
+            <Text style={styles.modalTitle}>ПРОВАЙДЕР</Text>
             <View style={styles.card}>
-              <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>Base URL</Text>
-                <TextInput
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                  onChangeText={setBaseUrl}
-                  placeholder="https://api.openai.com"
-                  placeholderTextColor={colors.textDim}
-                  style={styles.fieldInput}
-                  value={baseUrl}
-                />
-                <Text style={styles.fieldHint}>{endpointPreview}</Text>
-              </View>
-            </View>
-
-            <View style={styles.cardGap} />
-
-            <View style={styles.card}>
-              <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>Модель</Text>
-                <TextInput
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  onChangeText={setModel}
-                  placeholder="your-model-name"
-                  placeholderTextColor={colors.textDim}
-                  style={styles.fieldInput}
-                  value={model}
-                />
-                <View style={styles.chipRow}>
-                  {MODEL_SUGGESTIONS.map((item) => (
-                    <Pressable
-                      key={item}
-                      onPress={() => setModel(item)}
-                      style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
-                    >
-                      <Text style={styles.chipText}>{item}</Text>
-                    </Pressable>
-                  ))}
+              {ALL_PROVIDERS.map((p, index) => (
+                <View key={p}>
+                  {index > 0 && <View style={styles.divider} />}
+                  <Pressable
+                    onPress={() => handleProviderChange(p)}
+                    style={({ pressed }) => [styles.providerRow, pressed && styles.pressed]}
+                  >
+                    <View style={styles.providerRowLeft}>
+                      <View style={[styles.providerDot, provider === p && styles.providerDotActive]} />
+                      <Text style={[styles.providerLabel, provider === p && styles.providerLabelActive]}>
+                        {PROVIDER_LABELS[p]}
+                      </Text>
+                    </View>
+                    {provider === p && <Check size={16} color={colors.success} />}
+                  </Pressable>
                 </View>
-              </View>
+              ))}
             </View>
 
             <View style={styles.cardGap} />
@@ -405,6 +401,58 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
             </View>
           </>
         );
+
+      case 'connection':
+        return (
+          <>
+            <Text style={styles.modalTitle}>ПОДКЛЮЧЕНИЕ</Text>
+            <View style={styles.card}>
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>Base URL</Text>
+                <TextInput
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  onChangeText={setBaseUrl}
+                  placeholder={PROVIDER_DEFAULTS[provider].baseUrl}
+                  placeholderTextColor={colors.textDim}
+                  style={styles.fieldInput}
+                  value={baseUrl}
+                />
+                <Text style={styles.fieldHint}>{endpointPreview}</Text>
+              </View>
+            </View>
+
+            <View style={styles.cardGap} />
+
+            <View style={styles.card}>
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>Модель</Text>
+                <TextInput
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onChangeText={setModel}
+                  placeholder={PROVIDER_DEFAULTS[provider].model}
+                  placeholderTextColor={colors.textDim}
+                  style={styles.fieldInput}
+                  value={model}
+                />
+                <View style={styles.chipRow}>
+                  {MODEL_SUGGESTIONS[provider].map((item) => (
+                    <Pressable
+                      key={item}
+                      onPress={() => setModel(item)}
+                      style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+                    >
+                      <Text style={styles.chipText}>{item}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </>
+        );
+
       case 'permissions':
         return (
           <>
@@ -480,6 +528,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
             </View>
           </>
         );
+
       case 'stats':
         return tokenStats ? (
           <>
@@ -525,6 +574,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
             </View>
           </>
         ) : null;
+
       case 'update':
         return (
           <>
@@ -597,6 +647,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
             </View>
           </>
         );
+
       case 'skills':
         return (
           <>
@@ -641,6 +692,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
             </View>
           </>
         );
+
       default:
         return null;
     }
@@ -696,6 +748,18 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
           showsVerticalScrollIndicator={false}
           style={{ opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }] }}
         >
+          {/* Provider badge */}
+          <Pressable
+            onPress={() => openModal('provider')}
+            style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
+          >
+            <Text style={styles.menuItemLabel}>ПРОВАЙДЕР</Text>
+            <View style={styles.menuItemRight}>
+              <Text style={styles.menuItemBadge}>{PROVIDER_LABELS[provider]}</Text>
+              <ChevronRight size={16} color={colors.textDim} />
+            </View>
+          </Pressable>
+
           {/* Section: Подключение */}
           <Pressable
             onPress={() => openModal('connection')}
@@ -847,6 +911,15 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: '500',
   },
+  menuItemRight: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  menuItemBadge: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+  },
 
   /* Modal */
   modalOverlay: {
@@ -908,6 +981,37 @@ const styles = StyleSheet.create({
   divider: {
     backgroundColor: colors.border,
     height: StyleSheet.hairlineWidth,
+  },
+
+  /* Provider picker */
+  providerRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+  },
+  providerRowLeft: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  providerDot: {
+    backgroundColor: colors.border,
+    borderRadius: radius.pill,
+    height: 10,
+    width: 10,
+  },
+  providerDotActive: {
+    backgroundColor: colors.success,
+  },
+  providerLabel: {
+    color: colors.textMuted,
+    fontSize: typography.body,
+  },
+  providerLabelActive: {
+    color: colors.text,
+    fontWeight: '600',
   },
 
   /* Field row */
@@ -1128,5 +1232,4 @@ const styles = StyleSheet.create({
   deniedText: {
     color: colors.danger,
   },
-
 });
