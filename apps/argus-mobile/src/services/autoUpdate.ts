@@ -3,7 +3,7 @@ import { Platform, Alert, Linking } from 'react-native';
 const REPO_OWNER = 'ponkalapon';
 const REPO_NAME = 'Argus';
 const GITHUB_API = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest`;
-export const CURRENT_BUILD = 3; // increment for each release
+export const CURRENT_BUILD = 1; // minor version number, patched automatically by CI
 
 interface GitHubRelease {
   tag_name: string;
@@ -25,6 +25,22 @@ export type CheckUpdateResult = {
   error?: string;
   info?: string;
 };
+
+/**
+ * Extracts a comparable build number from a tag.
+ * Supports both legacy "build6" and new "v0.7.0" formats.
+ */
+function parseBuildNumber(tag: string): number | null {
+  // New format: v0.X.0
+  const semverMatch = tag.match(/^v0\.(\d+)\.\d+$/);
+  if (semverMatch) return parseInt(semverMatch[1], 10);
+
+  // Legacy format: build6
+  const legacyMatch = tag.match(/build(\d+)$/i);
+  if (legacyMatch) return parseInt(legacyMatch[1], 10);
+
+  return null;
+}
 
 export async function checkForUpdate(): Promise<CheckUpdateResult> {
   try {
@@ -51,12 +67,11 @@ export async function checkForUpdate(): Promise<CheckUpdateResult> {
 
     const release: GitHubRelease = await response.json();
 
-    const tagMatch = release.tag_name.match(/build(\d+)$/i);
-    if (!tagMatch) {
-      return { hasUpdate: false, error: `Тег "${release.tag_name}" не содержит номер сборки` };
+    const latestBuild = parseBuildNumber(release.tag_name);
+    if (latestBuild === null) {
+      return { hasUpdate: false, error: `Неизвестный формат тега: "${release.tag_name}"` };
     }
 
-    const latestBuild = parseInt(tagMatch[1], 10);
     if (latestBuild <= CURRENT_BUILD) {
       return { hasUpdate: false, info: `Установлена актуальная версия (build ${CURRENT_BUILD})` };
     }
@@ -68,7 +83,7 @@ export async function checkForUpdate(): Promise<CheckUpdateResult> {
 
     return {
       hasUpdate: true,
-      version: release.tag_name,
+      version: release.name || release.tag_name,
       url: apkAsset.browser_download_url,
       size: apkAsset.size,
       changelog: release.body,
@@ -83,13 +98,11 @@ export async function downloadAndInstallUpdate(url: string): Promise<void> {
   try {
     const { File, Directory, Paths } = require('expo-file-system');
 
-    // Создаём папку только если её нет
     const cacheDir = new Directory(Paths.cache, 'argus-updates');
     if (!cacheDir.exists) {
       await cacheDir.create({ intermediates: true });
     }
 
-    // Удаляем старый APK если был
     const oldFile = new File(cacheDir, 'argus-update.apk');
     if (oldFile.exists) {
       await oldFile.delete();
@@ -99,12 +112,9 @@ export async function downloadAndInstallUpdate(url: string): Promise<void> {
     const apkFile = await File.downloadFileAsync(url, cacheDir, { idempotent: true });
     console.log('[Update] Download complete.');
 
-    // Открываем APK через системный установщик
-    // На Android это запускает Package Installer
     try {
       await Linking.openURL(apkFile.uri);
     } catch {
-      // Если Linking не сработал — показываем путь
       Alert.alert(
         'Обновление скачано',
         `Найди файл в проводнике и открой его для установки:\n${apkFile.uri}`
