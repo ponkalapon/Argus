@@ -98,26 +98,36 @@ export async function downloadAndInstallUpdate(url: string): Promise<void> {
   try {
     const { File, Directory, Paths } = require('expo-file-system');
 
-    const cacheDir = new Directory(Paths.cache, 'argus-updates');
-    if (!cacheDir.exists) {
-      await cacheDir.create({ intermediates: true });
+    // Save to Downloads so the user can find it in the file manager
+    let destDir: InstanceType<typeof Directory>;
+    try {
+      destDir = new Directory(Paths.downloads);
+      if (!destDir.exists) {
+        await destDir.create({ intermediates: true });
+      }
+    } catch {
+      // Fallback to cache if Downloads is unavailable (emulator / older API)
+      destDir = new Directory(Paths.cache, 'argus-updates');
+      if (!destDir.exists) {
+        await destDir.create({ intermediates: true });
+      }
     }
 
-    const oldFile = new File(cacheDir, 'argus-update.apk');
+    const oldFile = new File(destDir, 'argus-update.apk');
     if (oldFile.exists) {
       await oldFile.delete();
     }
 
-    console.log('[Update] Downloading APK...');
-    const apkFile = await File.downloadFileAsync(url, cacheDir, { idempotent: true });
-    console.log('[Update] Download complete.');
+    console.log('[Update] Downloading APK to', destDir.uri);
+    const apkFile = await File.downloadFileAsync(url, destDir, { idempotent: true });
+    console.log('[Update] Download complete:', apkFile.uri);
 
     try {
       await Linking.openURL(apkFile.uri);
     } catch {
       Alert.alert(
         'Обновление скачано',
-        `Найди файл в проводнике и открой его для установки:\n${apkFile.uri}`
+        `Файл сохранён в Загрузках:\n${apkFile.uri}\n\nОткрой его для установки.`
       );
     }
   } catch (error) {
