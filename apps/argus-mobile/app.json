@@ -21,6 +21,7 @@
     "android": {
       "package": "com.dimap.argus",
       "versionCode": 2,
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/icon_foreground.png"
