@@ -24,20 +24,29 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Determine next build number
+      - name: Determine version
         id: version
         run: |
           git fetch --tags origin 2>/dev/null || true
-          LAST_TAG=$(git tag -l 'build*' --sort=-v:refname | head -1)
+          LAST_TAG=$(git tag -l 'v0.*' --sort=-v:refname | head -1)
           if [ -z "$LAST_TAG" ]; then
-            NEXT_BUILD=1
+            MINOR=1
           else
-            NUM=$(echo "$LAST_TAG" | sed 's/build//')
-            NEXT_BUILD=$((NUM + 1))
+            MINOR=$(echo "$LAST_TAG" | sed 's/v0\.\([0-9]*\)\..*/\1/')
+            MINOR=$((MINOR + 1))
           fi
-          echo "build=$NEXT_BUILD" >> "$GITHUB_OUTPUT"
-          echo "tag=build$NEXT_BUILD" >> "$GITHUB_OUTPUT"
-          echo "Next build: $NEXT_BUILD (last tag: $LAST_TAG)"
+          DATE=$(date +'%Y.%-m.%-d')
+          SEMVER="v0.${MINOR}.0"
+          DATE_TAG="v${DATE}"
+          RELEASE_NAME="Argus ${SEMVER} (${DATE_TAG})"
+          GIT_TAG="v0.${MINOR}.0"
+          echo "minor=$MINOR" >> "$GITHUB_OUTPUT"
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+          echo "date_tag=$DATE_TAG" >> "$GITHUB_OUTPUT"
+          echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+          echo "git_tag=$GIT_TAG" >> "$GITHUB_OUTPUT"
+          echo "build=$MINOR" >> "$GITHUB_OUTPUT"
+          echo "Release: $RELEASE_NAME (tag: $GIT_TAG)"
 
       - uses: actions/setup-node@v4
         with:
@@ -74,7 +83,7 @@ jobs:
 
       - name: Patch CURRENT_BUILD in autoUpdate.ts
         run: |
-          sed -i "s/export const CURRENT_BUILD = [0-9]*;/export const CURRENT_BUILD = ${{ steps.version.outputs.build }};/" src/services/autoUpdate.ts
+          sed -i "s/export const CURRENT_BUILD = [0-9]*;/export const CURRENT_BUILD = ${{ steps.version.outputs.minor }};/" src/services/autoUpdate.ts
           grep "CURRENT_BUILD" src/services/autoUpdate.ts
 
       - name: Expo prebuild
@@ -90,14 +99,14 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git tag "build${{ steps.version.outputs.build }}" HEAD
-          git push origin "build${{ steps.version.outputs.build }}"
+          git tag "${{ steps.version.outputs.git_tag }}" HEAD
+          git push origin "${{ steps.version.outputs.git_tag }}"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "build${{ steps.version.outputs.build }}"
-          name: "build${{ steps.version.outputs.build }}"
+          tag_name: "${{ steps.version.outputs.git_tag }}"
+          name: "${{ steps.version.outputs.release_name }}"
           files: apps/argus-mobile/android/app/build/outputs/apk/release/app-release.apk
           generate_release_notes: true
           fail_on_unmatched_files: false
