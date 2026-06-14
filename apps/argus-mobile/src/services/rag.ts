@@ -1,5 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import { File } from 'expo-file-system';
 
 export interface DocumentContext {
   name: string;
@@ -42,7 +42,7 @@ export async function pickAndParseDocument(): Promise<DocumentContext | null> {
     throw new Error(PDF_UNSUPPORTED_MESSAGE);
   }
 
-  const content = await FileSystem.readAsStringAsync(fileUri);
+  const content = await new File(fileUri).text();
   return { name: fileName, content };
 }
 

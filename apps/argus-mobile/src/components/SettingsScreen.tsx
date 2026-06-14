@@ -16,11 +16,12 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Trash2, ChevronRight, BarChart3, ArrowLeft, RefreshCw, Check, X, X as XIcon } from 'lucide-react-native';
+import { Trash2, ChevronRight, BarChart3, ArrowLeft, RefreshCw, Check, X, X as XIcon, Download } from 'lucide-react-native';
 import { AgentSettings } from '../types';
 import { loadApiKey, saveApiKey, sanitizeSettings } from '../services/storage';
 import { getTokenStats, getDailyStats, resetTokenStats, TokenStats, DailyRecord } from '../services/tokenStats';
 import { listSkills, deleteSkill, Skill } from '../services/skills';
+import { checkForUpdate, downloadAndInstallUpdate, CURRENT_BUILD } from '../services/autoUpdate';
 import { UsageChart } from './UsageChart';
 import { colors, motion, radius, spacing, typography } from '../styles/theme';
 
@@ -45,6 +46,9 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
   const [showStatsDetail, setShowStatsDetail] = useState(false);
   const [permissionsStatus, setPermissionsStatus] = useState<{ group: string; key: string; label: string; granted: boolean; checked: boolean }[]>([]);
   const [modalSection, setModalSection] = useState<string | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error'>('idle');
+  const [updateInfo, setUpdateInfo] = useState<{ version?: string; size?: number; changelog?: string; url?: string } | null>(null);
+  const [updateError, setUpdateError] = useState('');
   const entrance = useRef(new Animated.Value(0)).current;
   const modalScale = useRef(new Animated.Value(0)).current;
   const modalOpacity = useRef(new Animated.Value(0)).current;
@@ -265,6 +269,44 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
     ]);
   };
 
+  const handleCheckUpdate = useCallback(async () => {
+    setUpdateStatus('checking');
+    setUpdateError('');
+    try {
+      const result = await checkForUpdate();
+      if (result.hasUpdate) {
+        setUpdateInfo({ version: result.version, size: result.size, changelog: result.changelog, url: result.url });
+        setUpdateStatus('available');
+      } else {
+        setUpdateInfo(null);
+        setUpdateStatus('idle');
+        Alert.alert('Обновлений нет', 'У вас актуальная версия.');
+      }
+    } catch (e) {
+      setUpdateError(e instanceof Error ? e.message : 'Ошибка проверки');
+      setUpdateStatus('error');
+    }
+  }, []);
+
+  const handleDownloadUpdate = useCallback(async () => {
+    if (!updateInfo?.url) return;
+    setUpdateStatus('downloading');
+    setUpdateError('');
+    try {
+      await downloadAndInstallUpdate(updateInfo.url);
+      setUpdateStatus('downloaded');
+    } catch (e) {
+      setUpdateError(e instanceof Error ? e.message : 'Ошибка загрузки');
+      setUpdateStatus('error');
+    }
+  }, [updateInfo]);
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return '';
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  };
+
   const handleDeleteSkill = useCallback(async (id: string) => {
     await deleteSkill(id);
     const updated = await listSkills();
@@ -478,6 +520,78 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
             </View>
           </>
         ) : null;
+      case 'update':
+        return (
+          <>
+            <Text style={styles.modalTitle}>ОБНОВЛЕНИЕ</Text>
+            <View style={styles.card}>
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>Текущая версия</Text>
+                <Text style={{ color: colors.text, fontSize: typography.body }}>build {CURRENT_BUILD}</Text>
+                <Text style={styles.fieldHint}>Проверяет релизы GitHub</Text>
+              </View>
+              <View style={styles.divider} />
+              {updateStatus === 'checking' && (
+                <View style={styles.fieldRow}>
+                  <Text style={{ color: colors.textMuted }}>Проверка обновлений…</Text>
+                </View>
+              )}
+              {updateStatus === 'idle' && (
+                <Pressable
+                  onPress={handleCheckUpdate}
+                  style={({ pressed }) => [styles.nestedRow, pressed && styles.pressed]}
+                >
+                  <View style={styles.nestedRowLeft}>
+                    <RefreshCw size={16} color={colors.textMuted} />
+                    <Text style={styles.nestedRowText}>Проверить обновления</Text>
+                  </View>
+                </Pressable>
+              )}
+              {updateStatus === 'available' && updateInfo && (
+                <>
+                  <View style={styles.divider} />
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldLabel}>Доступно</Text>
+                    <Text style={{ color: colors.success, fontSize: typography.body, fontWeight: '600' }}>{updateInfo.version}</Text>
+                    {updateInfo.size ? <Text style={styles.fieldHint}>{formatFileSize(updateInfo.size)}</Text> : null}
+                    {updateInfo.changelog ? <Text style={styles.fieldHint}>{updateInfo.changelog}</Text> : null}
+                  </View>
+                  <View style={styles.divider} />
+                  <Pressable
+                    onPress={handleDownloadUpdate}
+                    style={({ pressed }) => [styles.nestedRow, pressed && styles.pressed]}
+                  >
+                    <View style={styles.nestedRowLeft}>
+                      <Download size={16} color={colors.accent} />
+                      <Text style={[styles.nestedRowText, { color: colors.accent }]}>Скачать и установить</Text>
+                    </View>
+                  </Pressable>
+                </>
+              )}
+              {updateStatus === 'downloading' && (
+                <View style={styles.fieldRow}>
+                  <Text style={{ color: colors.textMuted }}>Загрузка…</Text>
+                </View>
+              )}
+              {updateStatus === 'downloaded' && (
+                <View style={styles.fieldRow}>
+                  <Text style={{ color: colors.success }}>APK скачан. Откройте файл для установки.</Text>
+                </View>
+              )}
+              {updateStatus === 'error' && (
+                <View style={styles.fieldRow}>
+                  <Text style={{ color: colors.danger }}>{updateError || 'Ошибка'}</Text>
+                  <Pressable
+                    onPress={handleCheckUpdate}
+                    style={({ pressed }) => [styles.nestedRow, pressed && styles.pressed]}
+                  >
+                    <Text style={[styles.nestedRowText, { color: colors.accent }]}>Повторить</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          </>
+        );
       case 'skills':
         return (
           <>
@@ -612,6 +726,15 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
             style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
           >
             <Text style={styles.menuItemLabel}>СКИЛЛЫ</Text>
+            <ChevronRight size={16} color={colors.textDim} />
+          </Pressable>
+
+          {/* Section: Обновление */}
+          <Pressable
+            onPress={() => { setUpdateStatus('idle'); setUpdateInfo(null); setUpdateError(''); openModal('update'); }}
+            style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
+          >
+            <Text style={styles.menuItemLabel}>ОБНОВЛЕНИЕ</Text>
             <ChevronRight size={16} color={colors.textDim} />
           </Pressable>
 

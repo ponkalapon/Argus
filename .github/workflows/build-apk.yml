@@ -1,170 +1,48 @@
-name: Build Android APK
+name: Build APK
 
 on:
   push:
     tags:
-      - 'v*'
-  workflow_dispatch:
-    inputs:
-      version_name:
-        description: 'Version name (e.g. 1.2.0)'
-        required: false
-        default: ''
-      create_release:
-        description: 'Create GitHub Release'
-        required: false
-        default: 'false'
-        type: boolean
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      - 'build*'
 
 jobs:
   build:
-    name: Build release APK
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/argus-mobile
 
     steps:
-      # ── Checkout ────────────────────────────────────────────────────────
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # ── Node 24 ─────────────────────────────────────────────────────────
-      - name: Setup Node.js 24
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          # no cache: project has no package-lock.json
+          node-version: 22
 
-      # ── Java 17 ─────────────────────────────────────────────────────────
-      - name: Setup JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
-          java-version: '17'
           distribution: 'temurin'
+          java-version: '17'
 
-      # ── Android SDK ──────────────────────────────────────────────────────
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # ── Gradle cache ─────────────────────────────────────────────────────
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: gradle-${{ runner.os }}-
-
-      # ── Install dependencies ─────────────────────────────────────────────
       - name: Install dependencies
-        run: npm install --legacy-peer-deps --no-package-lock
-        working-directory: apps/argus-mobile
+        run: |
+          cd ../../
+          npm ci
 
-      # ── Expo prebuild ────────────────────────────────────────────────────
       - name: Expo prebuild
-        run: npx expo prebuild --platform android --clean --no-install
-        working-directory: apps/argus-mobile
-        env:
-          CI: true
-          EXPO_NO_DOTENV: 1
+        run: npx expo prebuild --platform android --no-install
 
-      # ── Write local.properties ───────────────────────────────────────────
-      - name: Write local.properties
-        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > apps/argus-mobile/android/local.properties
+      - name: Set SDK path
+        run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
 
-      # ── Keystore ─────────────────────────────────────────────────────────
-      - name: Setup keystore
-        working-directory: apps/argus-mobile
-        run: |
-          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
-            echo "Using keystore from secrets"
-            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/argus-release.keystore
-            echo "KS_PASS=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
-            echo "KS_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
-            echo "KS_KEY_PASS=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
-          else
-            echo "No keystore secret — generating debug keystore"
-            keytool -genkey -v \
-              -keystore android/app/argus-release.keystore \
-              -alias argus -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass android -keypass android \
-              -dname "CN=Argus,OU=Dev,O=Argus,L=Unknown,S=Unknown,C=US"
-            echo "KS_PASS=android" >> $GITHUB_ENV
-            echo "KS_ALIAS=argus" >> $GITHUB_ENV
-            echo "KS_KEY_PASS=android" >> $GITHUB_ENV
-          fi
+      - name: Build APK
+        run: cd android && ./gradlew assembleRelease --no-daemon
 
-      # ── Version ──────────────────────────────────────────────────────────
-      - name: Resolve version
-        id: version
-        working-directory: apps/argus-mobile
-        run: |
-          if [ -n "${{ github.event.inputs.version_name }}" ]; then
-            VERSION="${{ github.event.inputs.version_name }}"
-          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            VERSION="${{ github.ref_name }}"
-            VERSION="${VERSION#v}"
-          else
-            VERSION=$(node -p "require('./package.json').version")
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION"
-
-      # ── Build APK ────────────────────────────────────────────────────────
-      - name: Build release APK
-        working-directory: apps/argus-mobile/android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/apps/argus-mobile/android/app/argus-release.keystore" \
-            -Pandroid.injected.signing.store.password="${KS_PASS}" \
-            -Pandroid.injected.signing.key.alias="${KS_ALIAS}" \
-            -Pandroid.injected.signing.key.password="${KS_KEY_PASS}" \
-            --no-daemon
-        env:
-          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.parallel=false
-
-      # ── Rename & stage APK ────────────────────────────────────────────────
-      - name: Rename APK
-        id: apk
-        working-directory: apps/argus-mobile
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          APK_NAME="argus-mobile-v${VERSION}.apk"
-          cp android/app/build/outputs/apk/release/app-release.apk "$APK_NAME"
-          echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
-          ls -lh "$APK_NAME"
-
-      # ── Upload artifact ───────────────────────────────────────────────────
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.apk.outputs.apk_name }}
-          path: apps/argus-mobile/${{ steps.apk.outputs.apk_name }}
-          retention-days: 30
-
-      # ── GitHub Release ────────────────────────────────────────────────────
-      - name: Read release notes
-        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.create_release == 'true'
-        id: notes
-        working-directory: apps/argus-mobile
-        run: |
-          BODY=$(node -e "const r=require('../../release.json'); console.log(r.body||'')" 2>/dev/null || echo "Release ${{ steps.version.outputs.version }}")
-          echo "body<<EOF" >> $GITHUB_OUTPUT
-          echo "$BODY" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.create_release == 'true'
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: v${{ steps.version.outputs.version }}
-          body: ${{ steps.notes.outputs.body }}
-          draft: false
-          prerelease: false
-          files: apps/argus-mobile/${{ steps.apk.outputs.apk_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: android/app/build/outputs/apk/release/app-release.apk
+          generate_release_notes: true
