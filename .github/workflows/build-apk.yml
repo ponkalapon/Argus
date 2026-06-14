@@ -101,8 +101,8 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git tag "${{ steps.version.outputs.git_tag }}" HEAD
-          git push origin "${{ steps.version.outputs.git_tag }}"
+          git tag -f "${{ steps.version.outputs.git_tag }}" HEAD
+          git push origin "${{ steps.version.outputs.git_tag }}" --force
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
