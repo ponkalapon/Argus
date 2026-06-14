@@ -1,5 +1,7 @@
 export type Role = 'system' | 'user' | 'assistant' | 'tool';
 
+export type LLMProvider = 'openai' | 'anthropic' | 'gemini';
+
 export type ChatMessage = {
   id: string;
   role: Exclude<Role, 'system' | 'tool'>;
@@ -16,6 +18,7 @@ export type StoredChat = {
 };
 
 export type AgentSettings = {
+  provider: LLMProvider;
   baseUrl: string;
   model: string;
   allowAssistantContacts: boolean;
