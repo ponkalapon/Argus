@@ -1,20 +1,21 @@
 import { memo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
-import { colors, radius, spacing, typography } from '../styles/theme';
+import { colors, fontFamily, radius, spacing, typography } from '../styles/theme';
+import { t } from '../i18n';
 
 type Props = {
   disabled?: boolean;
   onSelect: (text: string) => void;
 };
 
-const actions = [
-  { label: 'Код', prompt: 'Напиши код' },
-  { label: 'План', prompt: 'Составь план' },
-  { label: 'Объяснение', prompt: 'Объясни' },
-  { label: 'Исправление', prompt: 'Исправь ошибку' },
-];
-
 export const QuickActionChips = memo(({ disabled, onSelect }: Props) => {
+  const actions = [
+    { label: t('quickActions.code'), prompt: t('quickActions.codePrompt') },
+    { label: t('quickActions.plan'), prompt: t('quickActions.planPrompt') },
+    { label: t('quickActions.explanation'), prompt: t('quickActions.explanationPrompt') },
+    { label: t('quickActions.fix'), prompt: t('quickActions.fixPrompt') },
+  ];
+
   return (
     <ScrollView
       horizontal
@@ -67,6 +68,7 @@ const styles = StyleSheet.create({
   },
   text: {
     color: colors.textMuted,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     fontWeight: '500',
   },

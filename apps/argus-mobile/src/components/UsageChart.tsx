@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { Dimensions, Text, View } from 'react-native';
 import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
 import type { DailyRecord } from '../services/tokenStats';
-import { colors, spacing, typography } from '../styles/theme';
+import { colors, fontFamily, spacing, typography } from '../styles/theme';
+import { t } from '../i18n';
 
 type Props = {
   data: DailyRecord[];
@@ -40,7 +41,8 @@ export const UsageChart = ({ data }: Props) => {
 
   const formatDay = (dateStr: string) => {
     const d = new Date(dateStr + 'T00:00:00');
-    return ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][d.getUTCDay()];
+    const days = [t('usageChart.daySun'), t('usageChart.dayMon'), t('usageChart.dayTue'), t('usageChart.dayWed'), t('usageChart.dayThu'), t('usageChart.dayFri'), t('usageChart.daySat')];
+    return days[d.getUTCDay()];
   };
 
   const formatShortDate = (dateStr: string) => {
@@ -55,7 +57,7 @@ export const UsageChart = ({ data }: Props) => {
     return (
       <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
         <Text style={{ color: colors.textMuted, fontSize: typography.caption }}>
-          Нет данных за последние дни
+          {t('usageChart.noData')}
         </Text>
       </View>
     );
@@ -111,11 +113,11 @@ export const UsageChart = ({ data }: Props) => {
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.lg, marginTop: spacing.md }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#6ee7b7' }} />
-          <Text style={{ color: colors.textMuted, fontSize: typography.caption }}>выходные</Text>
+          <Text style={{ color: colors.textMuted, fontSize: typography.caption }}>{t('usageChart.outputTokens')}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#a78bfa' }} />
-          <Text style={{ color: colors.textMuted, fontSize: typography.caption }}>входные</Text>
+          <Text style={{ color: colors.textMuted, fontSize: typography.caption }}>{t('usageChart.inputTokens')}</Text>
         </View>
       </View>
     </View>

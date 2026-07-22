@@ -1,10 +1,10 @@
-import { memo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { memo, useEffect, useRef, useState } from 'react';
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import Markdown, { ASTNode } from 'react-native-markdown-display';
 import { ChatMessage } from '../types';
-import { colors, radius, spacing, typography } from '../styles/theme';
-import { Bot } from 'lucide-react-native';
+import { colors, fontFamily, radius, spacing, typography } from '../styles/theme';
+import { t } from '../i18n';
 import MermaidChart from './MermaidChart';
 
 type Props = {
@@ -15,7 +15,57 @@ export const MessageBubble = memo(({ message }: Props) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const isUser = message.role === 'user';
   const isEmpty = !isUser && message.content.length === 0;
-  const raw = isEmpty ? '...' : message.content;
+  const raw = isEmpty ? '' : message.content;
+
+  const fadeAnim = useRef(new Animated.Value(message.content.length > 0 ? 1 : 0)).current;
+  const pulseAnim = useRef(new Animated.Value(0.4)).current;
+  const prevContentLen = useRef(message.content.length);
+
+  useEffect(() => {
+    if (!isUser && message.content.length > prevContentLen.current) {
+      fadeAnim.setValue(0.7);
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 120,
+        useNativeDriver: true,
+      }).start();
+    }
+    prevContentLen.current = message.content.length;
+  }, [message.content.length]);
+
+  const dot1Anim = useRef(new Animated.Value(0.4)).current;
+  const dot2Anim = useRef(new Animated.Value(0.6)).current;
+  const dot3Anim = useRef(new Animated.Value(0.8)).current;
+
+  useEffect(() => {
+    if (isEmpty) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.parallel([
+            Animated.timing(dot1Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+            Animated.timing(dot2Anim, { toValue: 0.4, duration: 400, useNativeDriver: true }),
+            Animated.timing(dot3Anim, { toValue: 0.6, duration: 400, useNativeDriver: true }),
+          ]),
+          Animated.parallel([
+            Animated.timing(dot1Anim, { toValue: 0.6, duration: 400, useNativeDriver: true }),
+            Animated.timing(dot2Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+            Animated.timing(dot3Anim, { toValue: 0.4, duration: 400, useNativeDriver: true }),
+          ]),
+          Animated.parallel([
+            Animated.timing(dot1Anim, { toValue: 0.4, duration: 400, useNativeDriver: true }),
+            Animated.timing(dot2Anim, { toValue: 0.6, duration: 400, useNativeDriver: true }),
+            Animated.timing(dot3Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+          ]),
+        ]),
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+    dot1Anim.setValue(1);
+    dot2Anim.setValue(1);
+    dot3Anim.setValue(1);
+    return undefined;
+  }, [isEmpty]);
 
   if (isUser) {
     return (
@@ -53,7 +103,7 @@ export const MessageBubble = memo(({ message }: Props) => {
         <View style={styles.codeHeader}>
           <Text style={styles.codeLang}>{lang || 'code'}</Text>
           <Text style={[styles.copyHint, isCopied && styles.copyHintActive]}>
-            {isCopied ? 'Скопировано' : 'Копировать'}
+            {isCopied ? t('messageBubble.copied') : t('messageBubble.copy')}
           </Text>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator>
@@ -73,13 +123,25 @@ export const MessageBubble = memo(({ message }: Props) => {
   return (
     <View style={styles.row}>
       <View style={styles.avatar}>
-        <Bot size={16} color="#a78bfa" />
+        <Image
+          source={require('../../assets/icon.png')}
+          style={styles.avatarImage}
+          resizeMode="contain"
+        />
       </View>
-      <View style={styles.assistantBubble}>
-        <Markdown style={markdownStyles} rules={rules}>
-          {raw}
-        </Markdown>
-      </View>
+      <Animated.View style={[styles.assistantBubble, { opacity: isEmpty ? pulseAnim : fadeAnim }]}>
+        {isEmpty ? (
+          <View style={styles.typingIndicator}>
+            <Animated.View style={[styles.typingDot, { opacity: dot1Anim }]} />
+            <Animated.View style={[styles.typingDot, { opacity: dot2Anim }]} />
+            <Animated.View style={[styles.typingDot, { opacity: dot3Anim }]} />
+          </View>
+        ) : (
+          <Markdown style={markdownStyles} rules={rules}>
+            {raw}
+          </Markdown>
+        )}
+      </Animated.View>
     </View>
   );
 });
@@ -87,6 +149,7 @@ export const MessageBubble = memo(({ message }: Props) => {
 const markdownStyles = StyleSheet.create({
   body: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     lineHeight: 24,
   },
@@ -94,7 +157,7 @@ const markdownStyles = StyleSheet.create({
     backgroundColor: '#1e1e3a',
     borderRadius: 4,
     color: '#a78bfa',
-    fontFamily: 'monospace',
+    fontFamily: fontFamily.mono,
     fontSize: 13,
     paddingHorizontal: 5,
   },
@@ -141,9 +204,9 @@ const markdownStyles = StyleSheet.create({
     color: '#a78bfa',
     textDecorationLine: 'underline',
   },
-  heading1: { color: colors.text, fontWeight: 'bold', fontSize: 24, marginVertical: 10 },
-  heading2: { color: colors.text, fontWeight: 'bold', fontSize: 20, marginVertical: 8 },
-  heading3: { color: colors.text, fontWeight: 'bold', fontSize: 18, marginVertical: 6 },
+  heading1: { color: colors.text, fontFamily: fontFamily.regular, fontWeight: 'bold', fontSize: 24, marginVertical: 10 },
+  heading2: { color: colors.text, fontFamily: fontFamily.regular, fontWeight: 'bold', fontSize: 20, marginVertical: 8 },
+  heading3: { color: colors.text, fontFamily: fontFamily.regular, fontWeight: 'bold', fontSize: 18, marginVertical: 6 },
   paragraph: { marginVertical: 4 },
   bullet_list: { marginVertical: 4 },
   ordered_list: { marginVertical: 4 },
@@ -162,13 +225,18 @@ const styles = StyleSheet.create({
   },
   avatar: {
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: '#000000',
     borderRadius: radius.pill,
     height: 30,
     justifyContent: 'center',
     marginTop: 1,
     width: 30,
     flexShrink: 0,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 24,
+    height: 24,
   },
   avatarText: {
     color: colors.textMuted,
@@ -184,6 +252,7 @@ const styles = StyleSheet.create({
   },
   userContent: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     lineHeight: 24,
   },
@@ -215,6 +284,7 @@ const styles = StyleSheet.create({
   },
   codeLang: {
     color: '#a78bfa',
+    fontFamily: fontFamily.regular,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -222,6 +292,7 @@ const styles = StyleSheet.create({
   },
   copyHint: {
     color: colors.textMuted,
+    fontFamily: fontFamily.regular,
     fontSize: 11,
     fontWeight: '500',
   },
@@ -230,10 +301,31 @@ const styles = StyleSheet.create({
   },
   codeText: {
     color: '#e5e7eb',
-    fontFamily: 'monospace',
+    fontFamily: fontFamily.mono,
     fontSize: 13,
     lineHeight: 20,
     padding: spacing.md,
     minWidth: 40,
+  },
+  typingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: spacing.sm,
+  },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#a78bfa',
+  },
+  typingDot1: {
+    opacity: 0.4,
+  },
+  typingDot2: {
+    opacity: 0.6,
+  },
+  typingDot3: {
+    opacity: 0.8,
   },
 });

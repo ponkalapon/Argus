@@ -1,46 +1,38 @@
-import Voice from '@react-native-voice/voice';
-
 let onResultCallback: ((text: string) => void) | null = null;
 let onErrorCallback: ((error: string) => void) | null = null;
 let _isRecording = false;
 
-Voice.onSpeechResults = (e) => {
-  const text = e.value?.[0] || '';
-  if (text && onResultCallback) onResultCallback(text);
-};
-
-Voice.onSpeechError = (e) => {
-  if (onErrorCallback) onErrorCallback(e.error?.message || 'Ошибка распознавания');
-};
-
-Voice.onSpeechEnd = () => {
-  _isRecording = false;
-};
-
 export const isRecording = () => _isRecording;
 
 export const startListening = async (locale = 'ru-RU'): Promise<void> => {
-  try {
+  if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = locale;
+    recognition.onresult = (e: any) => {
+      const text = e.results?.[0]?.[0]?.transcript || '';
+      if (text && onResultCallback) onResultCallback(text);
+    };
+    recognition.onerror = (e: any) => {
+      if (onErrorCallback) onErrorCallback(e.error || 'Ошибка распознавания');
+    };
+    recognition.onend = () => {
+      _isRecording = false;
+    };
     _isRecording = true;
-    await Voice.start(locale);
-  } catch {
-    _isRecording = false;
-    throw new Error('Не удалось запустить запись');
+    recognition.start();
+    return;
   }
+  _isRecording = false;
+  throw new Error('Голосовой ввод недоступен');
 };
 
 export const stopListening = async (): Promise<void> => {
-  try {
-    _isRecording = false;
-    await Voice.stop();
-  } catch {}
+  _isRecording = false;
 };
 
 export const destroy = async (): Promise<void> => {
   _isRecording = false;
-  try {
-    await Voice.destroy();
-  } catch {}
 };
 
 export const onResult = (cb: (text: string) => void) => {

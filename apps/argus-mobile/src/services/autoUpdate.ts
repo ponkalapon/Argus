@@ -3,12 +3,14 @@ import { Platform, Alert, Linking } from 'react-native';
 const REPO_OWNER = 'ponkalapon';
 const REPO_NAME = 'Argus';
 const GITHUB_API = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest`;
-export const CURRENT_BUILD = 1; // minor version number, patched automatically by CI
+export const CURRENT_VERSION = '0.5.0';
+export const CURRENT_BUILD = 3;
 
 interface GitHubRelease {
   tag_name: string;
   name: string;
   body: string;
+  published_at: string;
   assets: Array<{
     name: string;
     browser_download_url: string;
@@ -19,6 +21,7 @@ interface GitHubRelease {
 export type CheckUpdateResult = {
   hasUpdate: boolean;
   version?: string;
+  tagName?: string;
   url?: string;
   size?: number;
   changelog?: string;
@@ -26,21 +29,26 @@ export type CheckUpdateResult = {
   info?: string;
 };
 
-/**
- * Extracts a comparable build number from a tag.
- * Supports both legacy "build6" and new "v0.7.0" formats.
- */
-function parseBuildNumber(tag: string): number | null {
-  // New format: v0.X.0
-  const semverMatch = tag.match(/^v0\.(\d+)\.\d+$/);
-  if (semverMatch) return parseInt(semverMatch[1], 10);
-
-  // Legacy format: build6
-  const legacyMatch = tag.match(/build(\d+)$/i);
-  if (legacyMatch) return parseInt(legacyMatch[1], 10);
-
+const parseVersion = (tagName: string): { version: string; date: string } | null => {
+  const match = tagName.match(/v?(\d+\.\d+\.\d+)\s*\((\d{4}\.\d+\.\d+)\)/i)
+    || tagName.match(/Argus\s+v?(\d+\.\d+\.\d+)/i);
+  if (match) {
+    return { version: match[1], date: match[2] };
+  }
   return null;
-}
+};
+
+const compareVersions = (a: string, b: string): number => {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0;
+    const nb = pb[i] || 0;
+    if (na > nb) return 1;
+    if (na < nb) return -1;
+  }
+  return 0;
+};
 
 export async function checkForUpdate(): Promise<CheckUpdateResult> {
   try {
@@ -66,14 +74,14 @@ export async function checkForUpdate(): Promise<CheckUpdateResult> {
     }
 
     const release: GitHubRelease = await response.json();
+    const parsed = parseVersion(release.tag_name);
 
-    const latestBuild = parseBuildNumber(release.tag_name);
-    if (latestBuild === null) {
-      return { hasUpdate: false, error: `Неизвестный формат тега: "${release.tag_name}"` };
+    if (!parsed) {
+      return { hasUpdate: false, error: `Тег "${release.tag_name}" не распознан` };
     }
 
-    if (latestBuild <= CURRENT_BUILD) {
-      return { hasUpdate: false, info: `Установлена актуальная версия (build ${CURRENT_BUILD})` };
+    if (compareVersions(parsed.version, CURRENT_VERSION) <= 0) {
+      return { hasUpdate: false, info: `Установлена актуальная версия ${parsed.version}` };
     }
 
     const apkAsset = release.assets.find((a) => a.name.endsWith('.apk'));
@@ -83,7 +91,8 @@ export async function checkForUpdate(): Promise<CheckUpdateResult> {
 
     return {
       hasUpdate: true,
-      version: release.name || release.tag_name,
+      version: parsed.version,
+      tagName: release.tag_name,
       url: apkAsset.browser_download_url,
       size: apkAsset.size,
       changelog: release.body,
@@ -98,36 +107,26 @@ export async function downloadAndInstallUpdate(url: string): Promise<void> {
   try {
     const { File, Directory, Paths } = require('expo-file-system');
 
-    // Save to Downloads so the user can find it in the file manager
-    let destDir: InstanceType<typeof Directory>;
-    try {
-      destDir = new Directory(Paths.downloads);
-      if (!destDir.exists) {
-        await destDir.create({ intermediates: true });
-      }
-    } catch {
-      // Fallback to cache if Downloads is unavailable (emulator / older API)
-      destDir = new Directory(Paths.cache, 'argus-updates');
-      if (!destDir.exists) {
-        await destDir.create({ intermediates: true });
-      }
+    const cacheDir = new Directory(Paths.cache, 'argus-updates');
+    if (!cacheDir.exists) {
+      await cacheDir.create({ intermediates: true });
     }
 
-    const oldFile = new File(destDir, 'argus-update.apk');
+    const oldFile = new File(cacheDir, 'argus-update.apk');
     if (oldFile.exists) {
       await oldFile.delete();
     }
 
-    console.log('[Update] Downloading APK to', destDir.uri);
-    const apkFile = await File.downloadFileAsync(url, destDir, { idempotent: true });
-    console.log('[Update] Download complete:', apkFile.uri);
+    console.log('[Update] Downloading APK...');
+    const apkFile = await File.downloadFileAsync(url, cacheDir, { idempotent: true });
+    console.log('[Update] Download complete.');
 
     try {
       await Linking.openURL(apkFile.uri);
     } catch {
       Alert.alert(
         'Обновление скачано',
-        `Файл сохранён в Загрузках:\n${apkFile.uri}\n\nОткрой его для установки.`
+        `Найди файл в проводнике и открой его для установки:\n${apkFile.uri}`
       );
     }
   } catch (error) {

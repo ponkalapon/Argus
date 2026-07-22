@@ -2,7 +2,7 @@
   "name": "argus-web",
   "version": "1.0.0",
   "private": true,
-  "main": "expo/AppEntry.js",
+  "main": "electron/main.js",
   "scripts": {
     "start": "expo start",
     "start:clear": "expo start --clear",
@@ -10,7 +10,10 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test:stream": "rm -rf .tmp-test && tsc --ignoreConfig --target ES2022 --module Node16 --moduleResolution node16 --esModuleInterop --skipLibCheck --outDir .tmp-test src/services/openaiStream.ts && node --test tests/openaiStream.test.js"
+    "test:stream": "rm -rf .tmp-test && tsc --ignoreConfig --target ES2022 --module Node16 --moduleResolution node16 --esModuleInterop --skipLibCheck --outDir .tmp-test src/services/openaiStream.ts && node --test tests/openaiStream.test.js",
+    "build:web": "npm pkg set main=expo/AppEntry.js && set CI=1&& expo export -p web --output-dir dist && npm pkg set main=electron/main.js",
+    "electron:dev": "electron .",
+    "electron:dist": "npm run build:web && electron-builder"
   },
   "dependencies": {
     "@bittingz/expo-widgets": "^3.0.2",
@@ -31,18 +34,48 @@
     "lucide-react-native": "^1.17.0",
     "punycode": "^2.3.1",
     "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-native": "0.85.3",
     "react-native-gesture-handler": "~2.31.1",
     "react-native-markdown-display": "^7.0.2",
     "react-native-reanimated": "4.3.1",
     "react-native-safe-area-context": "~5.7.0",
+    "react-native-web": "^0.21.2",
     "react-native-webview": "13.16.1"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
-    "@types/react": "19.2.15",
+    "@types/react": "^19.2.15",
+    "electron": "^30.0.0",
+    "electron-builder": "^24.0.0",
     "fs-extra": "^11.3.5",
     "react-native-worklets": "^0.8.0",
-    "typescript": "6.0.3"
+    "typescript": "^6.0.3"
+  },
+  "build": {
+    "appId": "com.argus.desktop",
+    "productName": "Argus",
+    "directories": {
+      "output": "releases/electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/main.js",
+      "electron/preload.js",
+      "!node_modules/**/*",
+      "!node_modules"
+    ],
+    "asar": true,
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Argus"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png"
+    }
   }
 }

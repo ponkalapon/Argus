@@ -5,15 +5,18 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as SplashScreen from 'expo-splash-screen';
+import { useFonts } from 'expo-font';
 import { SettingsScreen } from './src/components/SettingsScreen';
 import { SandboxScreen } from './src/components/SandboxScreen';
 import { WorkspaceScreen } from './src/components/WorkspaceScreen';
 import { FileManagerScreen } from './src/components/FileManagerScreen';
 
+
 import { loadApiKey, loadSettings, saveSettings } from './src/services/storage';
 import { checkAndPromptUpdate } from './src/services/autoUpdate';
 import { AgentSettings } from './src/types';
-import { colors, spacing, typography } from './src/styles/theme';
+import { t, loadTranslations } from './src/i18n';
+import { colors, fontFamily, spacing, typography } from './src/styles/theme';
 
 
 try { SplashScreen.preventAutoHideAsync(); } catch {}
@@ -24,6 +27,12 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    'Roboto-Regular': require('./assets/Roboto-Regular.ttf'),
+    'Roboto-Bold': require('./assets/Roboto-Bold.ttf'),
+    'Roboto-Medium': require('./assets/Roboto-Medium.ttf'),
+  });
+
   const [screen, setScreen] = useState<'workspace' | 'settings' | 'sandbox' | 'files'>('workspace');
   const [settings, setSettings] = useState<AgentSettings | null>(null);
   const [apiKey, setApiKey] = useState('');
@@ -35,17 +44,18 @@ export default function App() {
     let mounted = true;
 
     Promise.all([loadSettings(), loadApiKey()])
-      .then(([storedSettings, storedApiKey]) => {
+      .then(async ([storedSettings, storedApiKey]) => {
         if (mounted) {
           setSettings(storedSettings);
           setApiKey(storedApiKey);
+          await loadTranslations(storedSettings.language || 'ru');
           // Check for app updates on startup
           checkAndPromptUpdate().catch(() => {});
         }
       })
       .catch((error) => {
         if (mounted) {
-          setLoadError(error instanceof Error ? error.message : 'Не удалось загрузить настройки');
+          setLoadError(error instanceof Error ? error.message : t('common.error'));
         }
       })
       .finally(() => {
@@ -62,17 +72,20 @@ export default function App() {
 
   const handleSaveSettings = useCallback(async (nextSettings: AgentSettings, nextApiKey: string) => {
     await saveSettings(nextSettings);
+    if (nextSettings.language !== settings?.language) {
+      await loadTranslations(nextSettings.language || 'ru');
+    }
     setSettings(nextSettings);
     setApiKey(nextApiKey);
-  }, []);
+  }, [settings?.language]);
 
-  if (isLoading || !settings) {
+  if (isLoading || !settings || !fontsLoaded) {
     return (
       <SafeAreaProvider>
         <StatusBar style="light" />
         <View style={styles.loadingScreen}>
           <ActivityIndicator color={colors.accent} size="large" />
-          <Text style={styles.loadingTitle}>Загрузка…</Text>
+          <Text style={styles.loadingTitle}>{t('common.loading')}</Text>
           {loadError ? <Text style={styles.loadingError}>{loadError}</Text> : null}
         </View>
       </SafeAreaProvider>
@@ -121,6 +134,7 @@ const styles = StyleSheet.create({
   },
   loadingTitle: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.subtitle,
     fontWeight: '900',
     marginTop: spacing.lg,
@@ -128,6 +142,7 @@ const styles = StyleSheet.create({
   },
   loadingError: {
     color: colors.danger,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     lineHeight: 22,
     marginTop: spacing.md,

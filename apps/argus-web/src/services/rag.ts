@@ -1,5 +1,4 @@
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
 
 export interface DocumentContext {
   name: string;
@@ -42,19 +41,24 @@ export async function pickAndParseDocument(): Promise<DocumentContext | null> {
     throw new Error(PDF_UNSUPPORTED_MESSAGE);
   }
 
-  const content = await FileSystem.readAsStringAsync(fileUri);
+  let content = '';
+  if (asset.file) {
+    content = await asset.file.text();
+  } else {
+    const res = await fetch(fileUri);
+    content = await res.text();
+  }
+
   return { name: fileName, content };
 }
 
 export function searchContext(query: string, documents: DocumentContext[]): string {
   if (documents.length === 0) return '';
   
-  // Простейший поиск по ключевым словам для демонстрации RAG
-  // В идеале здесь должен быть векторный поиск
   let relevantText = '';
   for (const doc of documents) {
     relevantText += `\n--- Документ: ${doc.name} ---\n${doc.content}\n`;
   }
   
-  return relevantText.slice(0, 10000); // Ограничиваем контекст 10к символов
+  return relevantText.slice(0, 10000);
 }

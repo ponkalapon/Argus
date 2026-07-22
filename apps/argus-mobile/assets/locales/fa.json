@@ -1,0 +1,49 @@
+{
+  "common": {
+    "loading": "در حال بارگذاری…",
+    "error": "خطا",
+    "cancel": "لغو",
+    "ok": "باشه",
+    "delete": "حذف",
+    "save": "ذخیره"
+  },
+  "status": {
+    "idle": "آماده",
+    "thinking": "در حال فکر کردن…",
+    "error": "خطا"
+  },
+  "agentStatus": {
+    "modelNotSet": "مدل تنظیم نشده",
+    "connectionNotConfigured": "اتصال پیکربندی نشده",
+    "keySet": "کلید تنظیم شده",
+    "noKey": "بدون کلید",
+    "messages": "پیام"
+  },
+  "settings": {
+    "language": "زبان",
+    "model": "مدل",
+    "apiFormat": "فرمت API",
+    "connection": "اتصال",
+    "provider": "ارائه‌دهنده",
+    "custom": "سفارشی",
+    "noKey": "بدون کلید",
+    "token": "توکن",
+    "keyOptional": "کلید (اختیاری)",
+    "loading": "در حال بارگذاری…",
+    "permissions": "مجوزها",
+    "stats": "آمار",
+    "update": "به‌روزرسانی",
+    "skills": "مهارت‌ها",
+    "settingsTitle": "تنظیمات"
+  },
+  "workspace": {
+    "welcomeTitle": "چطور می‌تونم کمک کنم؟",
+    "inputPlaceholder": "از دستیار بپرسید…",
+    "connected": "متصل",
+    "notConfigured": "پیکربندی نشده"
+  },
+  "messageBubble": {
+    "copied": "کپی شد",
+    "copy": "کپی"
+  }
+}

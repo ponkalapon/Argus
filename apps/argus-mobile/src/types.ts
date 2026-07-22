@@ -1,29 +1,5 @@
 export type Role = 'system' | 'user' | 'assistant' | 'tool';
 
-export type LLMProvider =
-  | 'openai'
-  | 'anthropic'
-  | 'gemini'
-  | 'openrouter'
-  | 'ollama'
-  | 'mistral'
-  | 'cohere'
-  | 'groq'
-  | 'together'
-  | 'xai'
-  | 'deepseek'
-  | 'azure'
-  | 'custom';
-
-/**
- * Схема авторизации для провайдера:
- * - apiKey   — Bearer token или x-api-key header
- * - oauth    — OAuth 2.0 (access token)
- * - none     — авторизация не нужна (Ollama local)
- * - azure    — API Key + resourceName + deploymentId
- */
-export type AuthScheme = 'apiKey' | 'oauth' | 'none' | 'azure';
-
 export type ChatMessage = {
   id: string;
   role: Exclude<Role, 'system' | 'tool'>;
@@ -39,15 +15,15 @@ export type StoredChat = {
   updatedAt: number;
 };
 
+export type ApiFormat = 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'kobold' | 'textgen';
+
 export type AgentSettings = {
-  provider: LLMProvider;
   baseUrl: string;
   model: string;
   allowAssistantContacts: boolean;
-  /** Дополнительные поля для Azure */
-  azureResourceName?: string;
-  azureDeploymentId?: string;
-  azureApiVersion?: string;
+  internetEnabled: boolean;
+  apiFormat: ApiFormat;
+  language: string;
 };
 
 export type StoredSettings = AgentSettings;

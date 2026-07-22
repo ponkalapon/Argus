@@ -1,4 +1,4 @@
-import { ChatCompletionContext, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResult } from '../types';
+import { ChatCompletionContext, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResult, ApiFormat } from '../types';
 import { ChatCompletionResponse, extractTextFromJson, extractToolCalls, readStreamingResponse, fetchWithRetry } from './openaiStream';
 import { formatMemoryContext, searchMemory } from './memory';
 import { formatSkillIndex, listSkills } from './skills';
@@ -22,8 +22,7 @@ const MEMORY_NUDGE_INTERVAL = 3;
 const trimTrailingSlashes = (value: string) => value.replace(/\/+$/, '');
 
 export const normalizeBaseUrl = (baseUrl: string) => {
-  // Strip trailing slashes first
-  let trimmed = trimTrailingSlashes(baseUrl.trim());
+  const trimmed = trimTrailingSlashes(baseUrl.trim());
 
   if (!trimmed) {
     throw new Error('Укажи Base URL в настройках.');
@@ -32,10 +31,6 @@ export const normalizeBaseUrl = (baseUrl: string) => {
   if (!/^https?:\/\//i.test(trimmed)) {
     throw new Error('Base URL должен начинаться с http:// или https://.');
   }
-
-  // Strip trailing /v1 (or /v1/) so callers can safely append /v1/...
-  // e.g. http://host:port/v1 → http://host:port
-  trimmed = trimmed.replace(/\/v1$/i, '');
 
   return trimmed;
 };
@@ -141,17 +136,31 @@ const parseErrorMessage = async (response: Response) => {
   }
 };
 
-const createHeaders = (apiKey: string): Record<string, string> => {
+const createHeaders = (apiKey: string, apiFormat?: ApiFormat): Record<string, string> => {
   const headers: Record<string, string> = {
     Accept: 'application/json, text/event-stream',
     'Content-Type': 'application/json',
   };
 
   if (apiKey.trim()) {
-    headers.Authorization = `Bearer ${apiKey.trim()}`;
+    if (apiFormat === 'anthropic') {
+      headers['x-api-key'] = apiKey.trim();
+      headers['anthropic-version'] = '2023-06-01';
+    } else {
+      headers.Authorization = `Bearer ${apiKey.trim()}`;
+    }
   }
 
   return headers;
+};
+
+const getEndpointPath = (apiFormat: ApiFormat): string => {
+  switch (apiFormat) {
+    case 'ollama': return '/api/chat';
+    case 'anthropic': return '/v1/messages';
+    case 'kobold': return '/api/v1/chat/completions';
+    default: return '/v1/chat/completions';
+  }
 };
 
 const summarizeMiddle = async (
@@ -159,6 +168,7 @@ const summarizeMiddle = async (
   baseUrl: string,
   apiKey: string,
   model: string,
+  apiFormat: ApiFormat = 'openai',
 ): Promise<string> => {
   const { head, middle, tail } = buildCompressionPlan(messages);
 
@@ -178,9 +188,10 @@ const summarizeMiddle = async (
     },
   ];
 
-  const response = await fetchWithRetry(`${baseUrl}/v1/chat/completions`, {
+  const endpointPath = getEndpointPath(apiFormat);
+  const response = await fetchWithRetry(`${baseUrl}${endpointPath}`, {
     method: 'POST',
-    headers: createHeaders(apiKey),
+    headers: createHeaders(apiKey, apiFormat),
     body: JSON.stringify({
       model,
       messages: summaryMessages,
@@ -266,9 +277,12 @@ export const requestChatCompletion = async ({
       ];
     }
 
-    const response = await fetchWithRetry(`${baseUrl}/v1/chat/completions`, {
+    const apiFormat = settings.apiFormat || 'openai';
+    const endpointPath = getEndpointPath(apiFormat);
+
+    const response = await fetchWithRetry(`${baseUrl}${endpointPath}`, {
       method: 'POST',
-      headers: createHeaders(apiKey),
+      headers: createHeaders(apiKey, apiFormat),
       body: JSON.stringify({
         model,
         messages: [
@@ -360,7 +374,7 @@ export const requestChatCompletion = async ({
 
     if (info.needed) {
       const beforeTokens = estimateMessagesTokens(currentMessages);
-      const summary = await summarizeMiddle(currentMessages, baseUrl, apiKey, model);
+      const summary = await summarizeMiddle(currentMessages, baseUrl, apiKey, model, settings.apiFormat || 'openai');
 
       if (summary) {
         const compressed = compressMessages(currentMessages, summary);

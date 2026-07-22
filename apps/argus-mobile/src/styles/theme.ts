@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 export const colors = {
   background: '#000000',
   backgroundSoft: '#0d0d0d',
@@ -50,6 +52,13 @@ export const typography = {
   body: 15,
   mono: 13,
   caption: 12,
+};
+
+export const fontFamily = {
+  regular: 'Roboto-Regular',
+  bold: 'Roboto-Bold',
+  medium: 'Roboto-Medium',
+  mono: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
 };
 
 export const motion = {

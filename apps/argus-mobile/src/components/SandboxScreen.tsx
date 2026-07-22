@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
-import { colors, motion, radius, spacing, typography } from '../styles/theme';
+import { colors, fontFamily, motion, radius, spacing, typography } from '../styles/theme';
+import { t } from '../i18n';
 import { listSandboxes, Sandbox, createSandbox, sandboxListFiles, deleteSandbox } from '../services/sandbox';
 import { ArrowLeft, FileCode, FolderOpen, Globe, Plus, Trash2, X } from 'lucide-react-native';
 
@@ -42,7 +43,7 @@ export const SandboxScreen = ({ onBack }: Props) => {
 
   const handleCreate = async () => {
     const count = sandboxes.length + 1;
-    const sb = await createSandbox(`Песочница ${count}`);
+    const sb = await createSandbox(t('sandbox.newSandbox', { count }));
     await loadSandboxes();
     selectSandbox(sb.id);
   };
@@ -88,7 +89,7 @@ export const SandboxScreen = ({ onBack }: Props) => {
           <ArrowLeft size={20} color={colors.text} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {activeSandbox ? activeSandbox.name : 'Песочницы'}
+          {activeSandbox ? activeSandbox.name : t('sandbox.sandboxes')}
         </Text>
         <View style={styles.headerRight}>
           {activeSandbox && (
@@ -118,13 +119,13 @@ export const SandboxScreen = ({ onBack }: Props) => {
             ) : (
               <View style={styles.emptyPreview}>
                 <Globe size={32} color={colors.textDim} />
-                <Text style={styles.emptyPreviewTitle}>Нет контента</Text>
+                <Text style={styles.emptyPreviewTitle}>{t('sandbox.noContent')}</Text>
                 <Text style={styles.emptyPreviewText}>
-                  Попроси агента написать код — результат появится здесь
+                  {t('sandbox.noContentHint')}
                 </Text>
                 {sandboxFiles.length > 0 && (
                   <Text style={styles.emptyPreviewHint}>
-                    Есть файлы: выбери для предпросмотра
+                    {t('sandbox.hasFiles')}
                   </Text>
                 )}
               </View>
@@ -135,7 +136,7 @@ export const SandboxScreen = ({ onBack }: Props) => {
           {showFileList && (
             <View style={styles.filePanel}>
               <View style={styles.filePanelHeader}>
-                <Text style={styles.filePanelTitle}>Файлы песочницы</Text>
+                <Text style={styles.filePanelTitle}>{t('sandbox.filesTitle')}</Text>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => setShowFileList(false)}
@@ -147,8 +148,8 @@ export const SandboxScreen = ({ onBack }: Props) => {
               {sandboxFiles.length === 0 ? (
                 <View style={styles.emptyFiles}>
                   <FileCode size={20} color={colors.textDim} />
-                  <Text style={styles.emptyFilesText}>Файлов пока нет</Text>
-                  <Text style={styles.emptyFilesHint}>Попроси агента создать файлы через sandbox_write_file</Text>
+                  <Text style={styles.emptyFilesText}>{t('sandbox.noFiles')}</Text>
+                  <Text style={styles.emptyFilesHint}>{t('sandbox.noFilesHint')}</Text>
                 </View>
               ) : (
                 <ScrollView style={styles.fileList}>
@@ -170,13 +171,13 @@ export const SandboxScreen = ({ onBack }: Props) => {
       ) : (
         /* Sandbox list */
         <View style={styles.sandboxListBody}>
-          <Text style={styles.sectionHeader}>ПЕСОЧНИЦЫ</Text>
+          <Text style={styles.sectionHeader}>{t('sandbox.sectionHeader')}</Text>
           {sandboxes.length === 0 ? (
             <View style={styles.emptyState}>
               <Globe size={40} color={colors.textDim} />
-              <Text style={styles.emptyStateTitle}>Нет песочниц</Text>
+              <Text style={styles.emptyStateTitle}>{t('sandbox.noSandboxes')}</Text>
               <Text style={styles.emptyStateText}>
-                Песочница — отдельная среда, где агент может запускать код, создавать HTML-страницы и SVG.
+                {t('sandbox.noSandboxesHint')}
               </Text>
             </View>
           ) : (
@@ -209,7 +210,7 @@ export const SandboxScreen = ({ onBack }: Props) => {
             style={({ pressed }) => [styles.createBtn, pressed && styles.pressed]}
           >
             <Plus size={20} color={colors.background} />
-            <Text style={styles.createBtnText}>Новая песочница</Text>
+            <Text style={styles.createBtnText}>{t('sandbox.createButton')}</Text>
           </Pressable>
         </View>
       )}
@@ -238,6 +239,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.subtitle,
     fontWeight: '600',
     flex: 1,
@@ -267,6 +269,7 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     color: colors.textDim,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     fontWeight: '600',
     letterSpacing: 0.8,
@@ -280,11 +283,13 @@ const styles = StyleSheet.create({
   },
   emptyStateTitle: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.subtitle,
     fontWeight: '600',
   },
   emptyStateText: {
     color: colors.textMuted,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     lineHeight: 22,
     textAlign: 'center',
@@ -310,6 +315,7 @@ const styles = StyleSheet.create({
   },
   sandboxItemName: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     fontWeight: '500',
     flex: 1,
@@ -334,6 +340,7 @@ const styles = StyleSheet.create({
   },
   createBtnText: {
     color: colors.background,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     fontWeight: '700',
   },
@@ -362,17 +369,20 @@ const styles = StyleSheet.create({
   },
   emptyPreviewTitle: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.subtitle,
     fontWeight: '600',
   },
   emptyPreviewText: {
     color: colors.textMuted,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     lineHeight: 22,
     textAlign: 'center',
   },
   emptyPreviewHint: {
     color: colors.textDim,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     marginTop: spacing.sm,
   },
@@ -393,6 +403,7 @@ const styles = StyleSheet.create({
   },
   filePanelTitle: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     fontWeight: '600',
   },
@@ -403,11 +414,13 @@ const styles = StyleSheet.create({
   },
   emptyFilesText: {
     color: colors.textMuted,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     fontWeight: '500',
   },
   emptyFilesHint: {
     color: colors.textDim,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     textAlign: 'center',
   },
@@ -424,8 +437,8 @@ const styles = StyleSheet.create({
   },
   fileItemPath: {
     color: colors.textMuted,
+    fontFamily: fontFamily.mono,
     fontSize: typography.caption,
     flex: 1,
-    fontFamily: 'monospace',
   },
 });

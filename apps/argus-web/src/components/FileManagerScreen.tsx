@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Directory, File, FileMode, Paths } from 'expo-file-system';
+const Paths: any = { document: { uri: '' }, cache: { uri: '' } };
+const Directory: any = class { constructor() {} async list() { return []; } };
+const File: any = class { constructor() {} async text() { return ''; } };
+const FileMode: any = {};
 import * as Sharing from 'expo-sharing';
 import { ArrowLeft, File as FileIcon, FileText, Folder, Image, Search, Trash2 } from 'lucide-react-native';
 import { colors, radius, spacing, typography } from '../styles/theme';

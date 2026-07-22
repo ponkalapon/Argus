@@ -4,7 +4,7 @@ import {
   Animated,
   Dimensions,
   KeyboardAvoidingView,
-  Linking,
+  LayoutAnimation,
   PermissionsAndroid,
   Platform,
   Pressable,
@@ -13,18 +13,20 @@ import {
   Switch,
   Text,
   TextInput,
+  UIManager,
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Trash2, ChevronRight, BarChart3, ArrowLeft, RefreshCw, Check, X, X as XIcon, Download, ExternalLink } from 'lucide-react-native';
-import { AgentSettings, LLMProvider } from '../types';
-import { loadApiKey, saveApiKey, sanitizeSettings, PROVIDER_META, ALL_PROVIDERS, PROVIDER_DEFAULTS } from '../services/storage';
+import { Trash2, ChevronRight, ChevronDown, BarChart3, ArrowLeft, RefreshCw, Check, X, X as XIcon, Download, Shield, ShieldCheck, ShieldOff } from 'lucide-react-native';
+import { AgentSettings, ApiFormat } from '../types';
+import { loadApiKey, saveApiKey, sanitizeSettings } from '../services/storage';
 import { getTokenStats, getDailyStats, resetTokenStats, TokenStats, DailyRecord } from '../services/tokenStats';
 import { listSkills, deleteSkill, Skill } from '../services/skills';
-import { checkForUpdate, downloadAndInstallUpdate, CURRENT_BUILD } from '../services/autoUpdate';
+import { checkForUpdate, downloadAndInstallUpdate, CURRENT_VERSION } from '../services/autoUpdate';
 import { UsageChart } from './UsageChart';
-import { colors, motion, radius, spacing, typography } from '../styles/theme';
+import { colors, fontFamily, motion, radius, spacing, typography } from '../styles/theme';
+import { t } from '../i18n';
 
 type Props = {
   initialSettings: AgentSettings;
@@ -32,52 +34,171 @@ type Props = {
   onSave: (settings: AgentSettings, apiKey: string) => Promise<void>;
 };
 
-const MODEL_SUGGESTIONS: Partial<Record<LLMProvider, string[]>> = {
-  openai: ['gpt-4.1-mini', 'gpt-4o-mini', 'gpt-4o', 'o4-mini'],
-  anthropic: ['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022', 'claude-opus-4-5'],
-  gemini: ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'],
-  openrouter: ['openai/gpt-4o-mini', 'anthropic/claude-3-haiku', 'meta-llama/llama-3.1-8b-instruct:free'],
-  ollama: ['llama3.2', 'mistral', 'qwen2.5', 'phi3', 'gemma3'],
-  mistral: ['mistral-small-latest', 'mistral-medium-latest', 'mistral-large-latest'],
-  cohere: ['command-r-plus', 'command-r', 'command-light'],
-  groq: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'gemma2-9b-it'],
-  together: ['meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo', 'mistralai/Mistral-7B-Instruct-v0.3'],
-  xai: ['grok-3-mini', 'grok-3', 'grok-2-1212'],
-  deepseek: ['deepseek-chat', 'deepseek-reasoner'],
-  azure: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
-  custom: [],
+const MODEL_SUGGESTIONS = ['gpt-4.1-mini', 'gpt-4o-mini', 'qwen/qwen3-coder'];
+
+type Provider = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  auth: 'api_key' | 'token' | 'none';
+  models: string[];
+  description: string;
+  apiFormat?: ApiFormat;
 };
 
+const PROVIDERS: Provider[] = [
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    baseUrl: 'https://api.openai.com',
+    auth: 'api_key',
+    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'o3-mini', 'gpt-4-turbo', 'gpt-4'],
+    description: 'settings.providers.openai',
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    baseUrl: 'https://openrouter.ai/api',
+    auth: 'api_key',
+    models: ['anthropic/claude-sonnet-4', 'anthropic/claude-3.5-sonnet', 'google/gemini-2.0-flash', 'meta-llama/llama-4-maverick', 'deepseek/deepseek-r1', 'qwen/qwen3-coder', 'openai/gpt-4o-mini'],
+    description: 'settings.providers.openrouter',
+  },
+  {
+    id: 'anthropic',
+    name: 'Anthropic',
+    baseUrl: 'https://api.anthropic.com',
+    auth: 'api_key',
+    models: ['claude-sonnet-4', 'claude-3.5-sonnet', 'claude-3.5-haiku', 'claude-3-opus', 'claude-3-haiku'],
+    description: 'settings.providers.anthropic',
+  },
+  {
+    id: 'google',
+    name: 'Google AI (Gemini)',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    auth: 'api_key',
+    models: ['gemini-2.0-flash', 'gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+    description: 'settings.providers.google',
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    baseUrl: 'https://api.deepseek.com',
+    auth: 'api_key',
+    models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'],
+    description: 'settings.providers.deepseek',
+  },
+  {
+    id: 'groq',
+    name: 'Groq',
+    baseUrl: 'https://api.groq.com/openai',
+    auth: 'api_key',
+    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
+    description: 'settings.providers.groq',
+  },
+  {
+    id: 'together',
+    name: 'Together AI',
+    baseUrl: 'https://api.together.xyz/v1',
+    auth: 'api_key',
+    models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo', 'Qwen/Qwen3-235B-A22B', 'deepseek-ai/DeepSeek-V3', 'google/gemma-2-27b-it'],
+    description: 'settings.providers.together',
+  },
+  {
+    id: 'fireworks',
+    name: 'Fireworks AI',
+    baseUrl: 'https://api.fireworks.ai/inference/v1',
+    auth: 'api_key',
+    models: ['accounts/fireworks/models/llama-v3p3-70b-instruct', 'accounts/fireworks/models/deepseek-v3', 'accounts/fireworks/models/qwen3-235b-a22b'],
+    description: 'settings.providers.fireworks',
+  },
+  {
+    id: 'mistral',
+    name: 'Mistral AI',
+    baseUrl: 'https://api.mistral.ai/v1',
+    auth: 'api_key',
+    models: ['mistral-large-latest', 'mistral-small-latest', 'codestral-latest', 'pixtral-large-latest'],
+    description: 'settings.providers.mistral',
+  },
+  {
+    id: 'xai',
+    name: 'xAI (Grok)',
+    baseUrl: 'https://api.x.ai/v1',
+    auth: 'api_key',
+    models: ['grok-3', 'grok-3-mini', 'grok-2'],
+    description: 'settings.providers.xai',
+  },
+  {
+    id: 'zhipu',
+    name: 'Zhipu AI (GLM)',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    auth: 'token',
+    models: ['glm-4-plus', 'glm-4-flash', 'glm-4-long'],
+    description: 'settings.providers.zhipu',
+  },
+  {
+    id: 'qwen-dashscope',
+    name: 'Alibaba (DashScope)',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    auth: 'api_key',
+    models: ['qwen3-235b-a22b', 'qwen-turbo-latest', 'qwen-plus-latest', 'qwen-max-latest'],
+    description: 'settings.providers.qwen-dashscope',
+  },
+  {
+    id: 'sambanova',
+    name: 'SambaNova',
+    baseUrl: 'https://api.sambanova.ai/v1',
+    auth: 'api_key',
+    models: ['Meta-Llama-3.3-70B-Instruct', 'DeepSeek-V3-0324'],
+    description: 'settings.providers.sambanova',
+  },
+  {
+    id: 'cerebras',
+    name: 'Cerebras',
+    baseUrl: 'https://api.cerebras.ai/v1',
+    auth: 'api_key',
+    models: ['llama-3.3-70b', 'llama-3.1-8b'],
+    description: 'settings.providers.cerebras',
+  },
+  {
+    id: 'openai-compat',
+    name: 'Custom',
+    baseUrl: '',
+    auth: 'api_key',
+    models: [],
+    description: 'settings.providers.custom',
+    apiFormat: 'openai' as const,
+  },
+];
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
-  const [provider, setProvider] = useState<LLMProvider>(initialSettings.provider ?? 'openai');
   const [baseUrl, setBaseUrl] = useState(initialSettings.baseUrl);
   const [model, setModel] = useState(initialSettings.model);
   const [allowAssistantContacts, setAllowAssistantContacts] = useState(initialSettings.allowAssistantContacts);
   const [apiKey, setApiKey] = useState('');
-  const [azureResourceName, setAzureResourceName] = useState(initialSettings.azureResourceName ?? '');
-  const [azureDeploymentId, setAzureDeploymentId] = useState(initialSettings.azureDeploymentId ?? '');
-  const [azureApiVersion, setAzureApiVersion] = useState(initialSettings.azureApiVersion ?? '2024-02-01');
   const [isKeyLoaded, setIsKeyLoaded] = useState(false);
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  const [showProviders, setShowProviders] = useState(false);
+  const [apiFormat, setApiFormat] = useState<ApiFormat>(initialSettings.apiFormat || 'openai');
+  const [language, setLanguage] = useState<string>(initialSettings.language || 'ru');
   const [tokenStats, setTokenStats] = useState<TokenStats | null>(null);
   const [dailyStats, setDailyStats] = useState<DailyRecord[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [showStatsDetail, setShowStatsDetail] = useState(false);
-  const [permissionsStatus, setPermissionsStatus] = useState<{ group: string; key: string; label: string; granted: boolean; checked: boolean }[]>([]);
+  const [permissionsStatus, setPermissionsStatus] = useState<{ group: string; key: string; label: string; description: string; granted: boolean; checked: boolean }[]>([]);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [requestingPerm, setRequestingPerm] = useState<string | null>(null);
   const [modalSection, setModalSection] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error'>('idle');
-  const [updateInfo, setUpdateInfo] = useState<{ version?: string; size?: number; changelog?: string; url?: string } | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<{ version?: string; tagName?: string; size?: number; changelog?: string; url?: string } | null>(null);
   const [updateError, setUpdateError] = useState('');
   const entrance = useRef(new Animated.Value(0)).current;
   const modalScale = useRef(new Animated.Value(0)).current;
   const modalOpacity = useRef(new Animated.Value(0)).current;
-
-  const meta = PROVIDER_META[provider];
-  const primaryAuth = meta.authSchemes[0];
-  const supportsOAuth = meta.authSchemes.includes('oauth');
-  const needsKey = primaryAuth !== 'none';
-  const isAzure = provider === 'azure';
 
   const loadDaily = useCallback(async () => {
     const stats = await getDailyStats();
@@ -86,109 +207,99 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
 
   const loadPermissions = useCallback(async () => {
     if (Platform.OS !== 'android') return;
-    const groups: { label: string; perms: { key: string; label: string }[] }[] = [
+    const groups: { label: string; perms: { key: string; label: string; description: string }[] }[] = [
       {
-        label: 'Микрофон и камера',
+        label: t('settings.permissionsGroup.microphoneCamera'),
         perms: [
-          { key: 'RECORD_AUDIO', label: 'Микрофон' },
-          { key: 'CAMERA', label: 'Камера' },
+          { key: 'RECORD_AUDIO', label: t('settings.permissionsGroup.microphone'), description: t('settings.permissionsGroup.microphoneDesc') },
+          { key: 'CAMERA', label: t('settings.permissionsGroup.camera'), description: t('settings.permissionsGroup.cameraDesc') },
         ],
       },
       {
-        label: 'Контакты',
+        label: t('settings.permissionsGroup.contacts'),
         perms: [
-          { key: 'READ_CONTACTS', label: 'Чтение контактов' },
-          { key: 'WRITE_CONTACTS', label: 'Запись контактов' },
-          { key: 'GET_ACCOUNTS', label: 'Аккаунты' },
+          { key: 'READ_CONTACTS', label: t('settings.permissionsGroup.readContacts'), description: t('settings.permissionsGroup.readContactsDesc') },
+          { key: 'WRITE_CONTACTS', label: t('settings.permissionsGroup.writeContacts'), description: t('settings.permissionsGroup.writeContactsDesc') },
+          { key: 'GET_ACCOUNTS', label: t('settings.permissionsGroup.accounts'), description: t('settings.permissionsGroup.accountsDesc') },
         ],
       },
       {
-        label: 'Календарь',
+        label: t('settings.permissionsGroup.calendar'),
         perms: [
-          { key: 'READ_CALENDAR', label: 'Чтение календаря' },
-          { key: 'WRITE_CALENDAR', label: 'Запись календаря' },
+          { key: 'READ_CALENDAR', label: t('settings.permissionsGroup.readCalendar'), description: t('settings.permissionsGroup.readCalendarDesc') },
+          { key: 'WRITE_CALENDAR', label: t('settings.permissionsGroup.writeCalendar'), description: t('settings.permissionsGroup.writeCalendarDesc') },
         ],
       },
       {
-        label: 'Телефон',
+        label: t('settings.permissionsGroup.phone'),
         perms: [
-          { key: 'READ_PHONE_STATE', label: 'Состояние телефона' },
-          { key: 'READ_PHONE_NUMBERS', label: 'Номер телефона' },
-          { key: 'CALL_PHONE', label: 'Звонки' },
-          { key: 'READ_CALL_LOG', label: 'Журнал звонков' },
-          { key: 'WRITE_CALL_LOG', label: 'Запись в журнал звонков' },
-          { key: 'ADD_VOICEMAIL', label: 'Голосовая почта' },
-          { key: 'USE_SIP', label: 'VoIP/SIP' },
-          { key: 'ANSWER_PHONE_CALLS', label: 'Ответ на звонки' },
+          { key: 'READ_PHONE_STATE', label: t('settings.permissionsGroup.phoneState'), description: t('settings.permissionsGroup.phoneStateDesc') },
+          { key: 'READ_PHONE_NUMBERS', label: t('settings.permissionsGroup.phoneNumber'), description: t('settings.permissionsGroup.phoneNumberDesc') },
+          { key: 'CALL_PHONE', label: t('settings.permissionsGroup.calls'), description: t('settings.permissionsGroup.callsDesc') },
+          { key: 'READ_CALL_LOG', label: t('settings.permissionsGroup.callLog'), description: t('settings.permissionsGroup.callLogDesc') },
+          { key: 'WRITE_CALL_LOG', label: t('settings.permissionsGroup.writeCallLog'), description: t('settings.permissionsGroup.writeCallLogDesc') },
+          { key: 'ANSWER_PHONE_CALLS', label: t('settings.permissionsGroup.answerCalls'), description: t('settings.permissionsGroup.answerCallsDesc') },
         ],
       },
       {
         label: 'SMS',
         perms: [
-          { key: 'SEND_SMS', label: 'Отправка SMS' },
-          { key: 'RECEIVE_SMS', label: 'Получение SMS' },
-          { key: 'READ_SMS', label: 'Чтение SMS' },
-          { key: 'RECEIVE_WAP_PUSH', label: 'WAP Push' },
-          { key: 'RECEIVE_MMS', label: 'Получение MMS' },
+          { key: 'SEND_SMS', label: t('settings.permissionsGroup.sendSms'), description: t('settings.permissionsGroup.sendSmsDesc') },
+          { key: 'RECEIVE_SMS', label: t('settings.permissionsGroup.receiveSms'), description: t('settings.permissionsGroup.receiveSmsDesc') },
+          { key: 'READ_SMS', label: t('settings.permissionsGroup.readSms'), description: t('settings.permissionsGroup.readSmsDesc') },
         ],
       },
       {
-        label: 'Хранилище и медиа',
+        label: t('settings.permissionsGroup.storageMedia'),
         perms: [
-          { key: 'READ_EXTERNAL_STORAGE', label: 'Внешнее хранилище (чтение)' },
-          { key: 'WRITE_EXTERNAL_STORAGE', label: 'Внешнее хранилище (запись)' },
-          { key: 'READ_MEDIA_IMAGES', label: 'Изображения' },
-          { key: 'READ_MEDIA_VIDEO', label: 'Видео' },
-          { key: 'READ_MEDIA_AUDIO', label: 'Аудио' },
+          { key: 'READ_EXTERNAL_STORAGE', label: t('settings.permissionsGroup.readStorage'), description: t('settings.permissionsGroup.readStorageDesc') },
+          { key: 'WRITE_EXTERNAL_STORAGE', label: t('settings.permissionsGroup.writeStorage'), description: t('settings.permissionsGroup.writeStorageDesc') },
+          { key: 'READ_MEDIA_IMAGES', label: t('settings.permissionsGroup.images'), description: t('settings.permissionsGroup.imagesDesc') },
+          { key: 'READ_MEDIA_VIDEO', label: t('settings.permissionsGroup.video'), description: t('settings.permissionsGroup.videoDesc') },
+          { key: 'READ_MEDIA_AUDIO', label: t('settings.permissionsGroup.audio'), description: t('settings.permissionsGroup.audioDesc') },
         ],
       },
       {
-        label: 'Геолокация',
+        label: t('settings.permissionsGroup.location'),
         perms: [
-          { key: 'ACCESS_FINE_LOCATION', label: 'Точное местоположение' },
-          { key: 'ACCESS_COARSE_LOCATION', label: 'Приблизительное местоположение' },
-          { key: 'ACCESS_BACKGROUND_LOCATION', label: 'Фоновое местоположение' },
+          { key: 'ACCESS_FINE_LOCATION', label: t('settings.permissionsGroup.fineLocation'), description: t('settings.permissionsGroup.fineLocationDesc') },
+          { key: 'ACCESS_COARSE_LOCATION', label: t('settings.permissionsGroup.coarseLocation'), description: t('settings.permissionsGroup.coarseLocationDesc') },
+          { key: 'ACCESS_BACKGROUND_LOCATION', label: t('settings.permissionsGroup.backgroundLocation'), description: t('settings.permissionsGroup.backgroundLocationDesc') },
         ],
       },
       {
-        label: 'Bluetooth и сеть',
+        label: t('settings.permissionsGroup.bluetoothNetwork'),
         perms: [
-          { key: 'BLUETOOTH', label: 'Bluetooth' },
-          { key: 'BLUETOOTH_ADMIN', label: 'Bluetooth (управление)' },
-          { key: 'BLUETOOTH_ADVERTISE', label: 'Bluetooth (реклама)' },
-          { key: 'BLUETOOTH_CONNECT', label: 'Bluetooth (подключение)' },
-          { key: 'BLUETOOTH_SCAN', label: 'Bluetooth (сканирование)' },
-          { key: 'ACCESS_WIFI_STATE', label: 'Состояние WiFi' },
-          { key: 'CHANGE_WIFI_STATE', label: 'Изменение WiFi' },
-          { key: 'INTERNET', label: 'Интернет' },
-          { key: 'ACCESS_NETWORK_STATE', label: 'Состояние сети' },
-          { key: 'CHANGE_NETWORK_STATE', label: 'Изменение сети' },
+          { key: 'BLUETOOTH_CONNECT', label: t('settings.permissionsGroup.bluetoothConnect'), description: t('settings.permissionsGroup.bluetoothConnectDesc') },
+          { key: 'BLUETOOTH_SCAN', label: t('settings.permissionsGroup.bluetoothScan'), description: t('settings.permissionsGroup.bluetoothScanDesc') },
+          { key: 'ACCESS_WIFI_STATE', label: t('settings.permissionsGroup.wifiState'), description: t('settings.permissionsGroup.wifiStateDesc') },
+          { key: 'CHANGE_WIFI_STATE', label: t('settings.permissionsGroup.changeWifi'), description: t('settings.permissionsGroup.changeWifiDesc') },
+          { key: 'INTERNET', label: t('settings.permissionsGroup.internet'), description: t('settings.permissionsGroup.internetDesc') },
+          { key: 'ACCESS_NETWORK_STATE', label: t('settings.permissionsGroup.networkState'), description: t('settings.permissionsGroup.networkStateDesc') },
         ],
       },
       {
-        label: 'Уведомления',
+        label: t('settings.permissionsGroup.notifications'),
         perms: [
-          { key: 'POST_NOTIFICATIONS', label: 'Уведомления' },
+          { key: 'POST_NOTIFICATIONS', label: t('settings.permissionsGroup.notifications'), description: t('settings.permissionsGroup.notificationsDesc') },
         ],
       },
       {
-        label: 'Датчики и активность',
+        label: t('settings.permissionsGroup.sensors'),
         perms: [
-          { key: 'BODY_SENSORS', label: 'Датчики тела' },
-          { key: 'ACTIVITY_RECOGNITION', label: 'Распознавание активности' },
+          { key: 'BODY_SENSORS', label: t('settings.permissionsGroup.bodySensors'), description: t('settings.permissionsGroup.bodySensorsDesc') },
+          { key: 'ACTIVITY_RECOGNITION', label: t('settings.permissionsGroup.activityRecognition'), description: t('settings.permissionsGroup.activityRecognitionDesc') },
         ],
       },
       {
-        label: 'Другие',
+        label: t('settings.permissionsGroup.system'),
         perms: [
-          { key: 'VIBRATE', label: 'Вибрация' },
-          { key: 'WAKE_LOCK', label: 'Блокировка сна' },
-          { key: 'SYSTEM_ALERT_WINDOW', label: 'Поверх других окон' },
-          { key: 'REQUEST_INSTALL_PACKAGES', label: 'Установка пакетов' },
+          { key: 'SYSTEM_ALERT_WINDOW', label: t('settings.permissionsGroup.overlayWindow'), description: t('settings.permissionsGroup.overlayWindowDesc') },
+          { key: 'REQUEST_INSTALL_PACKAGES', label: t('settings.permissionsGroup.installPackages'), description: t('settings.permissionsGroup.installPackagesDesc') },
         ],
       },
     ];
-    const flat: { group: string; key: string; label: string; granted: boolean; checked: boolean }[] = [];
+    const flat: { group: string; key: string; label: string; description: string; granted: boolean; checked: boolean }[] = [];
     for (const g of groups) {
       for (const perm of g.perms) {
         try {
@@ -202,6 +313,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
       }
     }
     setPermissionsStatus(flat);
+    setCollapsedGroups(new Set(groups.map(g => g.label)));
   }, []);
 
   useEffect(() => {
@@ -216,7 +328,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
       useNativeDriver: true,
     }).start();
 
-    loadApiKey(provider)
+    loadApiKey()
       .then((key) => {
         if (mounted) { setApiKey(key); setIsKeyLoaded(true); }
       })
@@ -230,15 +342,6 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
 
     return () => { mounted = false; };
   }, [entrance]);
-
-  // При смене провайдера — перезагружаем ключ
-  useEffect(() => {
-    setIsKeyLoaded(false);
-    loadApiKey(provider).then((key) => {
-      setApiKey(key);
-      setIsKeyLoaded(true);
-    });
-  }, [provider]);
 
   const openModal = (section: string) => {
     setModalSection(section);
@@ -275,43 +378,25 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
   };
 
   const endpointPreview = useMemo(() => {
-    if (isAzure && azureResourceName && azureDeploymentId) {
-      return `https://${azureResourceName}.openai.azure.com/openai/deployments/${azureDeploymentId}/chat/completions?api-version=${azureApiVersion || '2024-02-01'}`;
-    }
     const normalized = baseUrl.trim().replace(/\/+$/, '');
-    return normalized ? `${normalized}/v1/chat/completions` : 'Base URL не задан';
-  }, [baseUrl, isAzure, azureResourceName, azureDeploymentId, azureApiVersion]);
-
-  const handleProviderChange = (newProvider: LLMProvider) => {
-    setProvider(newProvider);
-    const m = PROVIDER_META[newProvider];
-    setBaseUrl(m.baseUrl);
-    setModel(m.model);
-  };
+    return normalized ? `${normalized}/v1/chat/completions` : t('settings.baseUrlNotSet');
+  }, [baseUrl]);
 
   useEffect(() => {
     const timer = setTimeout(async () => {
-      const settings = sanitizeSettings({
-        provider,
-        baseUrl,
-        model,
-        allowAssistantContacts,
-        azureResourceName: azureResourceName || undefined,
-        azureDeploymentId: azureDeploymentId || undefined,
-        azureApiVersion: azureApiVersion || undefined,
-      });
-      if (!isAzure && (!settings.baseUrl.trim() || !settings.model.trim())) return;
-      await saveApiKey(apiKey, provider);
+      const settings = sanitizeSettings({ baseUrl, model, allowAssistantContacts, internetEnabled: initialSettings.internetEnabled, apiFormat, language });
+      if (!settings.baseUrl.trim() || !settings.model.trim()) return;
+      await saveApiKey(apiKey);
       await onSave(settings, apiKey.trim());
     }, 600);
     return () => clearTimeout(timer);
-  }, [provider, baseUrl, model, apiKey, allowAssistantContacts, azureResourceName, azureDeploymentId, azureApiVersion]);
+  }, [baseUrl, model, apiKey, allowAssistantContacts, apiFormat, language]);
 
   const handleResetStats = () => {
-    Alert.alert('Сбросить статистику', 'Обнулить счётчики токенов?', [
-      { text: 'Отмена', style: 'cancel' },
+    Alert.alert(t('settings.resetStatsTitle'), t('settings.resetStatsMessage'), [
+      { text: t('settings.cancelAction'), style: 'cancel' },
       {
-        text: 'Сбросить',
+        text: t('settings.resetStatsConfirm'),
         style: 'destructive',
         onPress: async () => {
           await resetTokenStats();
@@ -328,7 +413,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
     try {
       const result = await checkForUpdate();
       if (result.hasUpdate) {
-        setUpdateInfo({ version: result.version, size: result.size, changelog: result.changelog, url: result.url });
+        setUpdateInfo({ version: result.version, tagName: result.tagName, size: result.size, changelog: result.changelog, url: result.url });
         setUpdateStatus('available');
       } else {
         setUpdateInfo(null);
@@ -337,11 +422,11 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
           setUpdateStatus('error');
         } else {
           setUpdateStatus('idle');
-          Alert.alert('Обновлений нет', result.info || 'У вас актуальная версия.');
+          Alert.alert(t('settings.noUpdates'), result.info || t('settings.noUpdatesHint'));
         }
       }
     } catch (e) {
-      setUpdateError(e instanceof Error ? e.message : 'Ошибка проверки');
+      setUpdateError(e instanceof Error ? e.message : t('settings.checkError'));
       setUpdateStatus('error');
     }
   }, []);
@@ -354,7 +439,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
       await downloadAndInstallUpdate(updateInfo.url);
       setUpdateStatus('downloaded');
     } catch (e) {
-      setUpdateError(e instanceof Error ? e.message : 'Ошибка загрузки');
+      setUpdateError(e instanceof Error ? e.message : t('settings.downloadError'));
       setUpdateStatus('error');
     }
   }, [updateInfo]);
@@ -369,6 +454,39 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
     await deleteSkill(id);
     const updated = await listSkills();
     setSkills(updated);
+  }, []);
+
+  const requestPermission = useCallback(async (permKey: string) => {
+    if (Platform.OS !== 'android') return;
+    setRequestingPerm(permKey);
+    try {
+      const permissionConst = (PermissionsAndroid.PERMISSIONS as any)[permKey];
+      if (!permissionConst) return;
+      const result = await PermissionsAndroid.request(permissionConst, {
+        title: t('settings.permissionTitle'),
+        message: t('settings.permissionMessage'),
+        buttonPositive: t('settings.permissionAllow'),
+        buttonNegative: t('settings.permissionDeny'),
+      });
+      setPermissionsStatus((prev) =>
+        prev.map((p) =>
+          p.key === permKey ? { ...p, granted: result === PermissionsAndroid.RESULTS.GRANTED } : p,
+        ),
+      );
+    } catch {
+      /* ignore */
+    } finally {
+      setRequestingPerm(null);
+    }
+  }, []);
+
+  const toggleGroup = useCallback((group: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(group)) next.delete(group);
+      else next.add(group);
+      return next;
+    });
   }, []);
 
   const formatLargeNumber = (n: number) =>
@@ -387,261 +505,275 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
     setShowStatsDetail(false);
   };
 
-  const authSchemeLabel = (scheme: string) => {
-    switch (scheme) {
-      case 'apiKey': return 'API Key';
-      case 'oauth': return 'OAuth 2.0';
-      case 'none': return 'Без авторизации';
-      case 'azure': return 'Azure API Key';
-      default: return scheme;
-    }
-  };
-
   const renderModalContent = () => {
     switch (modalSection) {
-      case 'provider':
-        return (
-          <>
-            <Text style={styles.modalTitle}>ПРОВАЙДЕР</Text>
-            <View style={styles.card}>
-              {ALL_PROVIDERS.map((p, index) => {
-                const m = PROVIDER_META[p];
-                return (
-                  <View key={p}>
-                    {index > 0 && <View style={styles.divider} />}
-                    <Pressable
-                      onPress={() => handleProviderChange(p)}
-                      style={({ pressed }) => [styles.providerRow, pressed && styles.pressed]}
-                    >
-                      <View style={styles.providerRowLeft}>
-                        <View style={[styles.providerDot, provider === p && styles.providerDotActive]} />
-                        <View>
-                          <Text style={[styles.providerLabel, provider === p && styles.providerLabelActive]}>
-                            {m.label}
-                          </Text>
-                          <Text style={styles.providerAuthHint}>
-                            {m.authSchemes.map(authSchemeLabel).join(' / ')}
-                          </Text>
-                        </View>
-                      </View>
-                      {provider === p && <Check size={16} color={colors.success} />}
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-          </>
-        );
-
       case 'connection':
         return (
           <>
-            <Text style={styles.modalTitle}>ПОДКЛЮЧЕНИЕ</Text>
+            <Text style={styles.modalTitle}>{t('settings.connection')}</Text>
 
-            {/* Auth section */}
             <View style={styles.card}>
-              {/* Auth scheme badge */}
-              <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>Авторизация</Text>
-                <View style={styles.authBadgeRow}>
-                  {meta.authSchemes.map((scheme) => (
-                    <View key={scheme} style={styles.authBadge}>
-                      <Text style={styles.authBadgeText}>{authSchemeLabel(scheme)}</Text>
-                    </View>
-                  ))}
+              <Pressable
+                onPress={() => {
+                  LayoutAnimation.configureNext(LayoutAnimation.create(
+                    200,
+                    LayoutAnimation.Types.easeInEaseOut,
+                    LayoutAnimation.Properties.opacity,
+                  ));
+                  setShowProviders(!showProviders);
+                }}
+                style={({ pressed }) => [styles.providerToggle, pressed && styles.pressed]}
+              >
+                <View style={styles.providerToggleLeft}>
+                  <Text style={styles.fieldLabel}>{t('settings.provider')}</Text>
+                  <Text style={styles.providerName}>
+                    {selectedProviderId
+                      ? PROVIDERS.find(p => p.id === selectedProviderId)?.name || t('settings.custom')
+                      : PROVIDERS.find(p => p.baseUrl && baseUrl.startsWith(p.baseUrl))?.name || t('settings.custom')}
+                  </Text>
                 </View>
-              </View>
+                <Animated.View style={{ transform: [{ rotate: showProviders ? '180deg' : '0deg' }] }}>
+                  <ChevronDown size={16} color={colors.textDim} />
+                </Animated.View>
+              </Pressable>
 
-              {/* API Key field */}
-              {needsKey && !isAzure && (
-                <>
+              {showProviders && (
+                <View style={styles.providerList}>
                   <View style={styles.divider} />
-                  <View style={styles.fieldRow}>
-                    <View style={styles.fieldLabelRow}>
-                      <Text style={styles.fieldLabel}>API Key</Text>
-                      {meta.keyUrl && (
+                  {PROVIDERS.map((provider, index) => {
+                    const isSelected = selectedProviderId === provider.id ||
+                      (!selectedProviderId && baseUrl.trim().replace(/\/+$/, '').startsWith(provider.baseUrl) && provider.baseUrl !== '');
+                    return (
+                      <View key={provider.id}>
+                        {index > 0 && <View style={styles.permissionDivider} />}
                         <Pressable
-                          onPress={() => Linking.openURL(meta.keyUrl!)}
-                          hitSlop={8}
-                          style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+                          onPress={() => {
+                            LayoutAnimation.configureNext(LayoutAnimation.create(
+                              200,
+                              LayoutAnimation.Types.easeInEaseOut,
+                              LayoutAnimation.Properties.opacity,
+                            ));
+                            setSelectedProviderId(provider.id);
+                            if (provider.baseUrl) setBaseUrl(provider.baseUrl);
+                            if (provider.models.length > 0 && !model.trim()) {
+                              setModel(provider.models[0]);
+                            }
+                            if (provider.apiFormat) setApiFormat(provider.apiFormat);
+                            setShowProviders(false);
+                          }}
+                          style={({ pressed }) => [
+                            styles.providerItem,
+                            isSelected && styles.providerItemSelected,
+                            pressed && styles.pressed,
+                          ]}
                         >
-                          <ExternalLink size={13} color={colors.accent} />
+                          <View style={styles.providerInfo}>
+                            <View style={styles.providerNameRow}>
+                              <Text style={[styles.providerItemName, isSelected && { color: colors.text }]}>{provider.name}</Text>
+                              <Text style={[styles.providerAuthBadge,
+                                provider.auth === 'none' && { color: colors.success },
+                              ]}>
+                                {provider.auth === 'api_key' ? 'API Key' : provider.auth === 'token' ? 'Token' : t('settings.noKey')}
+                              </Text>
+                            </View>
+                            <Text style={styles.providerDesc}>{provider.description}</Text>
+                          </View>
+                          {isSelected && <Check size={14} color={colors.success} />}
                         </Pressable>
-                      )}
-                    </View>
-                    <TextInput
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      onChangeText={setApiKey}
-                      placeholder={isKeyLoaded ? (meta.keyHint ?? 'токен...') : 'Загружается…'}
-                      placeholderTextColor={colors.textDim}
-                      secureTextEntry
-                      style={styles.fieldInput}
-                      value={apiKey}
-                    />
-                    {meta.authHeader && (
-                      <Text style={styles.fieldHint}>
-                        Передаётся как: <Text style={{ color: colors.textMuted }}>{meta.authHeader}{meta.authHeader === 'Authorization' ? ': Bearer …' : ': …'}</Text>
-                      </Text>
-                    )}
-                    {meta.keyAsQuery && (
-                      <Text style={styles.fieldHint}>
-                        Передаётся как query: <Text style={{ color: colors.textMuted }}>?{meta.keyAsQuery}=…</Text>
-                      </Text>
-                    )}
-                    {primaryAuth === 'none' && (
-                      <Text style={styles.fieldHint}>Авторизация не требуется</Text>
-                    )}
-                  </View>
-                </>
-              )}
-
-              {/* OAuth hint */}
-              {supportsOAuth && (
-                <>
-                  <View style={styles.divider} />
-                  <View style={styles.fieldRow}>
-                    <Text style={styles.fieldLabel}>OAuth 2.0</Text>
-                    <Text style={styles.fieldHint}>
-                      Поддерживается. Для OAuth вставь access token в поле API Key выше.
-                    </Text>
-                  </View>
-                </>
-              )}
-
-              {/* Azure-specific fields */}
-              {isAzure && (
-                <>
-                  <View style={styles.divider} />
-                  <View style={styles.fieldRow}>
-                    <Text style={styles.fieldLabel}>API Key</Text>
-                    <TextInput
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      onChangeText={setApiKey}
-                      placeholder="ваш Azure API ключ"
-                      placeholderTextColor={colors.textDim}
-                      secureTextEntry
-                      style={styles.fieldInput}
-                      value={apiKey}
-                    />
-                    <Text style={styles.fieldHint}>Передаётся как: <Text style={{ color: colors.textMuted }}>api-key: …</Text></Text>
-                  </View>
-                  <View style={styles.divider} />
-                  <View style={styles.fieldRow}>
-                    <Text style={styles.fieldLabel}>Resource Name</Text>
-                    <TextInput
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      onChangeText={setAzureResourceName}
-                      placeholder="my-resource"
-                      placeholderTextColor={colors.textDim}
-                      style={styles.fieldInput}
-                      value={azureResourceName}
-                    />
-                  </View>
-                  <View style={styles.divider} />
-                  <View style={styles.fieldRow}>
-                    <Text style={styles.fieldLabel}>Deployment ID</Text>
-                    <TextInput
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      onChangeText={setAzureDeploymentId}
-                      placeholder="gpt-4o"
-                      placeholderTextColor={colors.textDim}
-                      style={styles.fieldInput}
-                      value={azureDeploymentId}
-                    />
-                  </View>
-                  <View style={styles.divider} />
-                  <View style={styles.fieldRow}>
-                    <Text style={styles.fieldLabel}>API Version</Text>
-                    <TextInput
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      onChangeText={setAzureApiVersion}
-                      placeholder="2024-02-01"
-                      placeholderTextColor={colors.textDim}
-                      style={styles.fieldInput}
-                      value={azureApiVersion}
-                    />
-                  </View>
-                </>
+                      </View>
+                    );
+                  })}
+                </View>
               )}
             </View>
 
             <View style={styles.cardGap} />
 
-            {/* Base URL (not for Azure) */}
-            {!isAzure && (
-              <View style={styles.card}>
-                <View style={styles.fieldRow}>
-                  <Text style={styles.fieldLabel}>Base URL</Text>
-                  <TextInput
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    keyboardType="url"
-                    onChangeText={setBaseUrl}
-                    placeholder={PROVIDER_DEFAULTS[provider].baseUrl || 'https://...'}
-                    placeholderTextColor={colors.textDim}
-                    style={styles.fieldInput}
-                    value={baseUrl}
-                  />
-                  <Text style={styles.fieldHint}>{endpointPreview}</Text>
-                </View>
+            <View style={styles.card}>
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>Base URL</Text>
+                <TextInput
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  onChangeText={(text) => {
+                    setBaseUrl(text);
+                    setSelectedProviderId(null);
+                  }}
+                  placeholder="https://api.openai.com"
+                  placeholderTextColor={colors.textDim}
+                  style={styles.fieldInput}
+                  value={baseUrl}
+                />
+                <Text style={styles.fieldHint}>{endpointPreview}</Text>
               </View>
-            )}
-
-            {isAzure && (
-              <View style={styles.card}>
-                <View style={styles.fieldRow}>
-                  <Text style={styles.fieldLabel}>Endpoint preview</Text>
-                  <Text style={[styles.fieldHint, { fontFamily: 'monospace' }]}>{endpointPreview}</Text>
-                </View>
-              </View>
-            )}
+            </View>
 
             <View style={styles.cardGap} />
 
             <View style={styles.card}>
               <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>Модель</Text>
+                <Text style={styles.fieldLabel}>{t('settings.model')}</Text>
                 <TextInput
                   autoCapitalize="none"
                   autoCorrect={false}
                   onChangeText={setModel}
-                  placeholder={PROVIDER_DEFAULTS[provider].model || 'model-name'}
+                  placeholder="your-model-name"
                   placeholderTextColor={colors.textDim}
                   style={styles.fieldInput}
                   value={model}
                 />
-                {(MODEL_SUGGESTIONS[provider]?.length ?? 0) > 0 && (
-                  <View style={styles.chipRow}>
-                    {(MODEL_SUGGESTIONS[provider] ?? []).map((item) => (
-                      <Pressable
-                        key={item}
-                        onPress={() => setModel(item)}
-                        style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
-                      >
-                        <Text style={styles.chipText}>{item}</Text>
-                      </Pressable>
-                    ))}
+                <View style={styles.chipRow}>
+                  {(selectedProviderId
+                    ? PROVIDERS.find(p => p.id === selectedProviderId)?.models || MODEL_SUGGESTIONS
+                    : MODEL_SUGGESTIONS
+                  ).map((item) => (
+                    <Pressable
+                      key={item}
+                      onPress={() => setModel(item)}
+                      style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+                    >
+                      <Text style={styles.chipText}>{item}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            {selectedProviderId === 'openai-compat' && (
+              <>
+                <View style={styles.card}>
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldLabel}>{t('settings.apiFormat')}</Text>
+                    <View style={styles.chipRow}>
+                      {([
+                        { id: 'openai' as ApiFormat, label: 'OpenAI' },
+                        { id: 'ollama' as ApiFormat, label: 'Ollama' },
+                        { id: 'anthropic' as ApiFormat, label: 'Anthropic' },
+                        { id: 'kobold' as ApiFormat, label: 'KoboldCpp' },
+                      ]).map((fmt) => (
+                        <Pressable
+                          key={fmt.id}
+                          onPress={() => setApiFormat(fmt.id)}
+                          style={({ pressed }) => [
+                            styles.chip,
+                            apiFormat === fmt.id && styles.chipActive,
+                            pressed && styles.pressed,
+                          ]}
+                        >
+                          <Text style={[styles.chipText, apiFormat === fmt.id && styles.chipTextActive]}>{fmt.label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    <Text style={styles.fieldHint}>
+                      {apiFormat === 'openai' && 'POST /v1/chat/completions · Authorization: Bearer'}
+                      {apiFormat === 'ollama' && t('settings.apiFormatOllama')}
+                      {apiFormat === 'anthropic' && 'POST /v1/messages · x-api-key header'}
+                      {apiFormat === 'kobold' && t('settings.apiFormatKobold')}
+                    </Text>
+                    {apiFormat === 'ollama' && (
+                      <View style={styles.chipRow}>
+                        <Pressable
+                          onPress={() => setBaseUrl('http://localhost:11434')}
+                          style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+                        >
+                          <Text style={styles.chipText}>localhost:11434</Text>
+                        </Pressable>
+                      </View>
+                    )}
                   </View>
-                )}
+                </View>
+              </>
+            )}
+
+            <View style={styles.cardGap} />
+
+            <View style={styles.card}>
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>
+                  {(() => {
+                    const p = PROVIDERS.find(pr => pr.id === selectedProviderId);
+                    if (!p || p.auth === 'api_key') return 'API Key';
+                    if (p.auth === 'token') return t('settings.token');
+                    return t('settings.keyOptional');
+                  })()}
+                </Text>
+                <TextInput
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onChangeText={setApiKey}
+                  placeholder={isKeyLoaded ? 'sk-...' : t('settings.loading')}
+                  placeholderTextColor={colors.textDim}
+                  secureTextEntry
+                  style={styles.fieldInput}
+                  value={apiKey}
+                />
+                <Text style={styles.fieldHint}>
+                  {(() => {
+                    const p = PROVIDERS.find(pr => pr.id === selectedProviderId);
+                    if (!p || p.auth === 'api_key') return t('settings.endpointHint1');
+                    if (p.auth === 'token') return t('settings.endpointHint2');
+                    return t('settings.endpointHint3');
+                  })()}
+                </Text>
               </View>
             </View>
           </>
         );
-
+      case 'language':
+        return (
+          <>
+            <Text style={styles.modalTitle}>{t('settings.language')}</Text>
+            <View style={styles.card}>
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>{t('settings.language')}</Text>
+                <View style={styles.chipRow}>
+                  {[
+                    { id: 'ru', label: 'Русский', flag: '🇷🇺' },
+                    { id: 'en', label: 'English', flag: '🇺🇸' },
+                    { id: 'uk', label: 'Українська', flag: '🇺🇦' },
+                    { id: 'zh', label: '中文', flag: '🇨🇳' },
+                    { id: 'hi', label: 'हिन्दी', flag: '🇮🇳' },
+                    { id: 'es', label: 'Español', flag: '🇪🇸' },
+                    { id: 'pt', label: 'Português', flag: '🇧🇷' },
+                    { id: 'ar', label: 'العربية', flag: '🇸🇦' },
+                    { id: 'de', label: 'Deutsch', flag: '🇩🇪' },
+                    { id: 'fr', label: 'Français', flag: '🇫🇷' },
+                    { id: 'tr', label: 'Türkçe', flag: '🇹🇷' },
+                    { id: 'ko', label: '한국어', flag: '🇰🇷' },
+                    { id: 'ja', label: '日本語', flag: '🇯🇵' },
+                    { id: 'pl', label: 'Polski', flag: '🇵🇱' },
+                    { id: 'vi', label: 'Tiếng Việt', flag: '🇻🇳' },
+                    { id: 'th', label: 'ไทย', flag: '🇹🇭' },
+                    { id: 'id', label: 'Bahasa Indonesia', flag: '🇮🇩' },
+                    { id: 'fa', label: 'فارسی', flag: '🇮🇷' },
+                  ].map((lang) => (
+                    <Pressable
+                      key={lang.id}
+                      onPress={() => setLanguage(lang.id)}
+                      style={({ pressed }) => [
+                        styles.chip,
+                        language === lang.id && styles.chipActive,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={[styles.chipText, language === lang.id && styles.chipTextActive]}>{lang.flag} {lang.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </>
+        );
       case 'permissions':
         return (
           <>
-            <Text style={styles.modalTitle}>РАЗРЕШЕНИЯ</Text>
+            <Text style={styles.modalTitle}>{t('settings.permissions')}</Text>
             <View style={styles.card}>
               <View style={styles.toggleRow}>
                 <View style={styles.toggleTextBlock}>
-                  <Text style={styles.fieldLabel}>Разрешать ассистенту доступ к контактам</Text>
-                  <Text style={styles.fieldHint}>Выключено по умолчанию. Даже при включении номера и звонки/SMS требуют отдельного подтверждения.</Text>
+                  <Text style={styles.fieldLabel}>{t('settings.contactsAccess')}</Text>
+                  <Text style={styles.fieldHint}>{t('settings.contactsHint')}</Text>
                 </View>
                 <Switch
                   onValueChange={setAllowAssistantContacts}
@@ -656,19 +788,27 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
 
             <View style={styles.card}>
               <View style={styles.permissionsHeader}>
-                <Text style={styles.fieldLabel}>Разрешения Android</Text>
-                <Pressable
-                  onPress={loadPermissions}
-                  style={({ pressed }) => [styles.permissionsRefresh, pressed && { opacity: 0.6 }]}
-                  hitSlop={8}
-                >
-                  <RefreshCw size={16} color={colors.textMuted} />
-                </Pressable>
+                <View style={styles.permissionsHeaderLeft}>
+                  <Shield size={16} color={colors.textMuted} />
+                  <Text style={styles.fieldLabel}>{t('settings.androidPermissions')}</Text>
+                </View>
+                <View style={styles.permissionsHeaderRight}>
+                  <Text style={styles.permCountText}>
+                    {permissionsStatus.filter(p => p.granted).length}/{permissionsStatus.length}
+                  </Text>
+                  <Pressable
+                    onPress={loadPermissions}
+                    style={({ pressed }) => [styles.permissionsRefresh, pressed && { opacity: 0.6 }]}
+                    hitSlop={8}
+                  >
+                    <RefreshCw size={14} color={colors.textMuted} />
+                  </Pressable>
+                </View>
               </View>
               <View style={styles.divider} />
               {permissionsStatus.length === 0 ? (
                 <View style={{ padding: spacing.xl }}>
-                  <Text style={styles.fieldHint}>Проверка разрешений…</Text>
+                  <Text style={styles.fieldHint}>{t('settings.checkingPermissions')}</Text>
                 </View>
               ) : (
                 (() => {
@@ -678,59 +818,89 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                     arr.push(p);
                     groups.set(p.group, arr);
                   }
-                  const entries = Array.from(groups.entries()).filter(([, perms]) => perms.length > 0);
-                  return entries.map(([groupName, perms], gi) => (
-                    <View key={groupName}>
-                      {gi > 0 && <View style={styles.divider} />}
-                      <Text style={styles.permissionGroupLabel}>{groupName}</Text>
-                      {perms.map((perm, pi) => (
-                        <View key={perm.key}>
-                          {pi > 0 && <View style={styles.permissionDivider} />}
-                          <View style={styles.permissionRow}>
-                            <Text style={styles.permissionLabel}>{perm.label}</Text>
-                            <View style={styles.permissionBadge}>
-                              {perm.granted ? (
-                                <Check size={14} color={colors.success} />
-                              ) : (
-                                <X size={14} color={colors.danger} />
-                              )}
-                              <Text style={[styles.permissionStatus, perm.granted ? styles.grantedText : styles.deniedText]}>
-                                {perm.granted ? 'Вкл' : 'Выкл'}
-                              </Text>
-                            </View>
+                  const entries = Array.from(groups.entries());
+                  return entries.map(([groupName, perms], gi) => {
+                    const collapsed = collapsedGroups.has(groupName);
+                    const grantedCount = perms.filter(p => p.granted).length;
+                    return (
+                      <View key={groupName}>
+                        {gi > 0 && <View style={styles.divider} />}
+                        <Pressable
+                          onPress={() => toggleGroup(groupName)}
+                          style={({ pressed }) => [styles.permGroupHeader, pressed && styles.pressed]}
+                        >
+                          <View style={styles.permGroupLeft}>
+                            {grantedCount === perms.length ? (
+                              <ShieldCheck size={14} color={colors.success} />
+                            ) : grantedCount > 0 ? (
+                              <Shield size={14} color={colors.warning} />
+                            ) : (
+                              <ShieldOff size={14} color={colors.textDim} />
+                            )}
+                            <Text style={styles.permissionGroupLabel}>{groupName}</Text>
                           </View>
-                        </View>
-                      ))}
-                    </View>
-                  ));
+                          <View style={styles.permGroupRight}>
+                            <Text style={styles.permGroupCount}>{grantedCount}/{perms.length}</Text>
+                            <Animated.View style={{ transform: [{ rotate: collapsed ? '0deg' : '90deg' }] }}>
+                              <ChevronDown size={14} color={colors.textDim} />
+                            </Animated.View>
+                          </View>
+                        </Pressable>
+                        {!collapsed && perms.map((perm, pi) => (
+                          <View key={perm.key}>
+                            {pi > 0 && <View style={styles.permissionDivider} />}
+                            <Pressable
+                              onPress={() => !perm.granted && requestPermission(perm.key)}
+                              style={({ pressed }) => [styles.permissionRow, !perm.granted && pressed && { backgroundColor: colors.accentSoft }]}
+                            >
+                              <View style={styles.permInfo}>
+                                <Text style={[styles.permissionLabel, perm.granted && { color: colors.text }]}>{perm.label}</Text>
+                                <Text style={styles.permDesc}>{perm.description}</Text>
+                              </View>
+                              {requestingPerm === perm.key ? (
+                                <RefreshCw size={14} color={colors.textMuted} style={{ transform: [{ rotate: '90deg' }] }} />
+                              ) : perm.granted ? (
+                                <View style={[styles.permToggle, styles.permToggleOn]}>
+                                  <Check size={10} color={colors.background} />
+                                </View>
+                              ) : (
+                                <View style={styles.permToggle}>
+                                  <X size={10} color={colors.textDim} />
+                                </View>
+                              )}
+                            </Pressable>
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  });
                 })()
               )}
             </View>
           </>
         );
-
       case 'stats':
         return tokenStats ? (
           <>
-            <Text style={styles.modalTitle}>СТАТИСТИКА</Text>
+            <Text style={styles.modalTitle}>{t('settings.stats')}</Text>
             <View style={styles.card}>
               <View style={styles.statsGrid}>
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{formatLargeNumber(tokenStats.totalInput)}</Text>
-                  <Text style={styles.statLabel}>входных</Text>
+                  <Text style={styles.statLabel}>{t('settings.inputTokens')}</Text>
                 </View>
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{formatLargeNumber(tokenStats.totalOutput)}</Text>
-                  <Text style={styles.statLabel}>выходных</Text>
+                  <Text style={styles.statLabel}>{t('settings.outputTokens')}</Text>
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{formatLargeNumber(tokenStats.totalInput + tokenStats.totalOutput)}</Text>
-                  <Text style={styles.statLabel}>всего</Text>
+                  <Text style={styles.statLabel}>{t('settings.totalTokens')}</Text>
                 </View>
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{tokenStats.totalRequests}</Text>
-                  <Text style={styles.statLabel}>запросов</Text>
+                  <Text style={styles.statLabel}>{t('settings.requests')}</Text>
                 </View>
               </View>
               <View style={styles.divider} />
@@ -740,7 +910,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
               >
                 <View style={styles.nestedRowLeft}>
                   <BarChart3 size={16} color={colors.textMuted} />
-                  <Text style={styles.nestedRowText}>График использования</Text>
+                  <Text style={styles.nestedRowText}>{t('settings.usageChart')}</Text>
                 </View>
                 <ChevronRight size={14} color={colors.textDim} />
               </Pressable>
@@ -749,26 +919,25 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                 onPress={handleResetStats}
                 style={({ pressed }) => [styles.resetBtn, pressed && styles.pressed]}
               >
-                <Text style={styles.resetBtnText}>Сбросить статистику</Text>
+                <Text style={styles.resetBtnText}>{t('settings.resetStatsButton')}</Text>
               </Pressable>
             </View>
           </>
         ) : null;
-
       case 'update':
         return (
           <>
-            <Text style={styles.modalTitle}>ОБНОВЛЕНИЕ</Text>
+            <Text style={styles.modalTitle}>{t('settings.update')}</Text>
             <View style={styles.card}>
               <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>Текущая версия</Text>
-                <Text style={{ color: colors.text, fontSize: typography.body }}>build {CURRENT_BUILD}</Text>
-                <Text style={styles.fieldHint}>Проверяет релизы GitHub</Text>
+                <Text style={styles.fieldLabel}>{t('settings.currentVersion')}</Text>
+                <Text style={{ color: colors.text, fontSize: typography.body }}>v{CURRENT_VERSION}</Text>
+                <Text style={styles.fieldHint}>{t('settings.updateHint')}</Text>
               </View>
               <View style={styles.divider} />
               {updateStatus === 'checking' && (
                 <View style={styles.fieldRow}>
-                  <Text style={{ color: colors.textMuted }}>Проверка обновлений…</Text>
+                  <Text style={{ color: colors.textMuted }}>{t('settings.checkingUpdates')}</Text>
                 </View>
               )}
               {updateStatus === 'idle' && (
@@ -778,7 +947,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                 >
                   <View style={styles.nestedRowLeft}>
                     <RefreshCw size={16} color={colors.textMuted} />
-                    <Text style={styles.nestedRowText}>Проверить обновления</Text>
+                    <Text style={styles.nestedRowText}>{t('settings.checkUpdates')}</Text>
                   </View>
                 </Pressable>
               )}
@@ -786,8 +955,10 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                 <>
                   <View style={styles.divider} />
                   <View style={styles.fieldRow}>
-                    <Text style={styles.fieldLabel}>Доступно</Text>
-                    <Text style={{ color: colors.success, fontSize: typography.body, fontWeight: '600' }}>{updateInfo.version}</Text>
+                    <Text style={styles.fieldLabel}>{t('settings.updateAvailable')}</Text>
+                    <Text style={{ color: colors.success, fontSize: typography.body, fontWeight: '600' }}>
+                      {updateInfo.tagName || `v${updateInfo.version}`}
+                    </Text>
                     {updateInfo.size ? <Text style={styles.fieldHint}>{formatFileSize(updateInfo.size)}</Text> : null}
                     {updateInfo.changelog ? <Text style={styles.fieldHint}>{updateInfo.changelog}</Text> : null}
                   </View>
@@ -798,45 +969,44 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                   >
                     <View style={styles.nestedRowLeft}>
                       <Download size={16} color={colors.accent} />
-                      <Text style={[styles.nestedRowText, { color: colors.accent }]}>Скачать и установить</Text>
+                      <Text style={[styles.nestedRowText, { color: colors.accent }]}>{t('settings.downloadInstall')}</Text>
                     </View>
                   </Pressable>
                 </>
               )}
               {updateStatus === 'downloading' && (
                 <View style={styles.fieldRow}>
-                  <Text style={{ color: colors.textMuted }}>Загрузка…</Text>
+                  <Text style={{ color: colors.textMuted }}>{t('settings.downloading')}</Text>
                 </View>
               )}
               {updateStatus === 'downloaded' && (
                 <View style={styles.fieldRow}>
-                  <Text style={{ color: colors.success }}>APK скачан. Откройте файл для установки.</Text>
+                  <Text style={{ color: colors.success }}>{t('settings.apkDownloaded')}</Text>
                 </View>
               )}
               {updateStatus === 'error' && (
                 <View style={styles.fieldRow}>
-                  <Text style={{ color: colors.danger }}>{updateError || 'Ошибка'}</Text>
+                  <Text style={{ color: colors.danger }}>{updateError || t('settings.errorFallback')}</Text>
                   <Pressable
                     onPress={handleCheckUpdate}
                     style={({ pressed }) => [styles.nestedRow, pressed && styles.pressed]}
                   >
-                    <Text style={[styles.nestedRowText, { color: colors.accent }]}>Повторить</Text>
+                    <Text style={[styles.nestedRowText, { color: colors.accent }]}>{t('settings.retry')}</Text>
                   </Pressable>
                 </View>
               )}
             </View>
           </>
         );
-
       case 'skills':
         return (
           <>
-            <Text style={styles.modalTitle}>СКИЛЛЫ</Text>
+            <Text style={styles.modalTitle}>{t('settings.skills')}</Text>
             <View style={styles.card}>
               {skills.length === 0 ? (
                 <View style={styles.emptySkillsBox}>
-                  <Text style={styles.emptySkillsTitle}>Нет сохранённых скиллов</Text>
-                  <Text style={styles.emptySkillsText}>Скиллы создаются автоматически, когда AI решает сложные задачи.</Text>
+                  <Text style={styles.emptySkillsTitle}>{t('settings.noSkills')}</Text>
+                  <Text style={styles.emptySkillsText}>{t('settings.skillsHint')}</Text>
                 </View>
               ) : (
                 skills.map((skill, index) => (
@@ -847,7 +1017,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                         <Text style={styles.skillName}>{skill.name}</Text>
                         <Text style={styles.skillDesc}>{skill.description}</Text>
                         <View style={styles.skillMeta}>
-                          <Text style={styles.skillMetaText}>использован {skill.usageCount} раз</Text>
+                          <Text style={styles.skillMetaText}>{t('settings.usedCount', { count: skill.usageCount })}</Text>
                           {skill.triggerKeywords.length > 0 && (
                             <Text style={styles.skillMetaText}> · {skill.triggerKeywords.slice(0, 3).join(', ')}</Text>
                           )}
@@ -855,9 +1025,9 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                       </View>
                       <Pressable
                         onPress={() => {
-                          Alert.alert('Удалить скилл', `Удалить «${skill.name}»?`, [
-                            { text: 'Отмена', style: 'cancel' },
-                            { text: 'Удалить', style: 'destructive', onPress: () => handleDeleteSkill(skill.id) },
+                          Alert.alert(t('settings.deleteSkillTitle'), t('settings.deleteSkillConfirm', { name: skill.name }), [
+                            { text: t('settings.cancelAction'), style: 'cancel' },
+                            { text: t('settings.deleteSkill'), style: 'destructive', onPress: () => handleDeleteSkill(skill.id) },
                           ]);
                         }}
                         style={({ pressed }) => [styles.skillDeleteBtn, pressed && styles.skillDeleteBtnPressed]}
@@ -872,7 +1042,6 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
             </View>
           </>
         );
-
       default:
         return null;
     }
@@ -890,7 +1059,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
           >
             <ArrowLeft size={22} color={colors.text} />
           </Pressable>
-          <Text style={styles.headerTitle}>График использования</Text>
+          <Text style={styles.headerTitle}>{t('settings.usageChart')}</Text>
           <View style={styles.headerSpacer} />
         </View>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -918,7 +1087,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
           >
             <Text style={styles.backIcon}>←</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>Настройки</Text>
+          <Text style={styles.headerTitle}>{t('settings.settingsTitle')}</Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -928,30 +1097,22 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
           showsVerticalScrollIndicator={false}
           style={{ opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }] }}
         >
-          {/* Provider badge */}
-          <Pressable
-            onPress={() => openModal('provider')}
-            style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
-          >
-            <Text style={styles.menuItemLabel}>ПРОВАЙДЕР</Text>
-            <View style={styles.menuItemRight}>
-              <Text style={styles.menuItemBadge}>{PROVIDER_META[provider].label}</Text>
-              <ChevronRight size={16} color={colors.textDim} />
-            </View>
-          </Pressable>
-
           {/* Section: Подключение */}
           <Pressable
             onPress={() => openModal('connection')}
             style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
           >
-            <Text style={styles.menuItemLabel}>ПОДКЛЮЧЕНИЕ</Text>
-            <View style={styles.menuItemRight}>
-              <Text style={styles.menuItemBadge}>
-                {meta.authSchemes.map(authSchemeLabel).join(' / ')}
-              </Text>
-              <ChevronRight size={16} color={colors.textDim} />
-            </View>
+            <Text style={styles.menuItemLabel}>{t('settings.connection')}</Text>
+            <ChevronRight size={16} color={colors.textDim} />
+          </Pressable>
+
+          {/* Section: Язык */}
+          <Pressable
+            onPress={() => openModal('language')}
+            style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
+          >
+            <Text style={styles.menuItemLabel}>{t('settings.language')}</Text>
+            <ChevronRight size={16} color={colors.textDim} />
           </Pressable>
 
           {/* Section: Разрешения */}
@@ -959,7 +1120,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
             onPress={() => openModal('permissions')}
             style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
           >
-            <Text style={styles.menuItemLabel}>РАЗРЕШЕНИЯ</Text>
+            <Text style={styles.menuItemLabel}>{t('settings.permissions')}</Text>
             <ChevronRight size={16} color={colors.textDim} />
           </Pressable>
 
@@ -969,7 +1130,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
               onPress={() => openModal('stats')}
               style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
             >
-              <Text style={styles.menuItemLabel}>СТАТИСТИКА</Text>
+              <Text style={styles.menuItemLabel}>{t('settings.stats')}</Text>
               <ChevronRight size={16} color={colors.textDim} />
             </Pressable>
           )}
@@ -979,7 +1140,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
             onPress={() => openModal('skills')}
             style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
           >
-            <Text style={styles.menuItemLabel}>СКИЛЛЫ</Text>
+            <Text style={styles.menuItemLabel}>{t('settings.skills')}</Text>
             <ChevronRight size={16} color={colors.textDim} />
           </Pressable>
 
@@ -988,7 +1149,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
             onPress={() => { setUpdateStatus('idle'); setUpdateInfo(null); setUpdateError(''); openModal('update'); }}
             style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
           >
-            <Text style={styles.menuItemLabel}>ОБНОВЛЕНИЕ</Text>
+            <Text style={styles.menuItemLabel}>{t('settings.update')}</Text>
             <ChevronRight size={16} color={colors.textDim} />
           </Pressable>
 
@@ -1063,6 +1224,7 @@ const styles = StyleSheet.create({
   },
   backIcon: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: 22,
     fontWeight: '400',
   },
@@ -1071,6 +1233,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.subtitle,
     fontWeight: '600',
   },
@@ -1093,17 +1256,9 @@ const styles = StyleSheet.create({
   },
   menuItemLabel: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     fontWeight: '500',
-  },
-  menuItemRight: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  menuItemBadge: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
   },
 
   /* Modal */
@@ -1121,7 +1276,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.xl + 4,
     elevation: 24,
-    maxHeight: SCREEN_HEIGHT * 0.85,
+    maxHeight: SCREEN_HEIGHT * 0.8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.35,
@@ -1143,6 +1298,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     color: colors.textDim,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     fontWeight: '600',
     letterSpacing: 0.8,
@@ -1168,70 +1324,6 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
   },
 
-  /* Provider picker */
-  providerRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-  },
-  providerRowLeft: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.md,
-    flex: 1,
-  },
-  providerDot: {
-    backgroundColor: colors.border,
-    borderRadius: radius.pill,
-    height: 10,
-    width: 10,
-  },
-  providerDotActive: {
-    backgroundColor: colors.success,
-  },
-  providerLabel: {
-    color: colors.textMuted,
-    fontSize: typography.body,
-  },
-  providerLabelActive: {
-    color: colors.text,
-    fontWeight: '600',
-  },
-  providerAuthHint: {
-    color: colors.textDim,
-    fontSize: typography.caption - 1,
-    marginTop: 2,
-  },
-
-  /* Auth badges */
-  authBadgeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  authBadge: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  authBadgeText: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
-    fontWeight: '600',
-  },
-
-  /* Field label row with link */
-  fieldLabelRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-
   /* Field row */
   toggleRow: {
     alignItems: 'center',
@@ -1248,6 +1340,7 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     color: colors.textMuted,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     fontWeight: '500',
     marginBottom: spacing.sm,
@@ -1256,6 +1349,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceElevated,
     borderRadius: radius.md,
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     minHeight: 48,
     paddingHorizontal: spacing.lg,
@@ -1263,6 +1357,7 @@ const styles = StyleSheet.create({
   },
   fieldHint: {
     color: colors.textDim,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     lineHeight: 17,
     marginTop: spacing.md,
@@ -1283,8 +1378,79 @@ const styles = StyleSheet.create({
   },
   chipText: {
     color: colors.textMuted,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     fontWeight: '500',
+  },
+  chipActive: {
+    backgroundColor: colors.accentStrong,
+  },
+  chipTextActive: {
+    color: colors.background,
+  },
+
+  /* Provider selector */
+  providerToggle: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: spacing.xl,
+  },
+  providerToggleLeft: {
+    flex: 1,
+  },
+  providerName: {
+    color: colors.text,
+    fontFamily: fontFamily.regular,
+    fontSize: typography.body,
+    fontWeight: '500',
+    marginTop: spacing.xs,
+  },
+  providerList: {
+    paddingBottom: spacing.sm,
+  },
+  providerItem: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md + 2,
+  },
+  providerItemSelected: {
+    backgroundColor: colors.accentSoft,
+  },
+  providerInfo: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  providerNameRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  providerItemName: {
+    color: colors.textMuted,
+    fontFamily: fontFamily.regular,
+    fontSize: typography.body,
+    fontWeight: '500',
+  },
+  providerAuthBadge: {
+    color: colors.accent,
+    fontFamily: fontFamily.regular,
+    fontSize: 10,
+    fontWeight: '600',
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 1,
+    overflow: 'hidden',
+  },
+  providerDesc: {
+    color: colors.textDim,
+    fontFamily: fontFamily.regular,
+    fontSize: typography.caption,
+    lineHeight: 16,
+    marginTop: 2,
   },
 
   /* Stats */
@@ -1305,6 +1471,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     color: colors.textMuted,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     fontWeight: '500',
     marginTop: spacing.xs,
@@ -1321,6 +1488,7 @@ const styles = StyleSheet.create({
   },
   resetBtnText: {
     color: colors.textDim,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     fontWeight: '500',
   },
@@ -1340,6 +1508,7 @@ const styles = StyleSheet.create({
   },
   nestedRowText: {
     color: colors.textMuted,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
   },
 
@@ -1349,12 +1518,14 @@ const styles = StyleSheet.create({
   },
   emptySkillsTitle: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     fontWeight: '700',
     marginBottom: spacing.xs,
   },
   emptySkillsText: {
     color: colors.textMuted,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     lineHeight: 17,
   },
@@ -1369,12 +1540,14 @@ const styles = StyleSheet.create({
   },
   skillName: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     fontWeight: '600',
     marginBottom: 2,
   },
   skillDesc: {
     color: colors.textMuted,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     lineHeight: 17,
   },
@@ -1385,6 +1558,7 @@ const styles = StyleSheet.create({
   },
   skillMetaText: {
     color: colors.textDim,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
   },
   skillDeleteBtn: {
@@ -1407,33 +1581,91 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     paddingBottom: spacing.md,
   },
+  permissionsHeaderLeft: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  permissionsHeaderRight: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  permCountText: {
+    color: colors.textDim,
+    fontFamily: fontFamily.regular,
+    fontSize: typography.caption,
+  },
   permissionsRefresh: {
     padding: spacing.xs,
   },
-  permissionGroupLabel: {
-    color: colors.textDim,
-    fontSize: typography.caption,
-    fontWeight: '600',
-    letterSpacing: 0.6,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xs,
-  },
-  permissionDivider: {
-    backgroundColor: colors.border,
-    height: StyleSheet.hairlineWidth,
-    marginLeft: spacing.xl,
-  },
-  permissionRow: {
+  permGroupHeader: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.lg,
   },
+  permGroupLeft: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  permGroupRight: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  permGroupCount: {
+    color: colors.textDim,
+    fontFamily: fontFamily.regular,
+    fontSize: typography.caption,
+  },
+  permissionGroupLabel: {
+    color: colors.textDim,
+    fontFamily: fontFamily.regular,
+    fontSize: typography.caption,
+    fontWeight: '600',
+    letterSpacing: 0.6,
+  },
+  permissionDivider: {
+    backgroundColor: colors.border,
+    height: StyleSheet.hairlineWidth,
+    marginLeft: spacing.xl + 20,
+  },
+  permissionRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md + 2,
+  },
+  permInfo: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
   permissionLabel: {
     color: colors.textMuted,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
+  },
+  permDesc: {
+    color: colors.textDim,
+    fontFamily: fontFamily.regular,
+    fontSize: typography.caption,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  permToggle: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    height: 22,
+    justifyContent: 'center',
+    width: 22,
+    backgroundColor: colors.surfaceMuted,
+  },
+  permToggleOn: {
+    backgroundColor: colors.success,
   },
   permissionBadge: {
     alignItems: 'center',
@@ -1441,6 +1673,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   permissionStatus: {
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     fontWeight: '600',
   },
@@ -1450,4 +1683,5 @@ const styles = StyleSheet.create({
   deniedText: {
     color: colors.danger,
   },
+
 });

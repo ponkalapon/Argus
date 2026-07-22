@@ -1,4 +1,3 @@
-import * as Contacts from 'expo-contacts';
 import { Linking, Alert } from 'react-native';
 
 export type ContactResult = {
@@ -34,30 +33,35 @@ export const toSafeContactPreview = (contact: ContactResult): ContactSafePreview
 });
 
 export const searchContacts = async (query: string): Promise<ContactResult[]> => {
-  const { status } = await Contacts.requestPermissionsAsync();
-  if (status !== 'granted') throw new Error('Нет доступа к контактам');
+  try {
+    const Contacts = require('expo-contacts');
+    const { status } = await Contacts.requestPermissionsAsync();
+    if (status !== 'granted') throw new Error('Нет доступа к контактам');
 
-  const { data } = await Contacts.getContactsAsync({
-    fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
-    sort: 'firstName',
-  });
+    const { data } = await Contacts.getContactsAsync({
+      fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
+      sort: 'firstName',
+    });
 
-  if (!data || data.length === 0) return [];
+    if (!data || data.length === 0) return [];
 
-  const q = query.toLowerCase();
-  return data
-    .filter((c) => {
-      const name = (c.name || '').toLowerCase();
-      const phones = (c.phoneNumbers || []).map((p) => p.number || '').join(' ');
-      return !q || name.includes(q) || phones.includes(q);
-    })
-    .map((c) => ({
-      id: c.id || '',
-      name: c.name || 'Без имени',
-      phones: (c.phoneNumbers || []).map((p) => p.number || '').filter(Boolean),
-    }))
-    .filter((c) => c.phones.length > 0)
-    .slice(0, 10);
+    const q = query.toLowerCase();
+    return data
+      .filter((c: any) => {
+        const name = (c.name || '').toLowerCase();
+        const phones = (c.phoneNumbers || []).map((p: any) => p.number || '').join(' ');
+        return !q || name.includes(q) || phones.includes(q);
+      })
+      .map((c: any) => ({
+        id: c.id || '',
+        name: c.name || 'Без имени',
+        phones: (c.phoneNumbers || []).map((p: any) => p.number || '').filter(Boolean),
+      }))
+      .filter((c: any) => c.phones.length > 0)
+      .slice(0, 10);
+  } catch {
+    return [];
+  }
 };
 
 export const openDialer = (phone: string) => {

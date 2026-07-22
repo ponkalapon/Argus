@@ -1,7 +1,8 @@
 import { memo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { AgentSettings, AgentStatus } from '../types';
-import { colors, radius, spacing, typography } from '../styles/theme';
+import { colors, fontFamily, radius, spacing, typography } from '../styles/theme';
+import { t } from '../i18n';
 
 type Props = {
   settings: AgentSettings;
@@ -10,11 +11,7 @@ type Props = {
   messageCount: number;
 };
 
-const statusLabel: Record<AgentStatus, string> = {
-  idle: 'Готов',
-  thinking: 'Отвечает…',
-  error: 'Ошибка',
-};
+
 
 const statusDotColor: Record<AgentStatus, string> = {
   idle: colors.success,
@@ -23,30 +20,30 @@ const statusDotColor: Record<AgentStatus, string> = {
 };
 
 export const AgentStatusCard = memo(({ settings, status, hasApiKey, messageCount }: Props) => {
-  const modelLabel = settings.model.trim() || 'Модель не задана';
+  const modelLabel = settings.model.trim() || t('agentStatus.modelNotSet');
   const isReady = Boolean(settings.baseUrl.trim() && settings.model.trim());
 
   return (
     <View style={styles.card}>
       <View style={styles.topRow}>
         <View style={[styles.dot, { backgroundColor: statusDotColor[status] }]} />
-        <Text style={styles.statusText}>{statusLabel[status]}</Text>
+        <Text style={styles.statusText}>{t('status.' + status)}</Text>
         {status === 'thinking' && (
           <ActivityIndicator color={colors.textDim} size="small" style={styles.spinner} />
         )}
       </View>
       <Text style={styles.model} numberOfLines={1}>
-        {isReady ? modelLabel : 'Подключение не настроено'}
+        {isReady ? modelLabel : t('agentStatus.connectionNotConfigured')}
       </Text>
       <View style={styles.badges}>
         <View style={styles.badge}>
           <View style={styles.badgeRow}>
             <View style={[styles.badgeDot, { backgroundColor: hasApiKey ? colors.success : colors.textMuted }]} />
-            <Text style={styles.badgeText}>{hasApiKey ? 'ключ задан' : 'без ключа'}</Text>
+            <Text style={styles.badgeText}>{hasApiKey ? t('agentStatus.keySet') : t('agentStatus.noKey')}</Text>
           </View>
         </View>
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>{Math.max(messageCount, 0)} сообщ.</Text>
+          <Text style={styles.badgeText}>{Math.max(messageCount, 0)} {t('agentStatus.messages')}</Text>
         </View>
       </View>
     </View>
@@ -73,6 +70,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: colors.textMuted,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     fontWeight: '600',
   },
@@ -81,6 +79,7 @@ const styles = StyleSheet.create({
   },
   model: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     fontWeight: '500',
     marginBottom: spacing.md,
@@ -107,6 +106,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: colors.textDim,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     fontWeight: '500',
   },

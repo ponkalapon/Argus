@@ -1,0 +1,49 @@
+{
+  "common": {
+    "loading": "กำลังโหลด…",
+    "error": "ข้อผิดพลาด",
+    "cancel": "ยกเลิก",
+    "ok": "ตกลง",
+    "delete": "ลบ",
+    "save": "บันทึก"
+  },
+  "status": {
+    "idle": "พร้อม",
+    "thinking": "กำลังคิด…",
+    "error": "ข้อผิดพลาด"
+  },
+  "agentStatus": {
+    "modelNotSet": "ยังไม่ได้ตั้งค่าโมเดล",
+    "connectionNotConfigured": "ยังไม่ได้ตั้งค่าการเชื่อมต่อ",
+    "keySet": "ตั้งค่าคีย์แล้ว",
+    "noKey": "ไม่มีคีย์",
+    "messages": "ข้อความ"
+  },
+  "settings": {
+    "language": "ภาษา",
+    "model": "โมเดล",
+    "apiFormat": "รูปแบบ API",
+    "connection": "การเชื่อมต่อ",
+    "provider": "ผู้ให้บริการ",
+    "custom": "กำหนดเอง",
+    "noKey": "ไม่มีคีย์",
+    "token": "โทเค็น",
+    "keyOptional": "คีย์ (ไม่บังคับ)",
+    "loading": "กำลังโหลด…",
+    "permissions": "สิทธิ์",
+    "stats": "สถิติ",
+    "update": "อัปเดต",
+    "skills": "ทักษะ",
+    "settingsTitle": "การตั้งค่า"
+  },
+  "workspace": {
+    "welcomeTitle": "ช่วยอะไรได้บ้าง?",
+    "inputPlaceholder": "ถามผู้ช่วย…",
+    "connected": "เชื่อมต่อแล้ว",
+    "notConfigured": "ยังไม่ได้ตั้งค่า"
+  },
+  "messageBubble": {
+    "copied": "คัดลอกแล้ว",
+    "copy": "คัดลอก"
+  }
+}

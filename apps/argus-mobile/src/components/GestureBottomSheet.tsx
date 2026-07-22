@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useRef } from 'react';
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Dimensions, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -9,10 +9,12 @@ import Animated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, motion, radius, spacing } from '../styles/theme';
 
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 export type SnapPoint = 'closed' | 'partial' | 'full';
+export const BOTTOM_SHEET_HEIGHT = SCREEN_HEIGHT;
 
 type Props = {
   visible: boolean;
@@ -23,8 +25,11 @@ type Props = {
   overlayOpacity?: { closed: number; open: number };
 };
 
-// Keep export for consumers that reference it
-export const BOTTOM_SHEET_HEIGHT = 0; // deprecated — use useWindowDimensions inside
+const defaultSnapPoints = {
+  closed: SCREEN_HEIGHT,
+  partial: 200,
+  full: 0,
+};
 
 const defaultSpring = { damping: 28, stiffness: 220 };
 const defaultOverlay = { closed: 0, open: 0.5 };
@@ -37,25 +42,17 @@ export const GestureBottomSheet = ({
   springConfig = defaultSpring,
   overlayOpacity: userOverlay = defaultOverlay,
 }: Props) => {
-  const { height: screenHeight } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
-
-  // Compute snap points relative to real screen dimensions each render
-  const defaultSnapPoints = {
-    closed: screenHeight,
-    partial: Math.round(screenHeight * 0.42),
-    full: insets.top + 20,
-  };
-
   const points = { ...defaultSnapPoints, ...userSnapPoints };
   const spring = { ...defaultSpring, ...springConfig };
   const overlay = { ...defaultOverlay, ...userOverlay };
 
   const translateY = useSharedValue(points.closed);
-  const overlayOpacityVal = useSharedValue(0);
+  const overlayOpacity = useSharedValue(0);
   const currentY = useSharedValue(points.closed);
   const gestureStartY = useSharedValue(points.closed);
   const canCloseRef = useRef(false);
+
+  const enableClose = () => { canCloseRef.current = true; };
 
   const snapTo = (point: SnapPoint, closeAfter = false) => {
     'worklet';
@@ -65,7 +62,7 @@ export const GestureBottomSheet = ({
       damping: spring.damping,
       stiffness: spring.stiffness,
     });
-    overlayOpacityVal.value = withSpring(
+    overlayOpacity.value = withSpring(
       point === 'closed' ? overlay.closed : overlay.open,
       { damping: spring.damping, stiffness: spring.stiffness }
     );
@@ -96,7 +93,7 @@ export const GestureBottomSheet = ({
       const newY = gestureStartY.value + e.translationY;
       translateY.value = Math.max(points.full, Math.min(points.closed, newY));
       const progress = 1 - (translateY.value - points.full) / (points.closed - points.full);
-      overlayOpacityVal.value = interpolate(
+      overlayOpacity.value = interpolate(
         progress,
         [0, 1],
         [overlay.closed, overlay.open],
@@ -105,8 +102,8 @@ export const GestureBottomSheet = ({
     })
     .onEnd((e) => {
       const velocity = e.velocityY;
-      const cur = translateY.value;
-      const progress = 1 - (cur - points.full) / (points.closed - points.full);
+      const currentY = translateY.value;
+      const progress = 1 - (currentY - points.full) / (points.closed - points.full);
 
       let targetSnap: SnapPoint;
       if (velocity > 500) {
@@ -126,7 +123,7 @@ export const GestureBottomSheet = ({
   }));
 
   const overlayStyle = useAnimatedStyle(() => ({
-    opacity: overlayOpacityVal.value,
+    opacity: overlayOpacity.value,
   }));
 
   if (!visible) return null;
@@ -144,7 +141,7 @@ export const GestureBottomSheet = ({
         />
       </Animated.View>
       <GestureDetector gesture={panGesture}>
-        <Animated.View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }, sheetStyle]}>
+        <Animated.View style={[styles.sheet, sheetStyle]}>
           <View style={styles.handle} />
           {children}
         </Animated.View>
@@ -162,6 +159,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xxl,
     borderTopRightRadius: radius.xxl,
+    maxHeight: SCREEN_HEIGHT - 60,
+    paddingBottom: spacing.xl,
     position: 'absolute',
     left: 0,
     right: 0,

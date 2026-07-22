@@ -6,6 +6,9 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'gpt-4-turbo': 128000,
   'gpt-4o': 128000,
   'gpt-4o-mini': 128000,
+  'gpt-4.1': 1047576,
+  'gpt-4.1-mini': 1047576,
+  'gpt-4.1-nano': 1047576,
   'gpt-5': 128000,
   'gpt-5.4': 128000,
   'claude-3-haiku': 200000,
@@ -19,6 +22,7 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'gemini-1.5-pro': 1048576,
   'gemini-1.5-flash': 1048576,
   'gemini-2.0-flash': 1048576,
+  'gemini-2.5-pro': 1048576,
   'gemma-2-2b': 8192,
   'gemma-2-9b': 8192,
   'gemma-2-27b': 8192,
@@ -27,6 +31,7 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'llama-3.1-405b': 131072,
   'llama-3.2-3b': 131072,
   'llama-3.3-70b': 131072,
+  'llama-4-maverick': 1048576,
   'mixtral-8x7b': 32768,
   'mixtral-8x22b': 65536,
   'mistral-large': 131072,
@@ -37,6 +42,7 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'qwen-2.5-32b': 32768,
   'qwen-2.5-72b': 32768,
   'qwen-3': 131072,
+  'qwen-3-coder': 131072,
   'qwen-3.5': 131072,
   'phi-3': 128000,
   'phi-4': 128000,
@@ -61,8 +67,13 @@ export const getContextWindow = (modelName: string): number => {
   return DEFAULT_CONTEXT_WINDOW;
 };
 
+const isCyrillic = (text: string): boolean => /[\u0400-\u04FF]/.test(text);
+
 export const estimateTokens = (text: string): number => {
   if (!text) return 0;
+  if (isCyrillic(text)) {
+    return Math.ceil(text.length / 1.2);
+  }
   return Math.ceil(text.length / 3.5);
 };
 

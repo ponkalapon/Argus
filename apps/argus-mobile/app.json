@@ -21,7 +21,6 @@
     "android": {
       "package": "com.dimap.argus",
       "versionCode": 2,
-      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/icon_foreground.png"
@@ -42,7 +41,17 @@
       "expo-sharing",
       "expo-splash-screen",
       "@react-native-voice/voice",
-      ["@bittingz/expo-widgets", {}]
+      ["@bittingz/expo-widgets", {}],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/Roboto-Regular.ttf",
+            "./assets/Roboto-Bold.ttf",
+            "./assets/Roboto-Medium.ttf"
+          ]
+        }
+      ]
     ]
   }
 }

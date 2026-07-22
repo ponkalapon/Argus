@@ -1,0 +1,49 @@
+{
+  "common": {
+    "loading": "جارٍ التحميل…",
+    "error": "خطأ",
+    "cancel": "إلغاء",
+    "ok": "موافق",
+    "delete": "حذف",
+    "save": "حفظ"
+  },
+  "status": {
+    "idle": "جاهز",
+    "thinking": "جارٍ التفكير…",
+    "error": "خطأ"
+  },
+  "agentStatus": {
+    "modelNotSet": "النموذج غير محدد",
+    "connectionNotConfigured": "الاتصال غير مهيأ",
+    "keySet": "المفتاح محدد",
+    "noKey": "بلا مفتاح",
+    "messages": "رسائل"
+  },
+  "settings": {
+    "language": "اللغة",
+    "model": "النموذج",
+    "apiFormat": "تنسيق API",
+    "connection": "الاتصال",
+    "provider": "المزود",
+    "custom": "مخصص",
+    "noKey": "بلا مفتاح",
+    "token": "رمز",
+    "keyOptional": "المفتاح (اختياري)",
+    "loading": "جارٍ التحميل…",
+    "permissions": "التصاريح",
+    "stats": "الإحصائيات",
+    "update": "التحديث",
+    "skills": "المهارات",
+    "settingsTitle": "الإعدادات"
+  },
+  "workspace": {
+    "welcomeTitle": "كيف يمكنني مساعدتك؟",
+    "inputPlaceholder": "اسأل المساعد…",
+    "connected": "متصل",
+    "notConfigured": "غير مهيأ"
+  },
+  "messageBubble": {
+    "copied": "تم النسخ",
+    "copy": "نسخ"
+  }
+}

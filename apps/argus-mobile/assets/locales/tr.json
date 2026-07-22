@@ -1,0 +1,49 @@
+{
+  "common": {
+    "loading": "Yükleniyor…",
+    "error": "Hata",
+    "cancel": "İptal",
+    "ok": "Tamam",
+    "delete": "Sil",
+    "save": "Kaydet"
+  },
+  "status": {
+    "idle": "Hazır",
+    "thinking": "Düşünüyor…",
+    "error": "Hata"
+  },
+  "agentStatus": {
+    "modelNotSet": "Model ayarlanmamış",
+    "connectionNotConfigured": "Bağlantı yapılandırılmamış",
+    "keySet": "anahtar ayarlı",
+    "noKey": "anahtar yok",
+    "messages": "mesaj"
+  },
+  "settings": {
+    "language": "Dil",
+    "model": "Model",
+    "apiFormat": "API Formatı",
+    "connection": "BAĞLANTI",
+    "provider": "Sağlayıcı",
+    "custom": "Özel",
+    "noKey": "Anahtar yok",
+    "token": "Jeton",
+    "keyOptional": "Anahtar (isteğe bağlı)",
+    "loading": "Yükleniyor…",
+    "permissions": "İZİNLER",
+    "stats": "İSTATİSTİKLER",
+    "update": "GÜNCELLEME",
+    "skills": "BECERİLER",
+    "settingsTitle": "Ayarlar"
+  },
+  "workspace": {
+    "welcomeTitle": "Nasıl yardımcı olabilirim?",
+    "inputPlaceholder": "Asistana sor…",
+    "connected": "Bağlı",
+    "notConfigured": "Yapılandırılmamış"
+  },
+  "messageBubble": {
+    "copied": "Kopyalandı",
+    "copy": "Kopyala"
+  }
+}
