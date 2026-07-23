@@ -549,14 +549,14 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                 </View>
 
                 {/* Language Option (Dropdown Select) */}
-                <View style={{ marginBottom: spacing.xl, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', zIndex: 100, position: 'relative' }}>
+                <View style={{ marginBottom: spacing.xl, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', zIndex: 500 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <View>
+                    <View style={{ flex: 1, paddingRight: spacing.md }}>
                       <Text style={styles.fieldLabel}>{t('settings.language_title', 'Язык приложения / Language')}</Text>
                       <Text style={styles.fieldHint}>{t('settings.language_hint', 'Загружено из .yml файлов локализации.')}</Text>
                     </View>
 
-                    <View style={{ position: 'relative' }}>
+                    <View style={{ position: 'relative', zIndex: 1000 }}>
                       <Pressable
                         onPress={() => setShowLangPicker((prev) => !prev)}
                         style={({ pressed }) => [
@@ -570,7 +570,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                             paddingHorizontal: 14,
                             paddingVertical: 7,
                             borderRadius: radius.md,
-                            minWidth: 135,
+                            minWidth: 145,
                             justifyContent: 'space-between',
                           },
                           pressed && styles.pressed,
@@ -589,20 +589,20 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                         <View
                           style={{
                             position: 'absolute',
-                            top: 44,
+                            top: 40,
                             right: 0,
-                            left: 0,
+                            width: 155,
                             backgroundColor: '#18181b',
                             borderColor: colors.accent,
                             borderWidth: 1,
                             borderRadius: radius.md,
                             padding: 4,
-                            zIndex: 1000,
+                            zIndex: 9999,
                             shadowColor: '#000',
                             shadowOffset: { width: 0, height: 6 },
-                            shadowOpacity: 0.5,
+                            shadowOpacity: 0.6,
                             shadowRadius: 10,
-                            elevation: 12,
+                            elevation: 20,
                           }}
                         >
                           {availableLanguages.map((langOpt) => {
