@@ -3,10 +3,7 @@ name: Build APK
 on:
   push:
     branches: [main, master]
-    paths:
-      - 'apps/argus-mobile/**'
-      - 'package.json'
-      - 'package-lock.json'
+  workflow_dispatch:
 
 permissions:
   contents: write

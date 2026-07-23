@@ -2,11 +2,7 @@ name: Build Desktop (EXE)
 
 on:
   push:
-    branches: [master, main]
-    paths:
-      - 'apps/argus-desktop/**'
-      - 'package.json'
-      - 'package-lock.json'
+    branches: [main, master]
   workflow_dispatch:
 
 permissions:
