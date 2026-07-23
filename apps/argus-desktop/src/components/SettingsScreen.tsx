@@ -549,7 +549,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                 </View>
 
                 {/* Language Option (Dropdown Select) */}
-                <View style={{ marginBottom: spacing.xl, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', zIndex: 50 }}>
+                <View style={{ marginBottom: spacing.xl, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', zIndex: 100, position: 'relative' }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                     <View>
                       <Text style={styles.fieldLabel}>{t('settings.language_title', 'Язык приложения / Language')}</Text>
@@ -589,20 +589,20 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                         <View
                           style={{
                             position: 'absolute',
-                            top: 42,
+                            top: 44,
                             right: 0,
-                            width: 145,
-                            backgroundColor: '#121215',
-                            borderColor: '#27272a',
+                            left: 0,
+                            backgroundColor: '#18181b',
+                            borderColor: colors.accent,
                             borderWidth: 1,
                             borderRadius: radius.md,
                             padding: 4,
-                            zIndex: 100,
+                            zIndex: 1000,
                             shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.3,
-                            shadowRadius: 8,
-                            elevation: 10,
+                            shadowOffset: { width: 0, height: 6 },
+                            shadowOpacity: 0.5,
+                            shadowRadius: 10,
+                            elevation: 12,
                           }}
                         >
                           {availableLanguages.map((langOpt) => {
