@@ -1,0 +1,49 @@
+{
+  "common": {
+    "loading": "Chargement…",
+    "error": "Erreur",
+    "cancel": "Annuler",
+    "ok": "OK",
+    "delete": "Supprimer",
+    "save": "Enregistrer"
+  },
+  "status": {
+    "idle": "Prêt",
+    "thinking": "Réflexion…",
+    "error": "Erreur"
+  },
+  "agentStatus": {
+    "modelNotSet": "Modèle non défini",
+    "connectionNotConfigured": "Connexion non configurée",
+    "keySet": "clé définie",
+    "noKey": "pas de clé",
+    "messages": "messages"
+  },
+  "settings": {
+    "language": "Langue",
+    "model": "Modèle",
+    "apiFormat": "Format API",
+    "connection": "CONNEXION",
+    "provider": "Fournisseur",
+    "custom": "Personnalisé",
+    "noKey": "Pas de clé",
+    "token": "Jeton",
+    "keyOptional": "Clé (optionnel)",
+    "loading": "Chargement…",
+    "permissions": "AUTORISATIONS",
+    "stats": "STATISTIQUES",
+    "update": "MISE À JOUR",
+    "skills": "COMPÉTENCES",
+    "settingsTitle": "Paramètres"
+  },
+  "workspace": {
+    "welcomeTitle": "Comment puis-je aider?",
+    "inputPlaceholder": "Demandez à l'assistant…",
+    "connected": "Connecté",
+    "notConfigured": "Non configuré"
+  },
+  "messageBubble": {
+    "copied": "Copié",
+    "copy": "Copier"
+  }
+}

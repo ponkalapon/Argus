@@ -1,4 +1,5 @@
-import * as Calendar from 'expo-calendar';
+let Calendar: any = null;
+try { Calendar = require('expo-calendar'); } catch {}
 import { getSoul, updateSoul } from './soul';
 import * as ContactsService from './contacts';
 import { phoneSearchFiles, phoneSearchChats, phoneSearchMemory } from './localSearch';
@@ -675,7 +676,37 @@ export const TOOL_HANDLERS: Record<
       })),
     };
   },
-  save_skill: async ({ name, description, pattern, triggerKeywords }) => {
+  save_skill: async (args: any) => {
+    const name = String(args?.name || args?.skill_name || args?.title || 'Новый навык').trim();
+    const description = String(args?.description || args?.desc || args?.summary || 'Пользовательский навык').trim();
+    const pattern = String(args?.pattern || args?.steps || args?.instructions || args?.pattern_description || 'Выполнять задачи по данному шаблону.').trim();
+    const rawKeywords = args?.triggerKeywords || args?.keywords;
+    const triggerKeywords = Array.isArray(rawKeywords)
+      ? rawKeywords.map(String)
+      : typeof rawKeywords === 'string'
+        ? rawKeywords.split(/[\s,]+/).map((s: string) => s.trim()).filter(Boolean)
+        : [name.toLowerCase()];
+
+    const skill = await saveSkill({ name, description, pattern, triggerKeywords });
+    return { saved: true, id: skill.id, name: skill.name, description: skill.description };
+  },
+  learn_skill: async (args: any) => {
+    const name = String(args?.name || args?.skill_name || args?.title || 'Новый навык').trim();
+    const description = String(args?.description || args?.desc || args?.summary || 'Пользовательский навык').trim();
+    const pattern = String(args?.pattern || args?.steps || args?.instructions || '').trim();
+    const rawKeywords = args?.triggerKeywords || args?.keywords;
+    const triggerKeywords = Array.isArray(rawKeywords)
+      ? rawKeywords.map(String)
+      : [name.toLowerCase()];
+
+    const skill = await saveSkill({ name, description, pattern, triggerKeywords });
+    return { saved: true, id: skill.id, name: skill.name };
+  },
+  create_skill: async (args: any) => {
+    const name = String(args?.name || args?.skill_name || args?.title || 'Новый навык').trim();
+    const description = String(args?.description || args?.desc || args?.summary || 'Пользовательский навык').trim();
+    const pattern = String(args?.pattern || args?.steps || args?.instructions || '').trim();
+    const triggerKeywords = [name.toLowerCase()];
     const skill = await saveSkill({ name, description, pattern, triggerKeywords });
     return { saved: true, id: skill.id, name: skill.name };
   },
@@ -863,4 +894,23 @@ export const TOOL_HANDLERS: Record<
       truncated: result.truncated,
     };
   },
+};
+
+export const executeTool = async (
+  name: string,
+  args: any,
+  context?: any,
+): Promise<string> => {
+  const handler = TOOL_HANDLERS[name];
+  if (!handler) {
+    return JSON.stringify({ error: `Инструмент "${name}" не найден` });
+  }
+
+  try {
+    const result = await handler(args, context);
+    return typeof result === 'string' ? result : JSON.stringify(result);
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return JSON.stringify({ error: `Ошибка выполнения "${name}": ${errorMsg}` });
+  }
 };

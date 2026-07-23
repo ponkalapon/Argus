@@ -4,8 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { ArrowLeft, File as FileIcon, FileText, Folder, Image, Search, Trash2 } from 'lucide-react-native';
-import { colors, radius, spacing, typography } from '../styles/theme';
+import { colors, fontFamily, radius, spacing, typography } from '../styles/theme';
 import { setExternalSearchRoot } from '../services/localSearch';
+import { t } from '../i18n';
 
 type FileEntry = {
   name: string;
@@ -74,8 +75,8 @@ const KNOWN_BINARY_EXTENSIONS = [
   'bin',
 ];
 
-const PREVIEW_TRUNCATION_NOTICE = `\n\n[Предпросмотр обрезан: показаны первые ${MAX_PREVIEW_CHARS.toLocaleString('ru-RU')} символов.]`;
-const ATTACH_TRUNCATION_NOTICE = `\n\n[Файл обрезан при прикреплении: переданы первые ${MAX_ATTACH_CHARS.toLocaleString('ru-RU')} символов.]`;
+const PREVIEW_TRUNCATION_NOTICE = `\n\n${t('fileManager.previewTruncated', { count: MAX_PREVIEW_CHARS.toLocaleString('ru-RU') })}`;
+const ATTACH_TRUNCATION_NOTICE = `\n\n${t('fileManager.attachTruncated', { count: MAX_ATTACH_CHARS.toLocaleString('ru-RU') })}`;
 
 const getFileIcon = (name: string) => {
   const ext = name.split('.').pop()?.toLowerCase();
@@ -183,7 +184,7 @@ export const FileManagerScreen = ({ onBack, onAttach, initialPath }: Props) => {
 
       setEntries(fileEntries);
     } catch {
-      Alert.alert('Ошибка', 'Не удалось прочитать папку');
+      Alert.alert(t('workspace.cameraAccessTitle'), t('fileManager.folderReadError'));
     }
     setLoading(false);
   }, []);
@@ -217,55 +218,55 @@ export const FileManagerScreen = ({ onBack, onAttach, initialPath }: Props) => {
     if (isViewable) {
       if (entry.size > MAX_PREVIEW_CHARS) {
         Alert.alert(
-          'Большой файл',
-          `Файл ${formatSize(entry.size)}. Для предпросмотра будет показано только начало.`
+          t('fileManager.bigFileTitle'),
+          t('fileManager.bigFilePreview', { size: formatSize(entry.size) })
         );
       }
 
       try {
         const result = readTextPrefix(entry, MAX_PREVIEW_CHARS);
         if (result.binary || result.unreadable) {
-          Alert.alert('Неподдерживаемый файл', 'Файл не удалось прочитать как UTF-8 текст.');
+          Alert.alert(t('fileManager.unsupportedFile'), t('fileManager.notUtf8'));
           return;
         }
 
         setPreviewTitle(entry.name);
         setPreviewContent(result.truncated ? `${result.text}${PREVIEW_TRUNCATION_NOTICE}` : result.text);
       } catch {
-        Alert.alert('Ошибка', 'Не удалось прочитать файл');
+        Alert.alert(t('workspace.cameraAccessTitle'), t('fileManager.fileReadError'));
       }
     } else if (IMAGE_FILE_EXTENSIONS.includes(ext)) {
       try {
         Linking.openURL(entry.path);
       } catch {
-        Alert.alert('Ошибка', 'Не удалось открыть файл');
+        Alert.alert(t('workspace.cameraAccessTitle'), t('fileManager.fileOpenError'));
       }
     } else {
       try {
         await Sharing.shareAsync(entry.path);
       } catch {
-        Alert.alert('Ошибка', 'Не удалось открыть файл');
+        Alert.alert(t('workspace.cameraAccessTitle'), t('fileManager.fileOpenError'));
       }
     }
   };
 
   const handleAttach = async (entry: FileEntry) => {
     if (isLikelyBinaryExtension(entry.name)) {
-      Alert.alert('Неподдерживаемый файл', 'Бинарные файлы нельзя прикреплять как текст.');
+      Alert.alert(t('fileManager.unsupportedFile'), t('fileManager.binaryNotSupported'));
       return;
     }
 
     if (entry.size > MAX_ATTACH_CHARS) {
       Alert.alert(
-        'Большой файл',
-        `Файл ${formatSize(entry.size)}. Будет прикреплена только сокращенная текстовая версия.`
+        t('fileManager.bigFileTitle'),
+        t('fileManager.bigFileAttach', { size: formatSize(entry.size) })
       );
     }
 
     try {
       const result = readTextPrefix(entry, MAX_ATTACH_CHARS);
       if (result.binary || result.unreadable) {
-        Alert.alert('Неподдерживаемый файл', 'Файл не удалось прочитать как UTF-8 текст, поэтому он не будет прикреплен.');
+        Alert.alert(t('fileManager.unsupportedFile'), t('fileManager.notUtf8Attach'));
         return;
       }
 
@@ -274,15 +275,15 @@ export const FileManagerScreen = ({ onBack, onAttach, initialPath }: Props) => {
       onAttach(entry.name, content);
       onBack();
     } catch {
-      Alert.alert('Ошибка', 'Не удалось прочитать файл для прикрепления');
+      Alert.alert(t('workspace.cameraAccessTitle'), t('fileManager.attachReadError'));
     }
   };
 
   const handleDelete = (entry: FileEntry) => {
-    Alert.alert('Удалить', `Удалить "${entry.name}"?`, [
-      { text: 'Отмена', style: 'cancel' },
+    Alert.alert(t('fileManager.deleteTitle'), t('fileManager.deleteConfirm', { name: entry.name }), [
+      { text: t('fileManager.cancel'), style: 'cancel' },
       {
-        text: 'Удалить',
+        text: t('fileManager.delete'),
         style: 'destructive',
         onPress: async () => {
           try {
@@ -293,7 +294,7 @@ export const FileManagerScreen = ({ onBack, onAttach, initialPath }: Props) => {
             }
             loadDirectory(currentPath);
           } catch {
-            Alert.alert('Ошибка', 'Не удалось удалить');
+            Alert.alert(t('workspace.cameraAccessTitle'), t('fileManager.deleteError'));
           }
         },
       },
@@ -304,12 +305,12 @@ export const FileManagerScreen = ({ onBack, onAttach, initialPath }: Props) => {
     ? entries.filter((e) => e.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : entries;
 
-  const rootLabel = currentPath === Paths.document.uri ? 'App данных'
+  const rootLabel = currentPath === Paths.document.uri ? t('fileManager.appData')
     : currentPath.includes('/Android/') ? 'Android'
-    : currentPath.includes('/Download') ? 'Загрузки'
-    : currentPath.includes('/DCIM') ? 'Фото'
-    : currentPath.includes('/Documents') ? 'Документы'
-    : currentPath.split('/').filter(Boolean).pop() || 'Файлы';
+    : currentPath.includes('/Download') ? t('fileManager.downloads')
+    : currentPath.includes('/DCIM') ? t('fileManager.photos')
+    : currentPath.includes('/Documents') ? t('fileManager.documents')
+    : currentPath.split('/').filter(Boolean).pop() || t('fileManager.files');
 
   if (previewContent !== null) {
     return (
@@ -344,7 +345,7 @@ export const FileManagerScreen = ({ onBack, onAttach, initialPath }: Props) => {
         <Search size={16} color={colors.textDim} style={{ marginRight: spacing.sm }} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Поиск файлов..."
+          placeholder={t('fileManager.searchPlaceholder')}
           placeholderTextColor={colors.textDim}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -359,7 +360,7 @@ export const FileManagerScreen = ({ onBack, onAttach, initialPath }: Props) => {
           loading ? (
             <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.xxl }} />
           ) : (
-            <Text style={styles.emptyText}>Папка пуста</Text>
+            <Text style={styles.emptyText}>{t('fileManager.folderEmpty')}</Text>
           )
         }
         renderItem={({ item }) => {
@@ -422,6 +423,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     flex: 1,
     fontSize: typography.subtitle,
     fontWeight: '700',
@@ -429,6 +431,7 @@ const styles = StyleSheet.create({
   },
   upBtn: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.subtitle,
     fontWeight: '700',
   },
@@ -443,6 +446,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     flex: 1,
     fontSize: typography.body,
     paddingVertical: spacing.sm,
@@ -472,10 +476,12 @@ const styles = StyleSheet.create({
   },
   fileName: {
     color: colors.text,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
   },
   fileSize: {
     color: colors.textDim,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
     marginTop: 2,
   },
@@ -493,6 +499,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: colors.textDim,
+    fontFamily: fontFamily.regular,
     fontSize: typography.body,
     marginTop: spacing.xxl,
     textAlign: 'center',
@@ -504,7 +511,7 @@ const styles = StyleSheet.create({
   },
   previewText: {
     color: colors.text,
-    fontFamily: 'monospace',
+    fontFamily: fontFamily.mono,
     fontSize: typography.mono,
     lineHeight: 20,
   },
@@ -516,6 +523,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     color: colors.textDim,
+    fontFamily: fontFamily.regular,
     fontSize: typography.caption,
   },
 });

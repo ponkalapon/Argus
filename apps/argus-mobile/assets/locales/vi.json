@@ -1,0 +1,49 @@
+{
+  "common": {
+    "loading": "Đang tải…",
+    "error": "Lỗi",
+    "cancel": "Hủy",
+    "ok": "OK",
+    "delete": "Xóa",
+    "save": "Lưu"
+  },
+  "status": {
+    "idle": "Sẵn sàng",
+    "thinking": "Đang suy nghĩ…",
+    "error": "Lỗi"
+  },
+  "agentStatus": {
+    "modelNotSet": "Chưa đặt mô hình",
+    "connectionNotConfigured": "Chưa cấu hình kết nối",
+    "keySet": "đã đặt khóa",
+    "noKey": "không có khóa",
+    "messages": "tin nhắn"
+  },
+  "settings": {
+    "language": "Ngôn ngữ",
+    "model": "Mô hình",
+    "apiFormat": "Định dạng API",
+    "connection": "KẾT NỐI",
+    "provider": "Nhà cung cấp",
+    "custom": "Tùy chỉnh",
+    "noKey": "Không có khóa",
+    "token": "Mã thông báo",
+    "keyOptional": "Khóa (tùy chọn)",
+    "loading": "Đang tải…",
+    "permissions": "QUYỀN",
+    "stats": "THỐNG KÊ",
+    "update": "CẬP NHẬT",
+    "skills": "KỸ NĂNG",
+    "settingsTitle": "Cài đặt"
+  },
+  "workspace": {
+    "welcomeTitle": "Tôi có thể giúp gì?",
+    "inputPlaceholder": "Hỏi trợ lý…",
+    "connected": "Đã kết nối",
+    "notConfigured": "Chưa cấu hình"
+  },
+  "messageBubble": {
+    "copied": "Đã sao chép",
+    "copy": "Sao chép"
+  }
+}

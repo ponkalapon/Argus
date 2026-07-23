@@ -1,0 +1,49 @@
+{
+  "common": {
+    "loading": "Memuat…",
+    "error": "Kesalahan",
+    "cancel": "Batal",
+    "ok": "OK",
+    "delete": "Hapus",
+    "save": "Simpan"
+  },
+  "status": {
+    "idle": "Siap",
+    "thinking": "Berpikir…",
+    "error": "Kesalahan"
+  },
+  "agentStatus": {
+    "modelNotSet": "Model belum diatur",
+    "connectionNotConfigured": "Koneksi belum dikonfigurasi",
+    "keySet": "kunci diatur",
+    "noKey": "tanpa kunci",
+    "messages": "pesan"
+  },
+  "settings": {
+    "language": "Bahasa",
+    "model": "Model",
+    "apiFormat": "Format API",
+    "connection": "KONEKSI",
+    "provider": "Penyedia",
+    "custom": "Kustom",
+    "noKey": "Tanpa kunci",
+    "token": "Token",
+    "keyOptional": "Kunci (opsional)",
+    "loading": "Memuat…",
+    "permissions": "IZIN",
+    "stats": "STATISTIK",
+    "update": "PEMBARUAN",
+    "skills": "KETERAMPILAN",
+    "settingsTitle": "Pengaturan"
+  },
+  "workspace": {
+    "welcomeTitle": "Apa yang bisa saya bantu?",
+    "inputPlaceholder": "Tanya asisten…",
+    "connected": "Tersambung",
+    "notConfigured": "Belum dikonfigurasi"
+  },
+  "messageBubble": {
+    "copied": "Disalin",
+    "copy": "Salin"
+  }
+}

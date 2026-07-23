@@ -15,15 +15,20 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { requestChatCompletion, loadChats, WorkspaceFile, searchSessions, listWorkspaceFiles, exportWorkspaceArchive, exportWorkspaceFile } from '../api';
+import { requestChatCompletion, getEstimatedSystemPromptTokens } from '../services/openaiClient';
+import { loadChats, saveChats, loadInternetEnabled, saveInternetEnabled } from '../services/storage';
+import { listWorkspaceFiles, exportWorkspaceFile, exportWorkspaceArchive, WorkspaceFile } from '../services/workspace';
+import { searchSessions } from '../services/sessionSearch';
 import { AgentSettings, AgentStatus, ChatMessage, StoredChat, ChatCompletionMessage } from '../types';
 import { colors, motion, radius, spacing, typography } from '../styles/theme';
 import { DocumentContext, PDF_UNSUPPORTED_MESSAGE, pickAndParseDocument, searchContext } from '../services/rag';
 import * as VoiceService from '../services/voice';
 import { ContactSafePreview, normalizePhone, searchContacts, toSafeContactPreview } from '../services/contacts';
-import { setWidgetData } from '@bittingz/expo-widgets';
+const setWidgetData = () => {};
 import { MessageBubble } from './MessageBubble';
+import { GestureBottomSheet, BOTTOM_SHEET_HEIGHT } from './GestureBottomSheet';
 import { estimateTokens, estimateMessagesTokens } from '../services/context';
+import { recordTokenUsage } from '../services/tokenStats';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft, ArrowUp, Bot, Camera, Check, ChevronDown, Download, Folder, Globe, Image, Layers, Menu, Mic, Paperclip, Plus, Search, Settings, Trash2, Users, X } from 'lucide-react-native';
 import { WebView } from 'react-native-webview';
@@ -63,6 +68,7 @@ type Props = {
   onSaveSettings: (settings: AgentSettings, apiKey: string) => Promise<void>;
   pendingAttach?: { name: string; content: string } | null;
   onClearPendingAttach?: () => void;
+  layoutWidth?: 'fluid' | 'compact';
 };
 
 const initialAssistantMessage: ChatMessage = {
@@ -142,7 +148,7 @@ const toApiMessages = (messages: ChatMessage[]): ChatCompletionMessage[] =>
     .filter((m) => m.content.trim().length > 0)
     .map((m) => ({ role: m.role, content: m.content }));
 
-export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbox, onOpenFiles, onSaveSettings, pendingAttach, onClearPendingAttach }: Props) => {
+export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbox, onOpenFiles, onSaveSettings, pendingAttach, onClearPendingAttach, layoutWidth = 'compact' }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([initialAssistantMessage]);
   const [draft, setDraft] = useState('');
   const [status, setStatus] = useState<AgentStatus>('idle');
@@ -320,29 +326,61 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     if (!showModelPicker || !settings.baseUrl.trim()) return;
     let cancelled = false;
     setIsLoadingModels(true);
-    const baseUrl = settings.baseUrl.trim().replace(/\/+$/, '');
+    let baseUrl = settings.baseUrl.trim().replace(/\/+$/, '');
+    if (baseUrl.toLowerCase().endsWith('/v1')) {
+      baseUrl = baseUrl.slice(0, -3).replace(/\/+$/, '');
+    }
     fetch(`${baseUrl}/v1/models`, {
       headers: apiKey.trim() ? { Authorization: `Bearer ${apiKey.trim()}` } : undefined,
     })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((json: { data?: { id: string }[] }) => {
         if (cancelled) return;
-        const ids = json.data?.map((m) => m.id).filter(Boolean) || [];
-        setModelGroups(groupModels(ids));
+        const fetchedIds = json.data?.map((m) => m.id).filter(Boolean) || [];
+        const combined = Array.from(new Set([
+          settings.model.trim(),
+          ...fetchedIds,
+          'gpt-4o-mini',
+          'gpt-4.1-mini',
+          'qwen/qwen3-coder'
+        ].filter(Boolean)));
+        setModelGroups(groupModels(combined));
         if (!cancelled) setIsLoadingModels(false);
       })
       .catch(() => {
         if (cancelled) return;
-        setModelGroups([]);
+        const fallbackList = Array.from(new Set([
+          settings.model.trim(),
+          'gpt-4o-mini',
+          'gpt-4.1-mini',
+          'qwen/qwen3-coder'
+        ].filter(Boolean)));
+        setModelGroups(groupModels(fallbackList));
         if (!cancelled) setIsLoadingModels(false);
       });
     return () => { cancelled = true; };
   }, [showModelPicker]);
 
   useEffect(() => {
+    loadInternetEnabled().then((enabled) => {
+      setInternetEnabled(enabled);
+    });
     loadChats().then((storedChats) => {
       chatsRef.current = storedChats;
       setChats(storedChats);
+      if (storedChats.length > 0 && !activeChatId) {
+        const latest = storedChats[0];
+        setActiveChatId(latest.id);
+        const restoredMsgs: ChatMessage[] = latest.messages.map((m, idx) => ({
+          id: `restored_${idx}_${Date.now()}`,
+          role: m.role as any,
+          content: m.content,
+          createdAt: Date.now(),
+        }));
+        if (restoredMsgs.length > 0) {
+          setMessages(restoredMsgs);
+        }
+      }
     });
   }, []);
 
@@ -363,7 +401,7 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     chatsRef.current = sorted;
     setChats(sorted);
     try {
-      await AsyncStorage.setItem('@chats', JSON.stringify(sorted));
+      await saveChats(sorted);
     } catch {
       // Keep the UI responsive even if local persistence fails.
     }
@@ -624,7 +662,12 @@ ${names}`);
     const apiMessages = toApiMessages(previousMessages);
     apiMessages.push({ role: 'user', content: augmentedContent });
 
-    setInputTokens(estimateMessagesTokens(apiMessages));
+    const sysPromptTokens = await getEstimatedSystemPromptTokens(content, {
+      workspaceId: chatId,
+      contactsAccessEnabled: settings.allowAssistantContacts,
+      internetEnabled,
+    });
+    setInputTokens(sysPromptTokens + estimateMessagesTokens(apiMessages));
     setOutputTokens(0);
     streamedTextRef.current = '';
 
@@ -636,6 +679,7 @@ ${names}`);
         context: {
           workspaceId: chatId,
           contactsAccessEnabled: settings.allowAssistantContacts,
+          internetEnabled,
           requestContactDisclosure,
           confirmCommunication,
         },
@@ -661,6 +705,10 @@ ${names}`);
       // Update message list and persistent chat
       setMessages(finalMessages);
       void saveChatSnapshot(chatId, chatTitle, finalMessages);
+
+      const inputUsed = result.usage?.input || (sysPromptTokens + estimateMessagesTokens(apiMessages));
+      const outputUsed = result.usage?.output || estimateTokens(result.text || streamedTextRef.current);
+      void recordTokenUsage(inputUsed, outputUsed);
 
       // Update Android home-screen widget data. Never block chat if widget update fails.
       try {
@@ -823,7 +871,7 @@ ${names}`);
                 >
                   <Folder size={20} color={colors.text} />
                 </Pressable>
-                </View>
+              </View>
             </View>
 
             {/* ── Messages ── */}
@@ -894,10 +942,18 @@ ${names}`);
                   onChangeText={setDraft}
                   onFocus={() => setIsFocused(true)}
                   onBlur={() => setIsFocused(false)}
+                  onKeyPress={(e: any) => {
+                    if (e.nativeEvent?.key === 'Enter' && !e.nativeEvent?.shiftKey) {
+                      if (typeof e.preventDefault === 'function') e.preventDefault();
+                      if (draft.trim().length > 0 && status !== 'thinking') {
+                        sendMessage(draft);
+                      }
+                    }
+                  }}
                   placeholder="Спросить Agent…"
                   placeholderTextColor={colors.textDim}
                   style={styles.input}
-                  textAlignVertical="top"
+                  textAlignVertical="center"
                   value={draft}
                 />
 
@@ -1373,52 +1429,58 @@ ${names}`);
         </>
       )}
 
-      {/* ── Attach Bottom Sheet ── */}
-      <GestureBottomSheet
-        visible={showAttachMenu}
-        onClose={() => setShowAttachMenu(false)}
-        snapPoints={{ partial: BOTTOM_SHEET_HEIGHT - 260, closed: 3000 }}
-        springConfig={{ damping: 28, stiffness: 220 }}
-      >
-        <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm, paddingTop: spacing.md }}>
-          {[
-            { label: 'Камера', icon: Camera, onPress: handleCamera },
-            { label: 'Фото', icon: Image, onPress: handlePhotoLibrary },
-            { label: 'Файлы', icon: Paperclip, onPress: handleAttachDocument },
-            { label: 'Файл. менеджер', icon: Folder, onPress: handleOpenFiles },
-            { label: 'Контакты', icon: Users, onPress: handleContactsSearch },
-            { label: internetEnabled ? 'Интернет: вкл' : 'Интернет: выкл', icon: Globe, onPress: () => setInternetEnabled((p) => !p), iconColor: internetEnabled ? '#60a5fa' : colors.textMuted },
-          ].map((item) => (
-            <Pressable
-              key={item.label}
-              style={({ pressed }) => [styles.attachItem, pressed && styles.attachItemPressed]}
-              onPress={() => {
-                setShowAttachMenu(false);
-                item.onPress();
-              }}
-            >
-              <View style={styles.attachItemIcon}>
-                <item.icon size={22} color={(item as any).iconColor || colors.textMuted} />
-              </View>
-              <Text style={styles.attachItemLabel}>{item.label}</Text>
-            </Pressable>
-          ))}
+      {/* ── Attach Menu Popup ── */}
+      {showAttachMenu && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          <Pressable style={styles.attachOverlay} onPress={() => setShowAttachMenu(false)} />
+          <View style={styles.attachMenuCard}>
+            {[
+              { label: 'Камера', icon: Camera, onPress: handleCamera },
+              { label: 'Фото', icon: Image, onPress: handlePhotoLibrary },
+              { label: 'Файлы', icon: Paperclip, onPress: handleAttachDocument },
+              { label: 'Файл. менеджер', icon: Folder, onPress: handleOpenFiles },
+              {
+                label: internetEnabled ? 'Интернет: вкл' : 'Интернет: выкл',
+                icon: Globe,
+                onPress: () => {
+                  const nextState = !internetEnabled;
+                  setInternetEnabled(nextState);
+                  void saveInternetEnabled(nextState);
+                },
+                iconColor: internetEnabled ? '#60a5fa' : colors.textMuted,
+              },
+            ].map((item) => (
+              <Pressable
+                key={item.label}
+                style={({ pressed }) => [styles.attachItem, pressed && styles.attachItemPressed]}
+                onPress={() => {
+                  setShowAttachMenu(false);
+                  item.onPress();
+                }}
+              >
+                <View style={styles.attachItemIcon}>
+                  <item.icon size={20} color={(item as any).iconColor || colors.textMuted} />
+                </View>
+                <Text style={styles.attachItemLabel}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
-      </GestureBottomSheet>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: colors.background,
+    backgroundColor: 'transparent',
     flex: 1,
   },
   container: {
     flex: 1,
   },
   slideRoot: {
-    backgroundColor: colors.background,
+    backgroundColor: 'transparent',
     flex: 1,
   },
   edgeZone: {
@@ -1470,6 +1532,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+    backgroundColor: 'rgba(9, 9, 11, 0.55)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
   },
   headerBtn: {
     alignItems: 'center',
@@ -1802,6 +1867,9 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? spacing.lg : spacing.md,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
+    backgroundColor: 'rgba(9, 9, 11, 0.55)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
   },
   composer: {
     alignItems: 'center',
@@ -1856,6 +1924,8 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '300',
     paddingHorizontal: spacing.xs,
+    alignSelf: 'center',
+    marginTop: -1,
   },
   voiceBtn: {
     alignItems: 'center',
@@ -1869,8 +1939,12 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     lineHeight: 22,
     maxHeight: 120,
-    minHeight: 26,
-    paddingVertical: spacing.xs,
+    minHeight: 22,
+    paddingTop: 7,
+    paddingBottom: 7,
+    paddingHorizontal: 0,
+    outlineStyle: 'none' as any,
+    outlineWidth: 0 as any,
   },
 
   sendBtnWrap: {
@@ -1916,6 +1990,27 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.28,
     shadowRadius: 24,
     elevation: 12,
+  },
+  attachOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  attachMenuCard: {
+    position: 'absolute',
+    left: spacing.lg,
+    bottom: 90,
+    width: 250,
+    backgroundColor: '#18181b',
+    borderColor: '#27272a',
+    borderWidth: 1,
+    borderRadius: radius.xl,
+    padding: spacing.xs,
+    gap: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 20,
   },
   attachItem: {
     flexDirection: 'row',

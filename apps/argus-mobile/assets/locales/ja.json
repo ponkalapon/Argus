@@ -1,0 +1,49 @@
+{
+  "common": {
+    "loading": "読み込み中…",
+    "error": "エラー",
+    "cancel": "キャンセル",
+    "ok": "OK",
+    "delete": "削除",
+    "save": "保存"
+  },
+  "status": {
+    "idle": "準備完了",
+    "thinking": "思考中…",
+    "error": "エラー"
+  },
+  "agentStatus": {
+    "modelNotSet": "モデル未設定",
+    "connectionNotConfigured": "接続未設定",
+    "keySet": "キー設定済み",
+    "noKey": "キーなし",
+    "messages": "メッセージ"
+  },
+  "settings": {
+    "language": "言語",
+    "model": "モデル",
+    "apiFormat": "API形式",
+    "connection": "接続",
+    "provider": "プロバイダー",
+    "custom": "カスタム",
+    "noKey": "キーなし",
+    "token": "トークン",
+    "keyOptional": "キー（オプション）",
+    "loading": "読み込み中…",
+    "permissions": "権限",
+    "stats": "統計",
+    "update": "更新",
+    "skills": "スキル",
+    "settingsTitle": "設定"
+  },
+  "workspace": {
+    "welcomeTitle": "お手伝いできますか？",
+    "inputPlaceholder": "アシスタントに質問…",
+    "connected": "接続済み",
+    "notConfigured": "未設定"
+  },
+  "messageBubble": {
+    "copied": "コピーしました",
+    "copy": "コピー"
+  }
+}

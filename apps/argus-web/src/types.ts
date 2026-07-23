@@ -38,6 +38,7 @@ export type ChatCompletionContext = {
   memoryContext?: string;
   workspaceContext?: string;
   contactsAccessEnabled?: boolean;
+  internetEnabled?: boolean;
   requestContactDisclosure?: (payload: {
     query: string;
     results: { id: string; name: string; phoneCount: number; maskedPhones: string[] }[];

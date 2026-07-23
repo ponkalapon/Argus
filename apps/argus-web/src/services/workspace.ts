@@ -1,4 +1,4 @@
-import { Directory, File, Paths } from 'expo-file-system';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sharing from 'expo-sharing';
 import JSZip from 'jszip';
 
@@ -19,105 +19,67 @@ const normalizeRelativePath = (path: string) => {
   return normalized;
 };
 
-const getWorkspaceDir = (workspaceId: string) =>
-  new Directory(Paths.document, 'workspaces', safeSegment(workspaceId));
+const getStorageKey = (workspaceId: string) => `argus.workspace.${safeSegment(workspaceId)}`;
 
-const ensureWorkspaceDir = async (workspaceId: string) => {
-  const root = new Directory(Paths.document, 'workspaces');
-  if (!root.exists) {
-    root.create({ intermediates: true });
-  }
-  const dir = getWorkspaceDir(workspaceId);
-  if (!dir.exists) {
-    dir.create({ intermediates: true });
-  }
-};
-
-const collectFiles = (dir: Directory, basePath: string): WorkspaceFile[] => {
-  if (!dir.exists) return [];
-
-  const entries = dir.list();
-  const result: WorkspaceFile[] = [];
-
-  for (const entry of entries) {
-    if (entry instanceof Directory) {
-      result.push(...collectFiles(entry, `${basePath}/${entry.name}`));
-    } else if (entry instanceof File) {
-      const content = entry.textSync();
-      const info = entry.info();
-      result.push({
-        path: `${basePath}/${entry.name}`,
-        content,
-        updatedAt: info.modificationTime ?? Date.now(),
-        size: info.size ?? content.length,
-      });
-    }
-  }
-
-  return result.sort((a, b) => a.path.localeCompare(b.path));
-};
-
-export const ensureWorkspace = async (workspaceId: string) => {
-  await ensureWorkspaceDir(workspaceId);
-};
+export const ensureWorkspace = async (_workspaceId: string) => {};
 
 export const listWorkspaceFiles = async (workspaceId: string): Promise<WorkspaceFile[]> => {
-  await ensureWorkspaceDir(workspaceId);
-  const dir = getWorkspaceDir(workspaceId);
-  return collectFiles(dir, '');
+  const raw = await AsyncStorage.getItem(getStorageKey(workspaceId));
+  if (!raw) return [];
+  try {
+    const files: WorkspaceFile[] = JSON.parse(raw);
+    return Array.isArray(files) ? files.sort((a, b) => a.path.localeCompare(b.path)) : [];
+  } catch {
+    return [];
+  }
 };
 
 export const writeWorkspaceFile = async (workspaceId: string, path: string, content: string) => {
-  await ensureWorkspaceDir(workspaceId);
   const normalPath = normalizeRelativePath(path);
-  const segments = normalPath.split('/');
-  const fileName = segments.pop()!;
-  let parentDir = getWorkspaceDir(workspaceId);
+  const files = await listWorkspaceFiles(workspaceId);
+  const now = Date.now();
+  const existingIndex = files.findIndex((f) => f.path === normalPath);
+  const fileData: WorkspaceFile = {
+    path: normalPath,
+    content,
+    updatedAt: now,
+    size: content.length,
+  };
 
-  for (const segment of segments) {
-    const sub = new Directory(parentDir, segment);
-    if (!sub.exists) {
-      sub.create({ intermediates: true });
-    }
-    parentDir = sub;
+  if (existingIndex >= 0) {
+    files[existingIndex] = fileData;
+  } else {
+    files.push(fileData);
   }
 
-  const file = new File(parentDir, fileName);
-  file.write(content);
-  const info = file.info();
-
+  await AsyncStorage.setItem(getStorageKey(workspaceId), JSON.stringify(files));
   return {
     path: normalPath,
-    size: info.size ?? content.length,
-    updatedAt: info.modificationTime ?? Date.now(),
+    size: content.length,
+    updatedAt: now,
   };
 };
 
 export const readWorkspaceFile = async (workspaceId: string, path: string) => {
   const normalPath = normalizeRelativePath(path);
-  const dir = getWorkspaceDir(workspaceId);
-  const file = new File(dir, ...normalPath.split('/'));
-  if (!file.exists) {
+  const files = await listWorkspaceFiles(workspaceId);
+  const file = files.find((f) => f.path === normalPath);
+  if (!file) {
     throw new Error(`Файл не найден: ${path}`);
   }
-  return file.text();
+  return file.content;
 };
 
 export const deleteWorkspaceFile = async (workspaceId: string, path: string) => {
   const normalPath = normalizeRelativePath(path);
-  const dir = getWorkspaceDir(workspaceId);
-  const file = new File(dir, ...normalPath.split('/'));
-  if (file.exists) {
-    file.delete();
-  }
+  const files = await listWorkspaceFiles(workspaceId);
+  const filtered = files.filter((f) => f.path !== normalPath);
+  await AsyncStorage.setItem(getStorageKey(workspaceId), JSON.stringify(filtered));
   return { deleted: normalPath };
 };
 
 export const deleteWorkspace = async (workspaceId: string) => {
-  const dir = getWorkspaceDir(workspaceId);
-  if (dir.exists) {
-    dir.delete();
-  }
+  await AsyncStorage.removeItem(getStorageKey(workspaceId));
 };
 
 export const workspaceSummary = async (workspaceId: string) => {
@@ -131,14 +93,16 @@ export const exportWorkspaceFile = async (workspaceId: string, path: string) => 
   const content = await readWorkspaceFile(workspaceId, path);
   const normalPath = normalizeRelativePath(path);
   const fileName = normalPath.split('/').pop()!;
-  const cacheFile = new File(Paths.cache, fileName);
-  cacheFile.write(content);
-
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(cacheFile.uri);
+  
+  if (typeof window !== 'undefined' && window.document) {
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName;
+    link.click();
+    return link.href;
   }
-
-  return cacheFile.uri;
+  return '';
 };
 
 export const exportWorkspaceArchive = async (workspaceId: string, title = 'workspace') => {
@@ -149,29 +113,16 @@ export const exportWorkspaceArchive = async (workspaceId: string, title = 'works
     zip.file(file.path, file.content);
   });
 
-  const archiveBytes = await zip.generateAsync({ type: 'uint8array' });
+  const archiveBlob = await zip.generateAsync({ type: 'blob' });
   const fileName = `${safeSegment(title || workspaceId)}.zip`;
-  const cacheFile = new File(Paths.cache, fileName);
-  cacheFile.write(archiveBytes);
 
-  const writtenArchive = await JSZip.loadAsync(await cacheFile.bytes());
-  const expectedPaths = files.map((file) => file.path).sort();
-  const actualPaths = Object.values(writtenArchive.files)
-    .filter((entry) => !entry.dir)
-    .map((entry) => entry.name)
-    .sort();
-
-  const pathsMismatch =
-    expectedPaths.length !== actualPaths.length ||
-    expectedPaths.some((path, index) => path !== actualPaths[index]);
-
-  if (pathsMismatch) {
-    throw new Error('ZIP archive validation failed: exported paths do not match workspace files');
+  if (typeof window !== 'undefined' && window.document) {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(archiveBlob);
+    link.download = fileName;
+    link.click();
+    return link.href;
   }
 
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(cacheFile.uri);
-  }
-
-  return cacheFile.uri;
+  return '';
 };

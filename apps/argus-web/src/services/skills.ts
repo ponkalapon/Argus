@@ -11,21 +11,31 @@ export type Skill = {
   updatedAt: number;
 };
 
-const STORAGE_KEY = '@skills_store';
-const MAX_SKILLS = 20;
+const STORAGE_KEY = '@skills_store_v2';
+const LEGACY_KEY = '@skills_store';
+const MAX_SKILLS = 50;
 
 let cache: Skill[] | null = null;
 
 const load = async (): Promise<Skill[]> => {
-  if (cache) return cache;
-  const raw = await AsyncStorage.getItem(STORAGE_KEY);
-  cache = raw ? JSON.parse(raw) : [];
-  return cache!;
+  try {
+    const raw = (await AsyncStorage.getItem(STORAGE_KEY)) || (await AsyncStorage.getItem(LEGACY_KEY));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        cache = parsed;
+        return parsed;
+      }
+    }
+  } catch {}
+  return [];
 };
 
 const save = async (skills: Skill[]) => {
   cache = skills;
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(skills));
+  const data = JSON.stringify(skills);
+  await AsyncStorage.setItem(STORAGE_KEY, data);
+  await AsyncStorage.setItem(LEGACY_KEY, data);
 };
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -37,9 +47,9 @@ export const saveSkill = async (skill: Omit<Skill, 'id' | 'usageCount' | 'create
     (s) => s.name.toLowerCase() === skill.name.toLowerCase(),
   );
   if (existing) {
-    existing.pattern = skill.pattern;
-    existing.description = skill.description;
-    existing.triggerKeywords = skill.triggerKeywords;
+    existing.pattern = skill.pattern || '';
+    existing.description = skill.description || '';
+    existing.triggerKeywords = Array.isArray(skill.triggerKeywords) ? skill.triggerKeywords : [];
     existing.updatedAt = Date.now();
     await save(skills);
     return existing;
@@ -47,6 +57,9 @@ export const saveSkill = async (skill: Omit<Skill, 'id' | 'usageCount' | 'create
 
   const newSkill: Skill = {
     ...skill,
+    pattern: skill.pattern || '',
+    description: skill.description || '',
+    triggerKeywords: Array.isArray(skill.triggerKeywords) ? skill.triggerKeywords : [],
     id: createId(),
     usageCount: 0,
     createdAt: Date.now(),
@@ -69,7 +82,7 @@ export const findSkill = async (query: string): Promise<Skill | null> => {
   const q = query.toLowerCase();
 
   for (const skill of skills) {
-    const match = skill.triggerKeywords.some((kw) => q.includes(kw.toLowerCase()));
+    const match = (skill.triggerKeywords || []).some((kw) => q.includes(kw.toLowerCase()));
     if (match) return skill;
   }
 
@@ -89,10 +102,10 @@ export const searchSkills = async (query: string): Promise<Skill[]> => {
       (s) =>
         s.name.toLowerCase().includes(q) ||
         s.description.toLowerCase().includes(q) ||
-        s.triggerKeywords.some((kw) => kw.toLowerCase().includes(q)),
+        (s.triggerKeywords || []).some((kw) => kw.toLowerCase().includes(q)),
     )
     .sort((a, b) => b.usageCount - a.usageCount)
-    .slice(0, 5);
+    .slice(0, 10);
 };
 
 export const useSkill = async (id: string) => {
@@ -107,23 +120,23 @@ export const useSkill = async (id: string) => {
 
 export const listSkills = async (): Promise<Skill[]> => {
   const skills = await load();
-  return skills.sort((a, b) => b.usageCount - a.usageCount);
+  return skills.sort((a, b) => b.updatedAt - a.updatedAt);
 };
 
 export const deleteSkill = async (id: string) => {
   const skills = await load();
-  await save(skills.filter((s) => s.id !== id));
+  await save(skills.filter((s) => s.id !== id && s.name !== id));
 };
 
 export const formatSkillIndex = (skills: Skill[]): string => {
   if (!skills.length) return '';
 
   return (
-    'SKILLS\n' +
+    'АКТИВНЫЕ НАВЫКИ (SKILLS)\n' +
     skills
       .map(
         (s, i) =>
-          `${i + 1}. ${s.name} — ${s.description} (used ${s.usageCount}x)`,
+          `${i + 1}. [${s.name}]: ${s.description} (инструкция: ${s.pattern})`,
       )
       .join('\n')
   );

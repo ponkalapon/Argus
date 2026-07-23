@@ -1,0 +1,49 @@
+{
+  "common": {
+    "loading": "로딩 중…",
+    "error": "오류",
+    "cancel": "취소",
+    "ok": "확인",
+    "delete": "삭제",
+    "save": "저장"
+  },
+  "status": {
+    "idle": "준비",
+    "thinking": "생각 중…",
+    "error": "오류"
+  },
+  "agentStatus": {
+    "modelNotSet": "모델 미설정",
+    "connectionNotConfigured": "연결 미설정",
+    "keySet": "키 설정됨",
+    "noKey": "키 없음",
+    "messages": "메시지"
+  },
+  "settings": {
+    "language": "언어",
+    "model": "모델",
+    "apiFormat": "API 형식",
+    "connection": "연결",
+    "provider": "제공자",
+    "custom": "사용자 지정",
+    "noKey": "키 없음",
+    "token": "토큰",
+    "keyOptional": "키 (선택)",
+    "loading": "로딩 중…",
+    "permissions": "권한",
+    "stats": "통계",
+    "update": "업데이트",
+    "skills": "스킬",
+    "settingsTitle": "설정"
+  },
+  "workspace": {
+    "welcomeTitle": "도와드릴까요?",
+    "inputPlaceholder": "어시스턴트에게 물어보세요…",
+    "connected": "연결됨",
+    "notConfigured": "미설정"
+  },
+  "messageBubble": {
+    "copied": "복사됨",
+    "copy": "복사"
+  }
+}

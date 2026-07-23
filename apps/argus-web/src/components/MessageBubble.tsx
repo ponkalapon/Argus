@@ -1,10 +1,9 @@
 import { memo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import Markdown, { ASTNode } from 'react-native-markdown-display';
 import { ChatMessage } from '../types';
 import { colors, radius, spacing, typography } from '../styles/theme';
-import { Bot } from 'lucide-react-native';
 import MermaidChart from './MermaidChart';
 
 type Props = {
@@ -73,7 +72,11 @@ export const MessageBubble = memo(({ message }: Props) => {
   return (
     <View style={styles.row}>
       <View style={styles.avatar}>
-        <Bot size={16} color="#a78bfa" />
+        <Image
+          source={require('../../assets/icon.png')}
+          style={styles.avatarImage}
+          resizeMode="contain"
+        />
       </View>
       <View style={styles.assistantBubble}>
         <Markdown style={markdownStyles} rules={rules}>
@@ -86,17 +89,23 @@ export const MessageBubble = memo(({ message }: Props) => {
 
 const markdownStyles = StyleSheet.create({
   body: {
-    color: colors.text,
+    color: 'rgba(240, 240, 248, 0.95)',
     fontSize: typography.body,
     lineHeight: 24,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   code_inline: {
-    backgroundColor: '#1e1e3a',
-    borderRadius: 4,
-    color: '#a78bfa',
-    fontFamily: 'monospace',
+    backgroundColor: '#27272a',
+    borderWidth: 0,
+    borderColor: 'transparent',
+    borderRadius: 5,
+    color: '#e2e8f0',
+    fontFamily: 'Consolas, Monaco, monospace',
     fontSize: 13,
-    paddingHorizontal: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
   code_block: {
     backgroundColor: '#1a1a2e',
@@ -115,35 +124,41 @@ const markdownStyles = StyleSheet.create({
     overflow: 'hidden',
   },
   table: {
-    borderColor: '#2d2d4e',
+    borderColor: '#27272a',
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 12,
     marginVertical: spacing.md,
+    backgroundColor: '#121215',
+    overflow: 'hidden',
   },
   thead: {
-    backgroundColor: '#2d2d4e',
+    backgroundColor: '#18181b',
   },
   tr: {
     borderBottomWidth: 1,
-    borderColor: '#2d2d4e',
+    borderColor: '#27272a',
     flexDirection: 'row',
   },
   th: {
-    padding: spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     color: '#a78bfa',
-    fontWeight: 'bold',
+    fontWeight: '700',
+    fontSize: 13,
   },
   td: {
-    padding: spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     color: colors.text,
+    fontSize: 13,
   },
   link: {
     color: '#a78bfa',
     textDecorationLine: 'underline',
   },
-  heading1: { color: colors.text, fontWeight: 'bold', fontSize: 24, marginVertical: 10 },
-  heading2: { color: colors.text, fontWeight: 'bold', fontSize: 20, marginVertical: 8 },
-  heading3: { color: colors.text, fontWeight: 'bold', fontSize: 18, marginVertical: 6 },
+  heading1: { color: 'rgba(240, 240, 248, 0.98)', fontWeight: 'bold', fontSize: 24, marginVertical: 10, textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  heading2: { color: 'rgba(240, 240, 248, 0.98)', fontWeight: 'bold', fontSize: 20, marginVertical: 8, textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  heading3: { color: 'rgba(240, 240, 248, 0.95)', fontWeight: 'bold', fontSize: 18, marginVertical: 6 },
   paragraph: { marginVertical: 4 },
   bullet_list: { marginVertical: 4 },
   ordered_list: { marginVertical: 4 },
@@ -162,13 +177,18 @@ const styles = StyleSheet.create({
   },
   avatar: {
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: '#000000',
     borderRadius: radius.pill,
     height: 30,
     justifyContent: 'center',
     marginTop: 1,
     width: 30,
     flexShrink: 0,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 24,
+    height: 24,
   },
   avatarText: {
     color: colors.textMuted,
@@ -189,11 +209,13 @@ const styles = StyleSheet.create({
   },
   assistantBubble: {
     flex: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
   },
   codeBlock: {
-    backgroundColor: '#111827',
-    borderColor: '#243044',
-    borderRadius: radius.lg,
+    backgroundColor: '#09090b',
+    borderColor: '#27272a',
+    borderRadius: 12,
     borderWidth: 1,
     marginVertical: spacing.sm,
     overflow: 'hidden',
@@ -205,13 +227,13 @@ const styles = StyleSheet.create({
   },
   codeHeader: {
     alignItems: 'center',
-    backgroundColor: '#1f2937',
-    borderBottomColor: '#243044',
+    backgroundColor: '#18181b',
+    borderBottomColor: '#27272a',
     borderBottomWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   codeLang: {
     color: '#a78bfa',

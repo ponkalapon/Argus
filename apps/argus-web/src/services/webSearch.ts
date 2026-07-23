@@ -30,10 +30,12 @@ const FETCH_PAGE_ALLOWED_CONTENT_TYPES = [
   'text/html',
   'text/plain',
   'application/json',
+  'application/xml',
+  'text/xml',
 ];
 
 const FETCH_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
 };
 
 const SUPPORTED_URL_PROTOCOLS = new Set(['http:', 'https:']);
@@ -99,21 +101,83 @@ export const normalizeDuckDuckGoUrl = (rawUrl: string): string | null => {
   }
 };
 
-const extractAttribute = (tag: string, attributeName: string): string | null => {
-  const attributeRegex = new RegExp(`${attributeName}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
-  const match = attributeRegex.exec(tag);
-  return match?.[2] ?? match?.[3] ?? match?.[4] ?? null;
+const searchGoogleNewsRss = async (query: string): Promise<WebSearchResult[]> => {
+  try {
+    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ru&gl=RU&ceid=RU:ru`;
+    const res = await fetch(url, { headers: FETCH_HEADERS });
+    if (!res.ok) return [];
+    const xml = await res.text();
+    const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+    const results: WebSearchResult[] = [];
+    let match: RegExpExecArray | null;
+
+    while ((match = itemRegex.exec(xml)) !== null && results.length < 8) {
+      const itemXml = match[1];
+      const titleMatch = /<title>([\s\S]*?)<\/title>/i.exec(itemXml);
+      const linkMatch = /<link>([\s\S]*?)<\/link>/i.exec(itemXml);
+      const pubDateMatch = /<pubDate>([\s\S]*?)<\/pubDate>/i.exec(itemXml);
+      const sourceMatch = /<source[^>]*>([\s\S]*?)<\/source>/i.exec(itemXml);
+
+      const title = stripHtmlTags(titleMatch?.[1] || '');
+      const link = stripHtmlTags(linkMatch?.[1] || '');
+      const pubDate = stripHtmlTags(pubDateMatch?.[1] || '');
+      const source = stripHtmlTags(sourceMatch?.[1] || '');
+
+      if (title && link) {
+        results.push({
+          title,
+          url: link,
+          snippet: [source ? `Источник: ${source}` : '', pubDate ? `Дата: ${pubDate}` : ''].filter(Boolean).join(' • '),
+        });
+      }
+    }
+    return results;
+  } catch {
+    return [];
+  }
+};
+
+const searchWikipedia = async (query: string): Promise<WebSearchResult[]> => {
+  try {
+    const url = `https://ru.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=1&format=json`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const searchItems = data.query?.search;
+    if (!Array.isArray(searchItems)) return [];
+
+    return searchItems.slice(0, 6).map((item: any) => ({
+      title: item.title,
+      url: `https://ru.wikipedia.org/wiki/${encodeURIComponent(item.title)}`,
+      snippet: stripHtmlTags(item.snippet || ''),
+    }));
+  } catch {
+    return [];
+  }
 };
 
 export const webSearch = async (query: string): Promise<WebSearchResponse> => {
   try {
+    // 1. Try Google News RSS first for news / fresh content
+    const newsResults = await searchGoogleNewsRss(query);
+    if (newsResults.length > 0) {
+      return { results: newsResults };
+    }
+
+    // 2. Try Wikipedia Search API
+    const wikiResults = await searchWikipedia(query);
+    if (wikiResults.length > 0) {
+      return { results: wikiResults };
+    }
+
+    // 3. DuckDuckGo fallback
     const params = new URLSearchParams({ q: query });
     const response = await fetch(`${DDG_URL}?${params.toString()}`, {
       headers: FETCH_HEADERS,
     });
 
     if (!response.ok) {
-      return { results: [], diagnostic: `DuckDuckGo вернул ошибку HTTP ${response.status}` };
+      return { results: [], diagnostic: `Поиск вернул статус HTTP ${response.status}` };
     }
 
     const html = await response.text();
@@ -127,12 +191,8 @@ export const webSearch = async (query: string): Promise<WebSearchResponse> => {
 
     while ((m = linkRegex.exec(html)) !== null) {
       const attributes = m[1];
-      const className = extractAttribute(attributes, 'class') ?? '';
-      if (!className.split(/\s+/).includes('result-link')) continue;
-
-      const href = extractAttribute(attributes, 'href');
+      const href = /href=["']([^"']+)["']/i.exec(attributes)?.[1];
       if (!href) continue;
-
       links.push(href);
       titles.push(stripHtmlTags(m[2]));
     }
@@ -143,15 +203,9 @@ export const webSearch = async (query: string): Promise<WebSearchResponse> => {
     }
 
     const results: WebSearchResult[] = [];
-    let unsupportedUrlCount = 0;
-
     for (let i = 0; i < links.length && results.length < 8; i++) {
       const normalizedUrl = normalizeDuckDuckGoUrl(links[i]);
-      if (!normalizedUrl) {
-        unsupportedUrlCount += 1;
-        continue;
-      }
-
+      if (!normalizedUrl) continue;
       results.push({
         title: decodeHtmlEntities(titles[i] || 'Без названия'),
         url: normalizedUrl,
@@ -159,205 +213,84 @@ export const webSearch = async (query: string): Promise<WebSearchResponse> => {
       });
     }
 
-    if (results.length > 0) return { results };
-
-    if (links.length > 0) {
-      return {
-        results,
-        diagnostic: `DuckDuckGo вернул ${links.length} ссылок, но ${unsupportedUrlCount} из них были отброшены из-за неподдерживаемой схемы или ошибки нормализации URL. Возможно, изменился формат выдачи.`,
-      };
-    }
-
-    if (/result-link|result-snippet|uddg=/i.test(html)) {
-      return {
-        results,
-        diagnostic: 'DuckDuckGo вернул HTML, похожий на страницу результатов, но парсер не смог извлечь ссылки. Возможно, изменился формат выдачи.',
-      };
-    }
-
     return { results };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'неизвестная ошибка';
-    return { results: [], diagnostic: `Не удалось выполнить веб-поиск: ${message}` };
+    return { results: [], diagnostic: `Ошибка сети веб-поиска: ${message}` };
   }
 };
 
-const parseFetchPageUrl = (url: string): URL | string => {
+export const fetchPage = async (rawUrl: string): Promise<FetchPageResult> => {
+  let url: URL;
   try {
-    const parsedUrl = new URL(url);
-
-    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-      return `Неподдерживаемый протокол URL: ${parsedUrl.protocol}. Разрешены только http и https.`;
-    }
-
-    return parsedUrl;
+    url = new URL(rawUrl);
   } catch {
-    return 'Некорректный URL. Укажите полный адрес, например https://example.com/page.';
-  }
-};
-
-const isAllowedContentType = (contentTypeHeader: string | null): boolean => {
-  if (!contentTypeHeader) {
-    // Some valid web pages omit Content-Type. Keep them readable, but still reject
-    // known non-text formats when the server declares them.
-    return true;
+    return { ok: false, error: `Недопустимый URL "${rawUrl}"` };
   }
 
-  const contentType = contentTypeHeader.split(';')[0].trim().toLowerCase();
-
-  return (
-    FETCH_PAGE_ALLOWED_CONTENT_TYPES.includes(contentType) ||
-    contentType.startsWith('text/') ||
-    contentType === 'application/xhtml+xml' ||
-    (contentType.startsWith('application/') && contentType.endsWith('+json'))
-  );
-};
-
-const readResponseTextWithLimit = async (
-  response: Response,
-  maxBytes: number,
-): Promise<{ text: string; truncated: boolean } | { error: string }> => {
-  const contentLength = response.headers.get('Content-Length');
-  const expectedBytes = contentLength ? Number(contentLength) : NaN;
-
-  if (Number.isFinite(expectedBytes) && expectedBytes > maxBytes) {
-    return {
-      error: `Страница слишком большая: ${expectedBytes} байт. Лимит загрузки — ${maxBytes} байт.`,
-    };
-  }
-
-  if (!response.body) {
-    const text = await response.text();
-    const truncated = text.length > maxBytes;
-    return {
-      text: truncated ? text.slice(0, maxBytes) : text,
-      truncated,
-    };
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder('utf-8');
-  const chunks: string[] = [];
-  let receivedBytes = 0;
-  let truncated = false;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    if (!value) continue;
-
-    receivedBytes += value.byteLength;
-
-    if (receivedBytes > maxBytes) {
-      const allowedBytes = value.byteLength - (receivedBytes - maxBytes);
-      if (allowedBytes > 0) {
-        chunks.push(decoder.decode(value.slice(0, allowedBytes), { stream: true }));
-      }
-
-      truncated = true;
-      await reader.cancel();
-      break;
-    }
-
-    chunks.push(decoder.decode(value, { stream: true }));
-  }
-
-  chunks.push(decoder.decode());
-
-  return { text: chunks.join(''), truncated };
-};
-
-const extractReadableText = (body: string, contentTypeHeader: string | null): string => {
-  const contentType = contentTypeHeader?.split(';')[0].trim().toLowerCase() || '';
-
-  if (contentType === 'application/json' || contentType.endsWith('+json')) {
-    return body.replace(/\s+/g, ' ').trim();
-  }
-
-  return body
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
-    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
-    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&[^;]+;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-};
-
-export const fetchPage = async (url: string, maxChars = 8000): Promise<FetchPageResult> => {
-  const parsedUrl = parseFetchPageUrl(url);
-  if (typeof parsedUrl === 'string') {
-    return { ok: false, error: parsedUrl };
+  if (!isSupportedUrl(url)) {
+    return { ok: false, error: `Неподдерживаемый протокол URL "${url.protocol}"` };
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_PAGE_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), FETCH_PAGE_TIMEOUT_MS);
 
   try {
-    const response = await fetch(parsedUrl.href, {
+    const response = await fetch(url.toString(), {
       headers: FETCH_HEADERS,
       signal: controller.signal,
     });
 
-    const finalUrl = response.url || parsedUrl.href;
-
     if (!response.ok) {
       return {
         ok: false,
-        error: `Сервер вернул ошибку HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}.`,
-        finalUrl,
+        error: `Сервер вернул ошибку HTTP ${response.status}`,
+        finalUrl: response.url || url.toString(),
       };
     }
 
-    const contentType = response.headers.get('Content-Type');
-    if (!isAllowedContentType(contentType)) {
+    const rawContentType = response.headers.get('content-type') ?? '';
+    const contentType = rawContentType.split(';')[0].trim().toLowerCase();
+
+    if (contentType && !FETCH_PAGE_ALLOWED_CONTENT_TYPES.includes(contentType)) {
       return {
         ok: false,
-        error: `Неподдерживаемый Content-Type: ${contentType}. Можно читать только HTML, plain text и JSON.`,
-        finalUrl,
+        error: `Неподдерживаемый тип содержимого "${contentType}"`,
+        finalUrl: response.url || url.toString(),
       };
     }
 
-    const readResult = await readResponseTextWithLimit(response, FETCH_PAGE_MAX_BYTES);
-    if ('error' in readResult) {
-      return { ok: false, error: readResult.error, finalUrl };
-    }
+    const html = await response.text();
 
-    let text = extractReadableText(readResult.text, contentType);
-    let truncated = readResult.truncated;
+    const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+    const title = titleMatch ? stripHtmlTags(titleMatch[1]) : '';
 
-    if (text.length > maxChars) {
-      text = `${text.slice(0, maxChars)}...\n\n[Текст обрезан]`;
-      truncated = true;
-    } else if (truncated) {
-      text = `${text}\n\n[Загрузка остановлена после лимита ${FETCH_PAGE_MAX_BYTES} байт]`;
-    }
+    let textContent = html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
+      .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, ' ');
+
+    textContent = stripHtmlTags(textContent);
+
+    const fullContent = [title ? `# ${title}\n` : '', textContent]
+      .filter(Boolean)
+      .join('\n');
+
+    const truncated = fullContent.length > FETCH_PAGE_MAX_BYTES;
+    const content = truncated ? fullContent.slice(0, FETCH_PAGE_MAX_BYTES) : fullContent;
 
     return {
       ok: true,
-      content: text || 'Не удалось извлечь текст со страницы',
-      length: text.length,
+      content,
+      length: content.length,
       truncated,
-      finalUrl,
+      finalUrl: response.url || url.toString(),
     };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return {
-        ok: false,
-        error: `Таймаут загрузки страницы: ответ не получен за ${FETCH_PAGE_TIMEOUT_MS / 1000} секунд.`,
-        finalUrl: parsedUrl.href,
-      };
+      return { ok: false, error: `Тайм-аут загрузки страницы (${FETCH_PAGE_TIMEOUT_MS / 1000}s)` };
     }
-
-    return {
-      ok: false,
-      error: `Не удалось загрузить страницу${error instanceof Error ? `: ${error.message}` : '.'}`,
-      finalUrl: parsedUrl.href,
-    };
-  } finally {
-    clearTimeout(timeoutId);
+    const message = error instanceof Error ? error.message : 'неизвестная ошибка';
+    return { ok: false, error: `Ошибка загрузки страницы: ${message}` };
   }
 };
