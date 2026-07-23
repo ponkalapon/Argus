@@ -96,11 +96,11 @@ jobs:
           git tag "build${{ steps.version.outputs.build }}" HEAD
           git push origin "build${{ steps.version.outputs.build }}"
 
-      - name: Create Release
+      - name: Create or Update Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "build${{ steps.version.outputs.build }}"
-          name: "build${{ steps.version.outputs.build }}"
+          tag_name: "latest"
+          name: "Argus Latest Build (APK & EXE)"
           files: apps/argus-mobile/android/app/build/outputs/apk/release/app-release.apk
           generate_release_notes: true
           fail_on_unmatched_files: false
