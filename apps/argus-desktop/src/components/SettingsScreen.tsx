@@ -44,6 +44,7 @@ import { loadApiKey, saveApiKey, sanitizeSettings } from '../services/storage';
 import { getTokenStats, getDailyStats, resetTokenStats, DailyRecord, TokenStats } from '../services/tokenStats';
 import { listSkills, deleteSkill, Skill } from '../services/skills';
 import { loadThemeConfig, saveThemeConfig, WallpaperType, LayoutWidthType, LanguageType, AccentColorType, BubbleStyleType, FontSizeScaleType } from '../services/themeStorage';
+import { availableLanguages, setLanguage as setI18nLanguage, t } from '../services/i18n';
 import { UsageChart } from './UsageChart';
 import { colors, motion, radius, spacing, typography, ACCENT_PALETTES, applyAccentColor } from '../styles/theme';
 
@@ -63,41 +64,41 @@ const MODEL_PRESETS = [
   'qwen/qwen3-coder',
 ];
 
-const WALLPAPER_PRESETS: { id: WallpaperType; title: string; desc: string; source: any }[] = [
+const WALLPAPER_PRESETS_RAW: { id: WallpaperType; titleKey: string; descKey: string; source: any }[] = [
   {
     id: 'default',
-    title: 'Классический темный',
-    desc: 'Стандартный элегантный глубокий темный фон Argus',
+    titleKey: 'settings.default_wallpaper_title',
+    descKey: 'settings.default_wallpaper_desc',
     source: null,
   },
   {
     id: 'cyber_mesh',
-    title: 'Кибер-сетка',
-    desc: 'Неоновая анимированная кибернетическая сетка',
+    titleKey: 'settings.cyber_mesh_title',
+    descKey: 'settings.cyber_mesh_desc',
     source: require('../../assets/wallpapers/cyber_mesh.jpg'),
   },
   {
     id: 'argus_nebula',
-    title: 'Космическая туманность',
-    desc: 'Глубокий космос со звездной туманностью',
+    titleKey: 'settings.argus_nebula_title',
+    descKey: 'settings.argus_nebula_desc',
     source: require('../../assets/wallpapers/argus_nebula.jpg'),
   },
   {
     id: 'minimal_carbon',
-    title: 'Минимал Карбон',
-    desc: 'Строгая матовая текстура карбона с фиолетовым отливом',
+    titleKey: 'settings.minimal_carbon_title',
+    descKey: 'settings.minimal_carbon_desc',
     source: require('../../assets/wallpapers/minimal_carbon.jpg'),
   },
   {
     id: 'neon_waves',
-    title: 'Неоновые Волны',
-    desc: 'Яркие динамические волны светящегося неона',
+    titleKey: 'settings.neon_waves_title',
+    descKey: 'settings.neon_waves_desc',
     source: require('../../assets/wallpapers/neon_waves.jpg'),
   },
   {
     id: 'deep_space',
-    title: 'Глубокий Космос',
-    desc: 'Тёмно-изумрудная космическая пыль и галактики',
+    titleKey: 'settings.deep_space_title',
+    descKey: 'settings.deep_space_desc',
     source: require('../../assets/wallpapers/deep_space.jpg'),
   },
 ];
@@ -185,22 +186,22 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
     if (normalized.toLowerCase().endsWith('/v1')) {
       normalized = normalized.slice(0, -3).replace(/\/+$/, '');
     }
-    return normalized ? `${normalized}/v1/chat/completions` : 'Base URL не задан';
+    return normalized ? `${normalized}/v1/chat/completions` : t('settings.base_url_empty', 'Base URL не задан');
   }, [baseUrl]);
 
   const handleSave = async () => {
     const settings = sanitizeSettings({ baseUrl, model, allowAssistantContacts });
 
     if (!settings.baseUrl.trim()) {
-      Alert.alert('Нужен Base URL', 'Укажи адрес OpenAI-compatible API.');
+      Alert.alert(t('settings.alert_need_url', 'Нужен Base URL'), t('settings.alert_need_url_msg', 'Укажи адрес OpenAI-compatible API.'));
       return;
     }
     if (!/^https?:\/\//i.test(settings.baseUrl.trim())) {
-      Alert.alert('Проверь Base URL', 'Адрес должен начинаться с http:// или https://.');
+      Alert.alert(t('settings.alert_check_url', 'Проверь Base URL'), t('settings.alert_check_url_msg', 'Адрес должен начинаться с http:// или https://.'));
       return;
     }
     if (!settings.model.trim()) {
-      Alert.alert('Нужна модель', 'Укажи название модели.');
+      Alert.alert(t('settings.alert_need_model', 'Нужна модель'), t('settings.alert_need_model_msg', 'Укажи название модели.'));
       return;
     }
 
@@ -211,9 +212,9 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
       applyAccentColor(accentColor);
       if (onThemeChange) onThemeChange();
       await onSave(settings, apiKey.trim());
-      Alert.alert('Готово', 'Настройки сохранены.', [{ text: 'OK', onPress: onBack }]);
+      Alert.alert(t('settings.alert_saved', 'Готово'), t('settings.alert_saved_msg', 'Настройки сохранены.'), [{ text: 'OK', onPress: onBack }]);
     } catch (error) {
-      Alert.alert('Ошибка', error instanceof Error ? error.message : 'Неизвестная ошибка');
+      Alert.alert(t('settings.alert_error', 'Ошибка'), error instanceof Error ? error.message : 'Неизвестная ошибка');
     } finally {
       setIsSaving(false);
     }
@@ -238,6 +239,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
     const nextBubble = updates.bubbleStyle ?? bubbleStyle;
     const nextFontSize = updates.fontSize ?? fontSize;
 
+    setI18nLanguage(nextLanguage);
     if (updates.wallpaper !== undefined) setWallpaper(updates.wallpaper);
     if (updates.customWallpaperUri !== undefined) setCustomWallpaperUri(updates.customWallpaperUri);
     if (updates.layoutWidth !== undefined) setLayoutWidth(updates.layoutWidth);
@@ -311,8 +313,8 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
   const handleSelectFontSize = (fs: FontSizeScaleType) => updateTheme({ fontSize: fs });
 
   const handleResetStats = () => {
-    const title = '⚠️ Сброс статистики';
-    const message = 'Вы действительно хотите полностью обнулить всю сохраненную статистику использования токенов? Это действие нельзя отменить.';
+    const title = t('settings.reset_stats_title', '⚠️ Сброс статистики');
+    const message = t('settings.reset_stats_msg', 'Вы действительно хотите полностью обнулить всю сохраненную статистику использования токенов? Это действие нельзя отменить.');
 
     if (typeof window !== 'undefined' && window.confirm) {
       if (window.confirm(`${title}\n\n${message}`)) {
@@ -325,9 +327,9 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
     }
 
     Alert.alert(title, message, [
-      { text: 'Отмена', style: 'cancel' },
+      { text: t('settings.cancel', 'Отмена'), style: 'cancel' },
       {
-        text: 'Да, обнулить',
+        text: t('settings.reset_stats_confirm', 'Да, обнулить'),
         style: 'destructive',
         onPress: async () => {
           await resetTokenStats();
@@ -353,11 +355,11 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
   };
 
   const navItems: { id: TabType; label: string; icon: any }[] = [
-    { id: 'connection', label: 'Подключение', icon: Cpu },
-    { id: 'customization', label: 'Кастомизация', icon: Palette },
-    { id: 'stats', label: 'Использование', icon: BarChart3 },
-    { id: 'skills', label: 'Навыки', icon: Sparkles },
-    { id: 'privacy', label: 'Безопасность', icon: Shield },
+    { id: 'connection', label: t('settings.tab_general', 'Подключение'), icon: Cpu },
+    { id: 'customization', label: t('settings.tab_customization', 'Кастомизация'), icon: Palette },
+    { id: 'stats', label: t('settings.tab_stats', 'Использование'), icon: BarChart3 },
+    { id: 'skills', label: t('settings.tab_skills', 'Навыки'), icon: Sparkles },
+    { id: 'privacy', label: t('settings.tab_privacy', 'Безопасность'), icon: Shield },
   ];
 
   return (
@@ -372,14 +374,14 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
           >
             <ArrowLeft size={20} color={colors.text} />
           </Pressable>
-          <Text style={styles.headerTitle}>Настройки</Text>
+          <Text style={styles.headerTitle}>{t('settings.title', 'Настройки')}</Text>
           <Pressable
             accessibilityRole="button"
             onPress={handleSave}
             disabled={isSaving}
             style={({ pressed }) => [styles.saveBtn, pressed && styles.pressed]}
           >
-            <Text style={styles.saveBtnText}>{isSaving ? 'Сохранение…' : 'Сохранить'}</Text>
+            <Text style={styles.saveBtnText}>{isSaving ? t('settings.saving', 'Сохранение…') : t('settings.save', 'Сохранить')}</Text>
           </Pressable>
         </View>
 
@@ -415,13 +417,13 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
               <View style={styles.sectionCard}>
                 <View style={styles.cardHeader}>
                   <Globe size={18} color={colors.accent} />
-                  <Text style={styles.cardTitle}>Подключение ИИ</Text>
+                  <Text style={styles.cardTitle}>{t('settings.connection_title', 'Подключение ИИ')}</Text>
                 </View>
-                <Text style={styles.cardDesc}>Настройка подключения к ИИ серверу (OpenAI-compatible API)</Text>
+                <Text style={styles.cardDesc}>{t('settings.connection_desc', 'Настройка подключения к ИИ серверу (OpenAI-compatible API)')}</Text>
 
                 {/* Base URL */}
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Base URL</Text>
+                  <Text style={styles.fieldLabel}>{t('settings.base_url', 'Base URL')}</Text>
                   <TextInput
                     style={styles.textInput}
                     value={baseUrl}
@@ -436,12 +438,12 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
 
                 {/* Model */}
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Модель ИИ</Text>
+                  <Text style={styles.fieldLabel}>{t('settings.model', 'Модель ИИ')}</Text>
                   <TextInput
                     style={styles.textInput}
                     value={model}
                     onChangeText={setModel}
-                    placeholder="gpt-4o-mini / mimo-v2.5"
+                    placeholder={t('settings.model_placeholder', 'gpt-4o-mini / mimo-v2.5')}
                     placeholderTextColor={colors.textDim}
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -472,7 +474,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                     {apiKey ? (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#064e3b', paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill }}>
                         <Check size={12} color="#34d399" />
-                        <Text style={{ color: '#34d399', fontSize: 11, fontWeight: '600' }}>Ключ сохранён</Text>
+                        <Text style={{ color: '#34d399', fontSize: 11, fontWeight: '600' }}>{t('settings.key_saved', 'Ключ сохранён')}</Text>
                       </View>
                     ) : null}
                   </View>
@@ -481,7 +483,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                       style={[styles.textInput, { paddingRight: 40 }]}
                       value={apiKey}
                       onChangeText={setApiKey}
-                      placeholder="Введи твой API ключ (например sk-...)"
+                      placeholder={t('settings.api_key', 'API Key') + ' (' + t('settings.model_placeholder', 'sk-...') + ')'}
                       placeholderTextColor={colors.textDim}
                       secureTextEntry={!showApiKey}
                       autoCapitalize="none"
@@ -494,7 +496,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                       {showApiKey ? <EyeOff size={18} color={colors.textMuted} /> : <Eye size={18} color={colors.textMuted} />}
                     </Pressable>
                   </View>
-                  <Text style={styles.fieldHint}>Ключ сохраняется локально на вашем ПК и используется для авторизации</Text>
+                  <Text style={styles.fieldHint}>{t('settings.api_key_desc', 'Ключ сохраняется локально на вашем ПК и используется для авторизации')}</Text>
                 </View>
               </View>
             )}
@@ -503,20 +505,20 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
               <View style={styles.sectionCard}>
                 <View style={styles.cardHeader}>
                   <Palette size={18} color={colors.accent} />
-                  <Text style={styles.cardTitle}>Внешний вид и кастомизация</Text>
+                  <Text style={styles.cardTitle}>{t('settings.customization_title', 'Внешний вид и кастомизация')}</Text>
                 </View>
-                <Text style={styles.cardDesc}>Настройка языка, внешнего вида и обоев приложения</Text>
+                <Text style={styles.cardDesc}>{t('settings.customization_desc', 'Настройка языка, внешнего вида и обоев приложения')}</Text>
 
                 {/* Wallpaper Opacity */}
                 <View style={{ marginBottom: spacing.xl, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
-                  <Text style={[styles.fieldLabel, { marginBottom: 4 }]}>Интенсивность затемнения обоев</Text>
-                  <Text style={[styles.fieldHint, { marginBottom: spacing.md }]}>Регулируйте видимость выбранного фона для максимального удобства чтения</Text>
+                  <Text style={[styles.fieldLabel, { marginBottom: 4 }]}>{t('settings.wallpaper_opacity', 'Интенсивность затемнения обоев')}</Text>
+                  <Text style={[styles.fieldHint, { marginBottom: spacing.md }]}>{t('settings.wallpaper_opacity_hint', 'Регулируйте видимость выбранного фона для максимального удобства чтения')}</Text>
                   <View style={{ flexDirection: 'row', gap: spacing.sm }}>
                     {[
-                      { val: 0.25, label: 'Легкое (25%)' },
-                      { val: 0.45, label: 'Баланс (45%)' },
-                      { val: 0.65, label: 'Мягкое (65%)' },
-                      { val: 0.85, label: 'Матовое (85%)' },
+                      { val: 0.25, label: t('settings.opacity_light', 'Легкое (25%)') },
+                      { val: 0.45, label: t('settings.opacity_balanced', 'Баланс (45%)') },
+                      { val: 0.65, label: t('settings.opacity_soft', 'Мягкое (65%)') },
+                      { val: 0.85, label: t('settings.opacity_matte', 'Матовое (85%)') },
                     ].map((opt) => {
                       const active = Math.abs(wallpaperOpacity - opt.val) < 0.05;
                       return (
@@ -527,7 +529,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                             {
                               flex: 1,
                               alignItems: 'center',
-                              justify: 'center',
+                              justifyContent: 'center',
                               paddingVertical: 8,
                               borderRadius: radius.md,
                               backgroundColor: active ? '#27272a' : '#18181b',
@@ -550,8 +552,8 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                 <View style={{ marginBottom: spacing.xl, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', zIndex: 50 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                     <View>
-                      <Text style={styles.fieldLabel}>Язык приложения / Language</Text>
-                      <Text style={styles.fieldHint}>Выберите язык интерфейса и ответов ИИ-Агента.</Text>
+                      <Text style={styles.fieldLabel}>{t('settings.language_title', 'Язык приложения / Language')}</Text>
+                      <Text style={styles.fieldHint}>{t('settings.language_hint', 'Загружено из .yml файлов локализации.')}</Text>
                     </View>
 
                     <View style={{ position: 'relative' }}>
@@ -577,7 +579,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Globe size={14} color={colors.accent} />
                           <Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>
-                            {language === 'ru' ? 'Русский' : 'English'}
+                            {availableLanguages.find((l) => l.code === language)?.label || availableLanguages[0]?.label || 'Русский'}
                           </Text>
                         </View>
                         <ChevronDown size={14} color={colors.textMuted} />
@@ -603,53 +605,35 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                             elevation: 10,
                           }}
                         >
-                          <Pressable
-                            onPress={() => {
-                              handleSelectLanguage('ru');
-                              setShowLangPicker(false);
-                            }}
-                            style={({ pressed }) => [
-                              {
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                paddingHorizontal: 12,
-                                paddingVertical: 8,
-                                borderRadius: radius.sm,
-                                backgroundColor: language === 'ru' ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
-                              },
-                              pressed && styles.pressed,
-                            ]}
-                          >
-                            <Text style={{ color: language === 'ru' ? colors.accent : colors.text, fontSize: 13, fontWeight: '600' }}>
-                              Русский
-                            </Text>
-                            {language === 'ru' && <Check size={14} color={colors.accent} />}
-                          </Pressable>
-
-                          <Pressable
-                            onPress={() => {
-                              handleSelectLanguage('en');
-                              setShowLangPicker(false);
-                            }}
-                            style={({ pressed }) => [
-                              {
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                paddingHorizontal: 12,
-                                paddingVertical: 8,
-                                borderRadius: radius.sm,
-                                backgroundColor: language === 'en' ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
-                              },
-                              pressed && styles.pressed,
-                            ]}
-                          >
-                            <Text style={{ color: language === 'en' ? colors.accent : colors.text, fontSize: 13, fontWeight: '600' }}>
-                              English
-                            </Text>
-                            {language === 'en' && <Check size={14} color={colors.accent} />}
-                          </Pressable>
+                          {availableLanguages.map((langOpt) => {
+                            const isSel = language === langOpt.code;
+                            return (
+                              <Pressable
+                                key={langOpt.code}
+                                onPress={() => {
+                                  handleSelectLanguage(langOpt.code as LanguageType);
+                                  setShowLangPicker(false);
+                                }}
+                                style={({ pressed }) => [
+                                  {
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 8,
+                                    borderRadius: radius.sm,
+                                    backgroundColor: isSel ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                                  },
+                                  pressed && styles.pressed,
+                                ]}
+                              >
+                                <Text style={{ color: isSel ? colors.accent : colors.text, fontSize: 13, fontWeight: '600' }}>
+                                  {langOpt.label}
+                                </Text>
+                                {isSel && <Check size={14} color={colors.accent} />}
+                              </Pressable>
+                            );
+                          })}
                         </View>
                       )}
                     </View>
@@ -658,19 +642,19 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
 
                 {/* Wallpaper Preset Options */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
-                  <Text style={styles.fieldLabel}>Фоновые обои приложения</Text>
+                  <Text style={styles.fieldLabel}>{t('settings.wallpaper_title', 'Фоновые обои приложения')}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
                     <Pressable
                       onPress={handlePickCustomWallpaper}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#18181b', borderColor: colors.accent, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 4, borderRadius: radius.pill }}
                     >
                       <Upload size={13} color={colors.accent} />
-                      <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '600' }}>+ Свои обои</Text>
+                      <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '600' }}>{t('settings.custom_wallpaper', '+ Свои обои')}</Text>
                     </Pressable>
                     {wallpaper !== 'default' && (
                       <Pressable onPress={() => handleSelectWallpaper('default')} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                         <RotateCcw size={12} color={colors.textMuted} />
-                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Вернуть классический</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>{t('settings.reset_default', 'Вернуть классический')}</Text>
                       </Pressable>
                     )}
                   </View>
@@ -691,17 +675,19 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                       <View style={styles.wallpaperCardBody}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                           <Text style={[styles.wallpaperTitle, wallpaper === 'custom' && styles.wallpaperTitleActive]}>
-                            Свои обои
+                            {t('settings.custom_wallpaper_title', 'Свои обои')}
                           </Text>
                           {wallpaper === 'custom' && <Check size={14} color={colors.accent} />}
                         </View>
-                        <Text style={styles.wallpaperDesc}>Загруженное пользователем изображение</Text>
+                        <Text style={styles.wallpaperDesc}>{t('settings.custom_wallpaper_desc', 'Загруженное пользователем изображение')}</Text>
                       </View>
                     </Pressable>
                   ) : null}
 
-                  {WALLPAPER_PRESETS.map((wp) => {
+                  {WALLPAPER_PRESETS_RAW.map((wp) => {
                     const active = wallpaper === wp.id;
+                    const wpTitle = t(wp.titleKey, wp.titleKey);
+                    const wpDesc = t(wp.descKey, wp.descKey);
                     return (
                       <Pressable
                         key={wp.id}
@@ -721,10 +707,10 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                         )}
                         <View style={styles.wallpaperCardBody}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Text style={[styles.wallpaperTitle, active && styles.wallpaperTitleActive]}>{wp.title}</Text>
+                            <Text style={[styles.wallpaperTitle, active && styles.wallpaperTitleActive]}>{wpTitle}</Text>
                             {active && <Check size={14} color={colors.accent} />}
                           </View>
-                          <Text style={styles.wallpaperDesc}>{wp.desc}</Text>
+                          <Text style={styles.wallpaperDesc}>{wpDesc}</Text>
                         </View>
                       </Pressable>
                     );
@@ -737,31 +723,31 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
               <View style={styles.sectionCard}>
                 <View style={styles.cardHeader}>
                   <BarChart3 size={18} color={colors.accent} />
-                  <Text style={styles.cardTitle}>Статистика использования</Text>
+                  <Text style={styles.cardTitle}>{t('settings.stats_title', 'Статистика использования')}</Text>
                 </View>
 
                 <View style={styles.statsGrid}>
                   <View style={styles.statBox}>
                     <Text style={styles.statVal}>{formatLargeNumber(tokenStats?.totalInput || 0)}</Text>
-                    <Text style={styles.statSub}>Входные токены</Text>
+                    <Text style={styles.statSub}>{t('settings.input_tokens', 'Входные токены')}</Text>
                   </View>
                   <View style={styles.statBox}>
                     <Text style={styles.statVal}>{formatLargeNumber(tokenStats?.totalOutput || 0)}</Text>
-                    <Text style={styles.statSub}>Выходные токены</Text>
+                    <Text style={styles.statSub}>{t('settings.output_tokens', 'Выходные токены')}</Text>
                   </View>
                   <View style={styles.statBox}>
                     <Text style={styles.statVal}>{tokenStats?.totalRequests || 0}</Text>
-                    <Text style={styles.statSub}>Запросов</Text>
+                    <Text style={styles.statSub}>{t('settings.requests_count', 'Запросов')}</Text>
                   </View>
                 </View>
 
                 {/* Usage Chart */}
-                <Text style={[styles.fieldLabel, { marginTop: spacing.lg, marginBottom: spacing.xs }]}>График за 7 дней</Text>
+                <Text style={[styles.fieldLabel, { marginTop: spacing.lg, marginBottom: spacing.xs }]}>{t('settings.chart_title', 'График за 7 дней')}</Text>
                 <UsageChart data={dailyStats} />
 
                 <Pressable onPress={handleResetStats} style={({ pressed }) => [styles.resetBtn, pressed && styles.pressed]}>
                   <RefreshCw size={14} color={colors.danger} />
-                  <Text style={styles.resetBtnText}>Сбросить статистику</Text>
+                  <Text style={styles.resetBtnText}>{t('settings.reset_stats', 'Сбросить статистику')}</Text>
                 </Pressable>
               </View>
             )}
@@ -771,45 +757,45 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                   <View style={styles.cardHeader}>
                     <Sparkles size={18} color={colors.accent} />
-                    <Text style={styles.cardTitle}>Навыки ИИ (Skills)</Text>
+                    <Text style={styles.cardTitle}>{t('settings.skills_title', 'Навыки ИИ (Skills)')}</Text>
                   </View>
                   <Pressable
                     onPress={() => setShowAddSkill(!showAddSkill)}
                     style={{ backgroundColor: colors.surface, borderColor: colors.accent, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 4, borderRadius: radius.pill }}
                   >
                     <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '600' }}>
-                      {showAddSkill ? 'Отмена' : '+ Добавить навык'}
+                      {showAddSkill ? t('settings.cancel', 'Отмена') : t('settings.add_skill', '+ Добавить навык')}
                     </Text>
                   </Pressable>
                 </View>
-                <Text style={styles.cardDesc}>Автономные навыки, создаваемые ИИ или вручную во время диалога</Text>
+                <Text style={styles.cardDesc}>{t('settings.skills_desc', 'Автономные навыки, создаваемые ИИ или вручную во время диалога')}</Text>
 
                 {showAddSkill && (
                   <View style={{ backgroundColor: '#18181b', borderColor: '#27272a', borderWidth: 1, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.lg }}>
-                    <Text style={[styles.fieldLabel, { marginBottom: 6 }]}>Название навыка</Text>
+                    <Text style={[styles.fieldLabel, { marginBottom: 6 }]}>{t('settings.skill_name', 'Название навыка')}</Text>
                     <TextInput
                       style={styles.textInput}
                       value={newSkillName}
                       onChangeText={setNewSkillName}
-                      placeholder="Например: deploy_app / format_json"
+                      placeholder={t('settings.skill_name_placeholder', 'Например: deploy_app / format_json')}
                       placeholderTextColor={colors.textDim}
                     />
 
-                    <Text style={[styles.fieldLabel, { marginTop: 10, marginBottom: 6 }]}>Описание</Text>
+                    <Text style={[styles.fieldLabel, { marginTop: 10, marginBottom: 6 }]}>{t('settings.skill_desc', 'Описание')}</Text>
                     <TextInput
                       style={styles.textInput}
                       value={newSkillDesc}
                       onChangeText={setNewSkillDesc}
-                      placeholder="Что делает данный навык"
+                      placeholder={t('settings.skill_desc_placeholder', 'Что делает данный навык')}
                       placeholderTextColor={colors.textDim}
                     />
 
-                    <Text style={[styles.fieldLabel, { marginTop: 10, marginBottom: 6 }]}>Инструкция / Паттерн</Text>
+                    <Text style={[styles.fieldLabel, { marginTop: 10, marginBottom: 6 }]}>{t('settings.skill_instruction', 'Инструкция / Паттерн')}</Text>
                     <TextInput
                       style={[styles.textInput, { minHeight: 60 }]}
                       value={newSkillPattern}
                       onChangeText={setNewSkillPattern}
-                      placeholder="Пошаговая инструкция для ассистента"
+                      placeholder={t('settings.skill_instruction_placeholder', 'Пошаговая инструкция для ассистента')}
                       placeholderTextColor={colors.textDim}
                       multiline
                     />
@@ -835,14 +821,14 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                       }}
                       style={{ backgroundColor: colors.accent, paddingVertical: 8, borderRadius: radius.lg, alignItems: 'center', marginTop: 12 }}
                     >
-                      <Text style={{ color: '#000000', fontWeight: '700', fontSize: 13 }}>Сохранить навык</Text>
+                      <Text style={{ color: '#000000', fontWeight: '700', fontSize: 13 }}>{t('settings.save_skill', 'Сохранить навык')}</Text>
                     </Pressable>
                   </View>
                 )}
 
                 {skills.length === 0 ? (
                   <View style={styles.emptyCard}>
-                    <Text style={styles.emptyText}>Нет активных навыков. Вы можете добавить новый навык по кнопке выше или попросить ИИ запомнить навык во время разговора.</Text>
+                    <Text style={styles.emptyText}>{t('settings.no_skills', 'Нет активных навыков. Вы можете добавить новый навык по кнопке выше или попросить ИИ запомнить навык во время разговора.')}</Text>
                   </View>
                 ) : (
                   skills.map((s) => (
@@ -852,7 +838,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                         <Text style={styles.skillDesc}>{s.description}</Text>
                         {s.pattern ? (
                           <Text style={{ color: colors.textDim, fontSize: 11, marginTop: 4, fontFamily: 'monospace' }}>
-                            Инструкция: {s.pattern.slice(0, 100)}{s.pattern.length > 100 ? '...' : ''}
+                            {t('settings.skill_pattern_label', 'Инструкция:')} {s.pattern.slice(0, 100)}{s.pattern.length > 100 ? '...' : ''}
                           </Text>
                         ) : null}
                       </View>
@@ -869,15 +855,15 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
               <View style={styles.sectionCard}>
                 <View style={styles.cardHeader}>
                   <Shield size={18} color="#a78bfa" />
-                  <Text style={styles.cardTitle}>Разрешения и безопасность ПК</Text>
+                  <Text style={styles.cardTitle}>{t('settings.privacy_title', 'Разрешения и безопасность ПК')}</Text>
                 </View>
-                <Text style={styles.cardDesc}>Настройка доступа и локальной приватности ассистента на компьютере</Text>
+                <Text style={styles.cardDesc}>{t('settings.privacy_desc', 'Настройка доступа и локальной приватности ассистента на компьютере')}</Text>
 
                 {/* Workspace File Access */}
                 <View style={styles.switchRow}>
                   <View style={{ flex: 1, paddingRight: spacing.md }}>
-                    <Text style={styles.switchTitle}>Доступ к файлам проекта</Text>
-                    <Text style={styles.switchDesc}>Разрешить ассистенту создавать, изменять и читать файлы кода в рабочей области на ПК</Text>
+                    <Text style={styles.switchTitle}>{t('settings.project_files_title', 'Доступ к файлам проекта')}</Text>
+                    <Text style={styles.switchDesc}>{t('settings.project_files_desc', 'Разрешить ассистенту создавать, изменять и читать файлы кода в рабочей области на ПК')}</Text>
                   </View>
                   <Switch
                     value={true}
@@ -892,8 +878,8 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                 {/* Web Search Access */}
                 <View style={styles.switchRow}>
                   <View style={{ flex: 1, paddingRight: spacing.md }}>
-                    <Text style={styles.switchTitle}>Автоматический веб-поиск</Text>
-                    <Text style={styles.switchDesc}>Разрешить ассистенту находить свежие новости и факты в интернете во время диалога</Text>
+                    <Text style={styles.switchTitle}>{t('settings.web_search_title', 'Автоматический веб-поиск')}</Text>
+                    <Text style={styles.switchDesc}>{t('settings.web_search_desc', 'Разрешить ассистенту находить свежие новости и факты в интернете во время диалога')}</Text>
                   </View>
                   <Switch
                     value={true}

@@ -1,4 +1,8 @@
 # Russian Localization File for Argus AI
+meta:
+  name: "Русский"
+  code: "ru"
+
 navigation:
   new_chat: "Новый чат"
   search: "Поиск"

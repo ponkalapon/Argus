@@ -977,14 +977,14 @@ ${names}`);
             >
               {isEmptyChat ? (
                 <View style={styles.welcomeWrap}>
-                  <Text style={styles.welcomeTitle}>Чем могу помочь?</Text>
+                  <Text style={styles.welcomeTitle}>{t('chat.welcome_title', 'Чем могу помочь?')}</Text>
                   {!hasRequiredSettings && (
                     <Pressable
                       onPress={onOpenSettings}
                       style={({ pressed }) => [styles.connectHint, pressed && styles.pressed]}
                     >
                       <Settings size={16} color={colors.textMuted} style={{ marginRight: 6 }} />
-                      <Text style={styles.connectHintText}>Настроить подключение</Text>
+                      <Text style={styles.connectHintText}>{t('chat.connect_hint', 'Настроить подключение')}</Text>
                     </Pressable>
                   )}
                 </View>
@@ -1045,7 +1045,7 @@ ${names}`);
                       }
                     }
                   }}
-                  placeholder="Спросить Agent…"
+                  placeholder={t('chat.placeholder', 'Спросить Agent…')}
                   placeholderTextColor={colors.textDim}
                   style={styles.input}
                   textAlignVertical="center"
@@ -1078,9 +1078,9 @@ ${names}`);
                     <Layers size={11} color={colors.textMuted} style={{ marginRight: 2 }} />
                   </Animated.View>
                   <Text style={styles.tokenText}>
-                    Вх: {formatTokenNumber(animInputTokens)}
+                    {t('chat.input_short', 'Вх')}: {formatTokenNumber(animInputTokens)}
                     {' / '}
-                    Вых: {formatTokenNumber(animOutputTokens)}
+                    {t('chat.output_short', 'Вых')}: {formatTokenNumber(animOutputTokens)}
                   </Text>
                 </View>
                 <Text style={styles.statusModel} numberOfLines={1}>{modelLabel}</Text>
@@ -1114,7 +1114,7 @@ ${names}`);
                 <TextInput
                   ref={searchInputRef}
                   style={styles.searchInput}
-                  placeholder="Поиск по истории..."
+                  placeholder={t('chat.search_placeholder', 'Поиск по истории...')}
                   placeholderTextColor={colors.textDim}
                   value={searchQuery}
                   onChangeText={handleSearchQuery}
@@ -1138,17 +1138,17 @@ ${names}`);
               <>
                 {searchQuery.trim() === '' ? (
                   <View style={styles.emptyChatsBox}>
-                    <Text style={styles.emptyChatsTitle}>Введите запрос</Text>
-                    <Text style={styles.emptyChatsText}>Начни вводить текст для поиска по истории диалогов.</Text>
+                    <Text style={styles.emptyChatsTitle}>{t('search.enter_query', 'Введите запрос')}</Text>
+                    <Text style={styles.emptyChatsText}>{t('search.enter_query_hint', 'Начни вводить текст для поиска по истории диалогов.')}</Text>
                   </View>
                 ) : searchResults.length === 0 ? (
                   <View style={styles.emptyChatsBox}>
-                    <Text style={styles.emptyChatsTitle}>Ничего не найдено</Text>
-                    <Text style={styles.emptyChatsText}>Попробуй изменить запрос.</Text>
+                    <Text style={styles.emptyChatsTitle}>{t('search.not_found', 'Ничего не найдено')}</Text>
+                    <Text style={styles.emptyChatsText}>{t('search.not_found_hint', 'Попробуй изменить запрос.')}</Text>
                   </View>
                 ) : (
                   <>
-                    <Text style={[styles.navSectionHeader, { marginTop: spacing.sm }]}>РЕЗУЛЬТАТЫ ПОИСКА</Text>
+                    <Text style={[styles.navSectionHeader, { marginTop: spacing.sm }]}>{t('search.results_header', 'РЕЗУЛЬТАТЫ ПОИСКА')}</Text>
                     {searchResults.map((result) => (
                       <Pressable
                         key={result.chatId}
@@ -1165,7 +1165,7 @@ ${names}`);
                         <View style={styles.chatItemTextWrap}>
                           <Text style={styles.chatItemTitle} numberOfLines={1}>{result.title}</Text>
                           <Text style={styles.searchExcerpt} numberOfLines={2}>{result.excerpt}</Text>
-                          <Text style={styles.chatItemMeta}>{formatChatDate(result.updatedAt)} · совпадение {Math.round(result.score * 100)}%</Text>
+                          <Text style={styles.chatItemMeta}>{formatChatDate(result.updatedAt)} · {t('search.match', 'совпадение')} {Math.round(result.score * 100)}%</Text>
                         </View>
                       </Pressable>
                     ))}
@@ -1247,7 +1247,7 @@ ${names}`);
                         <View style={styles.chatItemTextWrap}>
                           <Text style={styles.chatItemTitle} numberOfLines={1}>{chat.title}</Text>
                           <Text style={styles.chatItemMeta} numberOfLines={1}>
-                            {formatChatDate(chat.updatedAt)} · {chat.messages.length} сообщ.
+                            {formatChatDate(chat.updatedAt)} · {chat.messages.length} {t('search.msgs_count', 'сообщ.')}
                           </Text>
                         </View>
                         <Pressable
@@ -1278,7 +1278,7 @@ ${names}`);
             <View style={styles.drawerBottomStatus}>
               <View style={[styles.statusDot, { backgroundColor: hasRequiredSettings ? colors.success : colors.danger }]} />
               <Text style={styles.drawerBottomStatusText}>
-                {hasRequiredSettings ? 'Подключено' : 'Не настроено'}
+                {hasRequiredSettings ? t('navigation.connected', 'Подключено') : t('status.not_configured', 'Не настроено')}
               </Text>
             </View>
           </View>
@@ -1297,7 +1297,7 @@ ${names}`);
         <SafeAreaView style={{ flex: 1 }}>
           <View style={styles.chatPanelHeader}>
             <View style={{ flex: 1, paddingRight: 8 }}>
-              <Text style={styles.chatPanelTitle}>Рабочая область ПК</Text>
+              <Text style={styles.chatPanelTitle}>{t('workspace.title', 'Рабочая область ПК')}</Text>
               {wsFolderName ? (
                 <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '600', marginTop: 2 }} numberOfLines={1}>
                   📁 {wsFolderName}
@@ -1318,8 +1318,8 @@ ${names}`);
 
           {!activeChatId ? (
             <View style={styles.emptyChatsBox}>
-              <Text style={styles.emptyChatsTitle}>Нет активного чата</Text>
-              <Text style={styles.emptyChatsText}>Создай чат, чтобы подключить рабочую папку.</Text>
+              <Text style={styles.emptyChatsTitle}>{t('workspace.no_active_chat', 'Нет активного чата')}</Text>
+              <Text style={styles.emptyChatsText}>{t('workspace.no_active_chat_desc', 'Создай чат, чтобы подключить рабочую папку.')}</Text>
             </View>
           ) : (
             <>
@@ -1335,7 +1335,7 @@ ${names}`);
                 >
                   <Folder size={16} color={colors.accent} style={{ marginRight: 6 }} />
                   <Text style={[styles.newChatText, { color: colors.accent, fontWeight: '700' }]}>
-                    {wsFolderName ? '📁 Сменить папку ПК' : '📁 Выбрать папку на ПК'}
+                    {wsFolderName ? t('workspace.change_folder', '📁 Сменить папку ПК') : t('workspace.select_folder', '📁 Выбрать папку на ПК')}
                   </Text>
                 </Pressable>
 
@@ -1349,16 +1349,16 @@ ${names}`);
                     style={({ pressed }) => [styles.newChatButton, pressed && styles.pressed]}
                   >
                     <Download size={15} color={colors.text} style={{ marginRight: 6 }} />
-                    <Text style={styles.newChatText}>Скачать ZIP архив</Text>
+                    <Text style={styles.newChatText}>{t('workspace.download_zip', 'Скачать ZIP архив')}</Text>
                   </Pressable>
                 )}
               </View>
 
               {wsFiles.length === 0 ? (
                 <View style={styles.emptyChatsBox}>
-                  <Text style={styles.emptyChatsTitle}>Рабочая область пуста</Text>
+                  <Text style={styles.emptyChatsTitle}>{t('workspace.empty_title', 'Рабочая область пуста')}</Text>
                   <Text style={styles.emptyChatsText}>
-                    Нажмите «📁 Выбрать папку на ПК», чтобы открыть файлы вашей системы напрямую в рабочем окне Агента.
+                    {t('workspace.empty_desc', 'Нажмите «📁 Выбрать папку на ПК», чтобы открыть файлы вашей системы напрямую в рабочем окне Агента.')}
                   </Text>
                 </View>
               ) : (
@@ -1485,14 +1485,14 @@ ${names}`);
             ]}
           >
             <Pressable style={styles.modelPanel} onPress={(e) => e.stopPropagation()}>
-              <Text style={styles.modelPanelTitle}>Выбрать модель</Text>
+              <Text style={styles.modelPanelTitle}>{t('chat.select_model_title', 'Выбрать модель')}</Text>
 
               <View style={styles.modelSearchWrap}>
                 <Search size={16} color={colors.textMuted} />
                 <TextInput
                   autoFocus
                   onChangeText={setModelSearch}
-                  placeholder="Поиск…"
+                  placeholder={t('chat.search_placeholder', 'Поиск…')}
                   placeholderTextColor={colors.textDim}
                   style={styles.modelSearchInput}
                   value={modelSearch}
@@ -1503,7 +1503,7 @@ ${names}`);
                 {isLoadingModels ? (
                   <View style={styles.modelEmpty}>
                     <Animated.View style={{ opacity: modelPickerAnim }}>
-                      <Text style={styles.modelEmptyText}>Загрузка моделей…</Text>
+                      <Text style={styles.modelEmptyText}>{t('chat.loading_models', 'Загрузка моделей…')}</Text>
                     </Animated.View>
                   </View>
                 ) : (
@@ -1538,7 +1538,7 @@ ${names}`);
 
                     {modelSearch.trim().length > 0 && (
                       <View>
-                        <Text style={styles.modelProviderLabel}>Другое</Text>
+                        <Text style={styles.modelProviderLabel}>{t('settings.other_label', 'Другое')}</Text>
                         <Pressable
                           onPress={() => {
                             setShowModelPicker(false);
@@ -1553,7 +1553,7 @@ ${names}`);
 
                     {filteredGroups.length === 0 && modelSearch.trim().length === 0 && (
                       <View style={styles.modelEmpty}>
-                        <Text style={styles.modelEmptyText}>Нет моделей</Text>
+                        <Text style={styles.modelEmptyText}>{t('settings.no_models', 'Нет моделей')}</Text>
                       </View>
                     )}
                   </>
@@ -1570,12 +1570,12 @@ ${names}`);
           <Pressable style={styles.attachOverlay} onPress={() => setShowAttachMenu(false)} />
           <View style={styles.attachMenuCard}>
             {[
-              { label: 'Камера', icon: Camera, onPress: handleCamera },
-              { label: 'Фото', icon: Image, onPress: handlePhotoLibrary },
-              { label: 'Файлы', icon: Paperclip, onPress: handleAttachDocument },
-              { label: 'Файл. менеджер', icon: Folder, onPress: handleOpenFiles },
+              { label: t('attach.camera', 'Камера'), icon: Camera, onPress: handleCamera },
+              { label: t('attach.photo', 'Фото'), icon: Image, onPress: handlePhotoLibrary },
+              { label: t('attach.files', 'Файлы'), icon: Paperclip, onPress: handleAttachDocument },
+              { label: t('attach.file_manager', 'Файл. менеджер'), icon: Folder, onPress: handleOpenFiles },
               {
-                label: internetEnabled ? 'Интернет: вкл' : 'Интернет: выкл',
+                label: internetEnabled ? t('attach.internet_on', 'Интернет: вкл') : t('attach.internet_off', 'Интернет: выкл'),
                 icon: Globe,
                 onPress: () => {
                   const nextState = !internetEnabled;

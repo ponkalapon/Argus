@@ -12,6 +12,7 @@ import { FileManagerScreen } from './src/components/FileManagerScreen';
 
 import { loadApiKey, loadSettings, saveSettings } from './src/api';
 import { loadThemeConfig, ThemeConfig, WallpaperType } from './src/services/themeStorage';
+import { setLanguage as setI18nLanguage } from './src/services/i18n';
 import { AgentSettings } from './src/types';
 import { applyAccentColor, colors, spacing, typography } from './src/styles/theme';
 
@@ -66,6 +67,7 @@ export default function App() {
   const refreshTheme = useCallback(async () => {
     const cfg = await loadThemeConfig();
     applyAccentColor(cfg.accentColor);
+    setI18nLanguage(cfg.language);
     setThemeConfig(cfg);
   }, []);
 
@@ -76,6 +78,7 @@ export default function App() {
       .then(([storedSettings, storedApiKey, storedTheme]) => {
         if (mounted) {
           applyAccentColor(storedTheme.accentColor);
+          setI18nLanguage(storedTheme.language);
           setSettings(storedSettings);
           setApiKey(storedApiKey);
           setThemeConfig(storedTheme);

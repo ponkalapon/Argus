@@ -1,0 +1,47 @@
+# English Localization File for Argus AI
+meta:
+  name: "English"
+  code: "en"
+
+navigation:
+  new_chat: "New Chat"
+  search: "Search"
+  library: "Library"
+  sandbox: "Sandbox"
+  recent: "RECENT"
+  no_chats_title: "No chats yet"
+  no_chats_text: "Your first chat will be created automatically after sending a message."
+  connected: "Connected"
+
+chat:
+  placeholder: "Ask Agent..."
+  welcome_title: "How can I help you today?"
+  connect_hint: "Configure connection"
+  copy_code: "Copy"
+  copied: "Copied"
+
+settings:
+  title: "Settings"
+  save: "Save"
+  saving: "Saving..."
+  api_key: "API Key"
+  base_url: "Base URL (OpenAI-Compatible)"
+  model: "Model"
+  allow_contacts: "Allow assistant access to contacts"
+  tab_general: "Connection"
+  tab_customization: "Customization"
+  tab_stats: "Usage"
+  tab_skills: "Skills"
+  wallpaper_title: "Application Wallpaper"
+  custom_wallpaper: "+ Custom Wallpaper"
+  reset_default: "Reset to Classic"
+  custom_wallpaper_title: "Custom Wallpaper"
+  custom_wallpaper_desc: "User uploaded background image"
+  wallpaper_opacity: "Wallpaper Opacity"
+  screen_width: "Message Area Width"
+  width_fluid: "Full Width"
+  width_fluid_desc: "Fill the entire window without large black side bars"
+  width_compact: "Compact Column"
+  width_compact_desc: "Classic centered column 880px"
+  default_wallpaper_title: "Classic Dark"
+  default_wallpaper_desc: "Standard elegant deep dark Argus background"

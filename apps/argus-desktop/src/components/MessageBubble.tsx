@@ -6,6 +6,7 @@ import { Check, ChevronRight, Copy, RotateCw } from 'lucide-react-native';
 import { ChatMessage } from '../types';
 import { colors, radius, spacing, typography } from '../styles/theme';
 import MermaidChart from './MermaidChart';
+import { t } from '../services/i18n';
 
 const TypingDots = memo(() => {
   const dot1 = useRef(new Animated.Value(0)).current;
@@ -170,7 +171,7 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete }: Props) =
         <View style={styles.codeHeader}>
           <Text style={styles.codeLang}>{lang || 'code'}</Text>
           <Text style={[styles.copyHint, isCopied && styles.copyHintActive]}>
-            {isCopied ? 'Скопировано' : 'Копировать'}
+            {isCopied ? t('chat.copied', 'Скопировано') : t('chat.copy_code', 'Копировать')}
           </Text>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator>
@@ -266,7 +267,7 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete }: Props) =
               {copiedMessage ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Check size={14} color={colors.success} />
-                  <Text style={{ color: colors.success, fontSize: 11, fontWeight: '600' }}>Скопировано</Text>
+                  <Text style={{ color: colors.success, fontSize: 11, fontWeight: '600' }}>{t('chat.copied', 'Скопировано')}</Text>
                 </View>
               ) : (
                 <Copy size={14} color={colors.textMuted} />
