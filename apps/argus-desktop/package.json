@@ -11,7 +11,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test:stream": "rm -rf .tmp-test && tsc --ignoreConfig --target ES2022 --module Node16 --moduleResolution node16 --esModuleInterop --skipLibCheck --outDir .tmp-test src/services/openaiStream.ts && node --test tests/openaiStream.test.js",
-    "build:web": "npm pkg set main=expo/AppEntry.js && set CI=1&& expo export -p web --output-dir dist && npm pkg set main=electron/main.js",
+    "build:web": "npm pkg set main=expo/AppEntry.js && npx cross-env CI=1 expo export -p web --output-dir dist && npm pkg set main=electron/main.js",
     "electron:dev": "electron .",
     "electron:dist": "npm run build:web && electron-builder",
     "electron:msix": "npm run build:web && electron-builder -w appx"

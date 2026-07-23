@@ -11,9 +11,6 @@ permissions:
 jobs:
   build-exe:
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: apps/argus-desktop
 
     steps:
       - uses: actions/checkout@v4
@@ -25,10 +22,15 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install desktop dependencies
+        working-directory: apps/argus-desktop
         run: npm ci
 
       - name: Build Electron App (EXE)
+        working-directory: apps/argus-desktop
         run: npm run electron:dist
 
       - name: Create or Update Release
@@ -40,3 +42,4 @@ jobs:
             apps/argus-desktop/releases/electron/*.exe
           generate_release_notes: true
           fail_on_unmatched_files: false
+

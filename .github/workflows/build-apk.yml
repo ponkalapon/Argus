@@ -64,20 +64,25 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install dependencies
-        run: |
-          cd ../../
-          npm ci
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install mobile dependencies
+        working-directory: apps/argus-mobile
+        run: npm ci
 
       - name: Patch CURRENT_BUILD in autoUpdate.ts
+        working-directory: apps/argus-mobile
         run: |
           sed -i "s/export const CURRENT_BUILD = [0-9]*;/export const CURRENT_BUILD = ${{ steps.version.outputs.build }};/" src/services/autoUpdate.ts
           grep "CURRENT_BUILD" src/services/autoUpdate.ts
 
       - name: Expo prebuild
+        working-directory: apps/argus-mobile
         run: npx expo prebuild --platform android --no-install
 
       - name: Set SDK path
+        working-directory: apps/argus-mobile
         run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
 
       - name: Build APK
