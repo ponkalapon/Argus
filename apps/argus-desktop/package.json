@@ -46,9 +46,11 @@
     "react-native-webview": "13.16.1"
   },
   "devDependencies": {
+    "@expo/config-plugins": "~56.0.0",
     "@types/fs-extra": "^11.0.4",
     "@types/js-yaml": "^4.0.9",
     "@types/react": "^19.2.15",
+    "cross-env": "^7.0.3",
     "electron": "^30.0.0",
     "electron-builder": "^24.0.0",
     "fs-extra": "^11.3.5",
