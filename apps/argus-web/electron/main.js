@@ -1,7 +1,95 @@
-const { app, BrowserWindow, protocol, session } = require('electron');
+const { app, BrowserWindow, protocol, session, ipcMain, dialog } = require('electron');
 const path = require('path');
 const url = require('url');
 const fs = require('fs');
+
+ipcMain.handle('select-directory', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle('get-default-directory', async () => {
+  try {
+    const downloads = app.getPath('downloads');
+    const defaultFolder = path.join(downloads, 'ArgusProjects');
+    if (!fs.existsSync(defaultFolder)) {
+      fs.mkdirSync(defaultFolder, { recursive: true });
+    }
+    return defaultFolder;
+  } catch {
+    return null;
+  }
+});
+
+ipcMain.handle('read-directory', async (event, dirPath) => {
+  if (!dirPath || !fs.existsSync(dirPath)) return [];
+  const results = [];
+
+  const readFolder = (currentDir, baseDir) => {
+    try {
+      const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === 'dist') continue;
+        const fullPath = path.join(currentDir, entry.name);
+        const relPath = path.relative(baseDir, fullPath).replace(/\\/g, '/');
+        if (entry.isDirectory()) {
+          readFolder(fullPath, baseDir);
+        } else if (entry.isFile()) {
+          try {
+            const stat = fs.statSync(fullPath);
+            if (stat.size < 5 * 1024 * 1024) {
+              const content = fs.readFileSync(fullPath, 'utf8');
+              results.push({ path: relPath, content, size: stat.size });
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+  };
+
+  readFolder(dirPath, dirPath);
+  return results;
+});
+
+ipcMain.handle('write-file', async (event, { dirPath, relativePath, content }) => {
+  if (!dirPath || !relativePath) return false;
+  try {
+    const fullPath = path.join(dirPath, relativePath);
+    const parentDir = path.dirname(fullPath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+    fs.writeFileSync(fullPath, content, 'utf8');
+    return true;
+  } catch (e) {
+    console.error('Error writing file:', e);
+    return false;
+  }
+});
+
+ipcMain.handle('read-file', async (event, { dirPath, relativePath }) => {
+  try {
+    const fullPath = path.join(dirPath, relativePath);
+    if (!fs.existsSync(fullPath)) return null;
+    return fs.readFileSync(fullPath, 'utf8');
+  } catch {
+    return null;
+  }
+});
+
+ipcMain.handle('delete-file', async (event, { dirPath, relativePath }) => {
+  try {
+    const fullPath = path.join(dirPath, relativePath);
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+      return true;
+    }
+  } catch {}
+  return false;
+});
 
 const logFile = path.join(app.getPath('userData'), 'app_debug.log');
 function log(msg) {

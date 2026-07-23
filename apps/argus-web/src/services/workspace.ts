@@ -19,9 +19,36 @@ const normalizeRelativePath = (path: string) => {
   return normalized;
 };
 
+const GLOBAL_FOLDER_KEY = '@argus_global_working_folder_v1';
 const getStorageKey = (workspaceId: string) => `argus.workspace.${safeSegment(workspaceId)}`;
+const getFolderNameKey = (workspaceId: string) => `argus.workspace_folder_name.${safeSegment(workspaceId)}`;
 
 export const ensureWorkspace = async (_workspaceId: string) => {};
+
+export const getWorkspaceFolderName = async (workspaceId: string): Promise<string | null> => {
+  const specific = await AsyncStorage.getItem(getFolderNameKey(workspaceId));
+  if (specific) return specific;
+
+  const globalFolder = await AsyncStorage.getItem(GLOBAL_FOLDER_KEY);
+  if (globalFolder) return globalFolder;
+
+  if (typeof window !== 'undefined' && (window as any).electronAPI?.getDefaultDirectory) {
+    try {
+      const defaultDir = await (window as any).electronAPI.getDefaultDirectory();
+      if (defaultDir) {
+        await AsyncStorage.setItem(GLOBAL_FOLDER_KEY, defaultDir);
+        return defaultDir;
+      }
+    } catch {}
+  }
+
+  return null;
+};
+
+export const setWorkspaceFolderName = async (workspaceId: string, folderName: string) => {
+  await AsyncStorage.setItem(getFolderNameKey(workspaceId), folderName);
+  await AsyncStorage.setItem(GLOBAL_FOLDER_KEY, folderName);
+};
 
 export const listWorkspaceFiles = async (workspaceId: string): Promise<WorkspaceFile[]> => {
   const raw = await AsyncStorage.getItem(getStorageKey(workspaceId));
@@ -53,11 +80,94 @@ export const writeWorkspaceFile = async (workspaceId: string, path: string, cont
   }
 
   await AsyncStorage.setItem(getStorageKey(workspaceId), JSON.stringify(files));
+
+  // Write directly to physical hard disk if folder path is configured
+  const folderName = await getWorkspaceFolderName(workspaceId);
+  if (typeof window !== 'undefined' && (window as any).electronAPI?.writeFile && folderName) {
+    try {
+      await (window as any).electronAPI.writeFile(folderName, normalPath, content);
+    } catch {}
+  }
+
   return {
     path: normalPath,
     size: content.length,
     updatedAt: now,
   };
+};
+
+export const importWorkspaceFiles = async (workspaceId: string, newFiles: { path: string; content: string }[], folderName?: string) => {
+  const files = await listWorkspaceFiles(workspaceId);
+  const now = Date.now();
+
+  newFiles.forEach((nf) => {
+    try {
+      const normalPath = normalizeRelativePath(nf.path);
+      const existingIndex = files.findIndex((f) => f.path === normalPath);
+      const fileData: WorkspaceFile = {
+        path: normalPath,
+        content: nf.content,
+        updatedAt: now,
+        size: nf.content.length,
+      };
+      if (existingIndex >= 0) {
+        files[existingIndex] = fileData;
+      } else {
+        files.push(fileData);
+      }
+    } catch {}
+  });
+
+  await AsyncStorage.setItem(getStorageKey(workspaceId), JSON.stringify(files));
+  if (folderName) {
+    await setWorkspaceFolderName(workspaceId, folderName);
+  }
+};
+
+export const selectLocalFolderOnPC = async (): Promise<{ folderName: string; files: { path: string; content: string }[] }> => {
+  // Electron Native Directory Picker
+  if (typeof window !== 'undefined' && (window as any).electronAPI?.selectDirectory) {
+    try {
+      const dirPath = await (window as any).electronAPI.selectDirectory();
+      if (!dirPath) return { folderName: '', files: [] };
+      const files = await (window as any).electronAPI.readDirectory(dirPath);
+      return { folderName: dirPath, files };
+    } catch {
+      return { folderName: '', files: [] };
+    }
+  }
+
+  // HTML5 Web File System Access API
+  if (typeof window !== 'undefined' && 'showDirectoryPicker' in window) {
+    try {
+      const dirHandle = await (window as any).showDirectoryPicker();
+      const folderName = dirHandle.name;
+      const files: { path: string; content: string }[] = [];
+
+      const readDir = async (handle: any, currentPath = '') => {
+        for await (const entry of handle.values()) {
+          if (entry.kind === 'file') {
+            try {
+              const file = await entry.getFile();
+              if (file.size < 3 * 1024 * 1024) {
+                const content = await file.text();
+                const filePath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+                files.push({ path: filePath, content });
+              }
+            } catch {}
+          } else if (entry.kind === 'directory' && !entry.name.startsWith('.') && entry.name !== 'node_modules' && entry.name !== 'dist' && entry.name !== 'build') {
+            await readDir(entry, currentPath ? `${currentPath}/${entry.name}` : entry.name);
+          }
+        }
+      };
+
+      await readDir(dirHandle);
+      return { folderName, files };
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return { folderName: '', files: [] };
+    }
+  }
+  return { folderName: '', files: [] };
 };
 
 export const readWorkspaceFile = async (workspaceId: string, path: string) => {

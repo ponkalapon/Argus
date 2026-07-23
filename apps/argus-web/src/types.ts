@@ -1,10 +1,23 @@
 export type Role = 'system' | 'user' | 'assistant' | 'tool';
 
+export type AgentStep = {
+  id: string;
+  type: 'read' | 'write' | 'search' | 'think' | 'tool';
+  label: string;
+  detail?: string;
+  filename?: string;
+  ext?: string;
+  addedLines?: number;
+  deletedLines?: number;
+  status: 'running' | 'done' | 'error';
+};
+
 export type ChatMessage = {
   id: string;
   role: Exclude<Role, 'system' | 'tool'>;
   content: string;
   createdAt: number;
+  steps?: AgentStep[];
 };
 
 export type StoredChat = {
@@ -52,6 +65,7 @@ export type ChatCompletionRequest = {
   messages: ChatCompletionMessage[];
   context?: ChatCompletionContext;
   onToken?: (token: string) => void;
+  onStep?: (step: AgentStep) => void;
   tools?: any[];
 };
 

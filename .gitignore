@@ -15,3 +15,9 @@ android/
 apps/*-old/
 .apk
 *.apk
+
+releases/
+**/releases/
+.mimocode/
+upload_release.js
+

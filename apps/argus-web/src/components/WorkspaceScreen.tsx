@@ -17,7 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { requestChatCompletion, getEstimatedSystemPromptTokens } from '../services/openaiClient';
 import { loadChats, saveChats, loadInternetEnabled, saveInternetEnabled } from '../services/storage';
-import { listWorkspaceFiles, exportWorkspaceFile, exportWorkspaceArchive, WorkspaceFile } from '../services/workspace';
+import { listWorkspaceFiles, exportWorkspaceFile, exportWorkspaceArchive, WorkspaceFile, selectLocalFolderOnPC, importWorkspaceFiles, getWorkspaceFolderName, deleteWorkspaceFile } from '../services/workspace';
 import { searchSessions } from '../services/sessionSearch';
 import { AgentSettings, AgentStatus, ChatMessage, StoredChat, ChatCompletionMessage } from '../types';
 import { colors, motion, radius, spacing, typography } from '../styles/theme';
@@ -29,6 +29,7 @@ import { MessageBubble } from './MessageBubble';
 import { GestureBottomSheet, BOTTOM_SHEET_HEIGHT } from './GestureBottomSheet';
 import { estimateTokens, estimateMessagesTokens } from '../services/context';
 import { recordTokenUsage } from '../services/tokenStats';
+import { t } from '../services/i18n';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft, ArrowUp, Bot, Camera, Check, ChevronDown, Download, Folder, Globe, Image, Layers, Menu, Mic, Paperclip, Plus, Search, Settings, Trash2, Users, X } from 'lucide-react-native';
 import { WebView } from 'react-native-webview';
@@ -201,9 +202,30 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
   }, [pendingAttach]);
 
   const [wsFiles, setWsFiles] = useState<WorkspaceFile[]>([]);
+  const [wsFolderName, setWsFolderName] = useState<string | null>(null);
   const [showWsModal, setShowWsModal] = useState(false);
   const [previewFile, setPreviewFile] = useState<WorkspaceFile | null>(null);
   const [isFocused, setIsFocused] = useState(false);
+
+  const refreshWorkspaceFiles = useCallback(async (chatId: string) => {
+    const files = await listWorkspaceFiles(chatId);
+    const folderName = await getWorkspaceFolderName(chatId);
+    setWsFiles(files);
+    setWsFolderName(folderName);
+  }, []);
+
+  const handleSelectLocalFolder = async () => {
+    if (!activeChatId) return;
+    try {
+      const res = await selectLocalFolderOnPC();
+      if (res.files.length > 0) {
+        await importWorkspaceFiles(activeChatId, res.files, res.folderName);
+        await refreshWorkspaceFiles(activeChatId);
+      }
+    } catch {
+      Alert.alert('Ошибка', 'Не удалось прочитать выбранную папку');
+    }
+  };
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [modelSearch, setModelSearch] = useState('');
   const [modelGroups, setModelGroups] = useState<ModelGroup[]>([]);
@@ -621,17 +643,34 @@ ${names}`);
       return;
     }
 
-    // RAG Logic: Search in attached documents
-    const context = searchContext(content, attachedDocs);
-    const augmentedContent = context 
-      ? `Контекст из прикрепленных файлов:\n${context}\n\nВопрос пользователя: ${content}`
-      : content;
-
     const chatId = activeChatId || createId();
     const chatTitle = chatsRef.current.find((chat) => chat.id === chatId)?.title || createChatTitle(content);
 
     if (!activeChatId) {
       setActiveChatId(chatId);
+    }
+
+    // Working Folder context for AI Agent (capped & sanitized to avoid LLM prefill overflow)
+    const wsFilesList = await listWorkspaceFiles(chatId);
+    const wsFolderNameStr = await getWorkspaceFolderName(chatId);
+    let wsContext = '';
+    if (wsFilesList.length > 0) {
+      const topFiles = wsFilesList.slice(0, 25);
+      const fileSummaries = topFiles
+        .map(f => `- ${f.path.replace(/[\u0000-\u001F\u7F-\u9F]/g, '')} (${(f.size / 1024).toFixed(1)} KB)`)
+        .join('\n');
+      const extraCount = wsFilesList.length > 25 ? `\n...и ещё ${wsFilesList.length - 25} файлов` : '';
+      wsContext = `[Доступная рабочая папка ПК${wsFolderNameStr ? ` "${wsFolderNameStr.replace(/[\u0000-\u001F\u7F-\u9F]/g, '')}"` : ''}]:\n${fileSummaries}${extraCount}\n\n`;
+    }
+
+    // RAG Logic: Search in attached documents
+    const context = searchContext(content, attachedDocs);
+    let augmentedContent = content;
+    if (context) {
+      augmentedContent = `Контекст из прикрепленных файлов:\n${context}\n\nВопрос пользователя: ${content}`;
+    }
+    if (wsContext) {
+      augmentedContent = `${wsContext}${augmentedContent}`;
     }
 
     const userMessage: ChatMessage = {
@@ -687,6 +726,23 @@ ${names}`);
           streamQueue.current += token;
           streamedTextRef.current += token;
           setOutputTokens(estimateTokens(streamedTextRef.current));
+        },
+        onStep: (step) => {
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.id !== assistantMessage.id) return msg;
+              const existingSteps = msg.steps || [];
+              const stepIndex = existingSteps.findIndex((s) => s.id === step.id);
+              let newSteps = [...existingSteps];
+              if (stepIndex >= 0) {
+                newSteps[stepIndex] = step;
+              } else {
+                newSteps.push(step);
+              }
+              return { ...msg, steps: newSteps };
+            })
+          );
+          refreshWorkspaceFiles(chatId).catch(() => {});
         },
       });
 
@@ -818,8 +874,47 @@ ${names}`);
     setTimeout(() => onOpenSettings(), 350);
   };
 
+  const handleRegenerate = (messageId: string) => {
+    const currentMsgs = messages.filter((m) => m.id !== 'welcome');
+    const targetIndex = currentMsgs.findIndex((m) => m.id === messageId);
+    if (targetIndex === -1) return;
+
+    let userQuery = '';
+    let sliceIndex = targetIndex;
+    for (let i = targetIndex; i >= 0; i--) {
+      if (currentMsgs[i].role === 'user') {
+        userQuery = currentMsgs[i].content;
+        sliceIndex = i;
+        break;
+      }
+    }
+
+    if (userQuery) {
+      const kept = currentMsgs.slice(0, sliceIndex);
+      setMessages(kept.length > 0 ? kept : [{ id: 'welcome', role: 'assistant', content: 'Чем могу помочь?', createdAt: Date.now() }]);
+      setTimeout(() => {
+        sendMessage(userQuery);
+      }, 50);
+    }
+  };
+
   return (
     <View style={styles.slideRoot}>
+      {/* Fixed top-left Menu <-> X Toggle Button */}
+      <View style={styles.fixedMenuBtnWrap}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={showChatList ? closeDrawer : openDrawer}
+          style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
+        >
+          {showChatList ? (
+            <X size={20} color={colors.text} />
+          ) : (
+            <Menu size={20} color={colors.text} />
+          )}
+        </Pressable>
+      </View>
+
       {/* Main content - slides right when drawer opens */}
       <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateX: contentTranslate }] }]}>
         {/* Invisible edge zone to open drawer */}
@@ -837,20 +932,14 @@ ${names}`);
           >
             {/* ── Header ── */}
             <View style={styles.header}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={openDrawer}
-                style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
-              >
-                <Menu size={20} color={colors.text} />
-              </Pressable>
+              <View style={{ width: 38, height: 38 }} />
 
               <Pressable
                 style={({ pressed }) => [styles.modelPill, pressed && styles.pressed]}
                 onPress={() => { setModelSearch(''); setShowModelPicker(true); }}
                 accessibilityRole="button"
               >
-                <Bot size={14} color="#a78bfa" style={{ marginRight: 4 }} />
+                <Bot size={14} color={colors.accent} style={{ marginRight: 4 }} />
                 <Text style={styles.modelPillLabel} numberOfLines={1}>
                   {modelLabel}
                 </Text>
@@ -862,8 +951,7 @@ ${names}`);
                   accessibilityRole="button"
                   onPress={async () => {
                     if (activeChatId) {
-                      const files = await listWorkspaceFiles(activeChatId);
-                      setWsFiles(files);
+                      await refreshWorkspaceFiles(activeChatId);
                     }
                     setShowWsModal(true);
                   }}
@@ -903,7 +991,14 @@ ${names}`);
               ) : (
                 messages
                   .filter((m) => m.id !== 'welcome')
-                  .map((m) => <MessageBubble key={m.id} message={m} />)
+                  .map((m) => (
+                    <MessageBubble
+                      key={m.id}
+                      message={m}
+                      onRegenerate={m.role === 'assistant' ? () => handleRegenerate(m.id) : undefined}
+                      onDelete={() => handleDeleteMessage(m.id)}
+                    />
+                  ))
               )}
 
               {!!error && (
@@ -1034,13 +1129,7 @@ ${names}`);
                 </Pressable>
               </>
             ) : (
-              <Pressable
-                accessibilityRole="button"
-                onPress={closeDrawer}
-                style={({ pressed }) => [styles.chatCloseBtn, pressed && styles.pressed]}
-              >
-                <X size={18} color={colors.textMuted} />
-              </Pressable>
+              <View style={{ height: 38 }} />
             )}
           </View>
 
@@ -1086,7 +1175,7 @@ ${names}`);
             ) : (
               <>
                 {/* Навигация */}
-                <Text style={[styles.navSectionHeader, { marginTop: spacing.sm }]}>НАВИГАЦИЯ</Text>
+                <Text style={[styles.navSectionHeader, { marginTop: spacing.sm }]}>{t('navigation.recent', 'НАВИГАЦИЯ')}</Text>
                 <View style={styles.navCol}>
                   <Pressable
                     onPress={() => { closeDrawer(); startNewChat(); }}
@@ -1095,7 +1184,7 @@ ${names}`);
                     <View style={styles.navRowIcon}>
                       <Plus size={18} color={colors.text} />
                     </View>
-                    <Text style={styles.navRowLabel}>Новый чат</Text>
+                    <Text style={styles.navRowLabel}>{t('navigation.new_chat', 'Новый чат')}</Text>
                   </Pressable>
                   <Pressable
                     onPress={() => openSearch()}
@@ -1104,7 +1193,7 @@ ${names}`);
                     <View style={styles.navRowIcon}>
                       <Search size={18} color={colors.text} />
                     </View>
-                    <Text style={styles.navRowLabel}>Поиск</Text>
+                    <Text style={styles.navRowLabel}>{t('navigation.search', 'Поиск')}</Text>
                   </Pressable>
                   <Pressable
                     onPress={async () => {
@@ -1120,7 +1209,7 @@ ${names}`);
                     <View style={styles.navRowIcon}>
                       <Folder size={18} color={colors.text} />
                     </View>
-                    <Text style={styles.navRowLabel}>Библиотека</Text>
+                    <Text style={styles.navRowLabel}>{t('navigation.library', 'Библиотека')}</Text>
                   </Pressable>
                   <Pressable
                     onPress={() => { closeDrawer(); onOpenSandbox(); }}
@@ -1129,17 +1218,17 @@ ${names}`);
                     <View style={styles.navRowIcon}>
                       <Globe size={18} color={colors.text} />
                     </View>
-                    <Text style={styles.navRowLabel}>Песочница</Text>
+                    <Text style={styles.navRowLabel}>{t('navigation.sandbox', 'Песочница')}</Text>
                   </Pressable>
                 </View>
 
                 {/* Недавние */}
-                <Text style={styles.navSectionHeader}>НЕДАВНИЕ</Text>
+                <Text style={styles.navSectionHeader}>{t('navigation.recent', 'НЕДАВНИЕ')}</Text>
 
                 {chats.length === 0 ? (
                   <View style={styles.emptyChatsBox}>
-                    <Text style={styles.emptyChatsTitle}>Пока нет диалогов</Text>
-                    <Text style={styles.emptyChatsText}>Первый чат создастся автоматически после отправки сообщения.</Text>
+                    <Text style={styles.emptyChatsTitle}>{t('navigation.no_chats_title', 'Пока нет диалогов')}</Text>
+                    <Text style={styles.emptyChatsText}>{t('navigation.no_chats_text', 'Первый чат создастся автоматически после отправки сообщения.')}</Text>
                   </View>
                 ) : (
                   chats.map((chat) => {
@@ -1207,7 +1296,14 @@ ${names}`);
       <Animated.View style={[styles.wsPanelContainer, { transform: [{ translateX: wsTranslate }] }]}>
         <SafeAreaView style={{ flex: 1 }}>
           <View style={styles.chatPanelHeader}>
-            <Text style={styles.chatPanelTitle}>Файлы рабочей области</Text>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={styles.chatPanelTitle}>Рабочая область ПК</Text>
+              {wsFolderName ? (
+                <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '600', marginTop: 2 }} numberOfLines={1}>
+                  📁 {wsFolderName}
+                </Text>
+              ) : null}
+            </View>
             <Pressable
               accessibilityRole="button"
               onPress={() => {
@@ -1223,26 +1319,47 @@ ${names}`);
           {!activeChatId ? (
             <View style={styles.emptyChatsBox}>
               <Text style={styles.emptyChatsTitle}>Нет активного чата</Text>
-              <Text style={styles.emptyChatsText}>Создай чат, чтобы появилась рабочая область.</Text>
+              <Text style={styles.emptyChatsText}>Создай чат, чтобы подключить рабочую папку.</Text>
             </View>
           ) : (
             <>
-              <Pressable
-                accessibilityRole="button"
-                onPress={async () => {
-                  setShowWsModal(false);
-                  await exportWorkspaceArchive(activeChatId);
-                }}
-                style={({ pressed }) => [styles.newChatButton, pressed && styles.pressed]}
-              >
-                <Download size={18} color={colors.text} />
-                <Text style={styles.newChatText}>Экспорт архива</Text>
-              </Pressable>
+              <View style={{ paddingHorizontal: spacing.lg, gap: spacing.xs, marginBottom: spacing.md }}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={handleSelectLocalFolder}
+                  style={({ pressed }) => [
+                    styles.newChatButton,
+                    { backgroundColor: 'rgba(168, 85, 247, 0.15)', borderColor: colors.accent, borderWidth: 1 },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Folder size={16} color={colors.accent} style={{ marginRight: 6 }} />
+                  <Text style={[styles.newChatText, { color: colors.accent, fontWeight: '700' }]}>
+                    {wsFolderName ? '📁 Сменить папку ПК' : '📁 Выбрать папку на ПК'}
+                  </Text>
+                </Pressable>
+
+                {wsFiles.length > 0 && (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={async () => {
+                      setShowWsModal(false);
+                      await exportWorkspaceArchive(activeChatId, wsFolderName || 'workspace');
+                    }}
+                    style={({ pressed }) => [styles.newChatButton, pressed && styles.pressed]}
+                  >
+                    <Download size={15} color={colors.text} style={{ marginRight: 6 }} />
+                    <Text style={styles.newChatText}>Скачать ZIP архив</Text>
+                  </Pressable>
+                )}
+              </View>
 
               {wsFiles.length === 0 ? (
                 <View style={styles.emptyChatsBox}>
                   <Text style={styles.emptyChatsTitle}>Рабочая область пуста</Text>
-                  <Text style={styles.emptyChatsText}>Попроси AI сохранить файл, и он появится здесь.</Text>
+                  <Text style={styles.emptyChatsText}>
+                    Нажмите «📁 Выбрать папку на ПК», чтобы открыть файлы вашей системы напрямую в рабочем окне Агента.
+                  </Text>
                 </View>
               ) : (
                 <ScrollView style={styles.chatList} showsVerticalScrollIndicator={false}>
@@ -1256,12 +1373,15 @@ ${names}`);
                         pressed && styles.chatItemPressed,
                       ]}
                     >
+                      <View style={{ marginRight: 8 }}>
+                        <Folder size={16} color={colors.accent} />
+                      </View>
                       <View style={styles.chatItemTextWrap}>
                         <Text style={styles.chatItemTitle} numberOfLines={1}>
                           {file.path}
                         </Text>
                         <Text style={styles.chatItemMeta}>
-                          {file.size} bytes
+                          {(file.size / 1024).toFixed(1)} KB
                         </Text>
                       </View>
                       <Pressable
@@ -1273,9 +1393,24 @@ ${names}`);
                         style={({ pressed }) => [
                           styles.chatDeleteBtn,
                           pressed && styles.chatDeleteBtnPressed,
+                          { marginRight: 4 },
                         ]}
                       >
-                        <Download size={16} color={colors.textMuted} />
+                        <Download size={15} color={colors.textMuted} />
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={async () => {
+                          await deleteWorkspaceFile(activeChatId, file.path);
+                          await refreshWorkspaceFiles(activeChatId);
+                        }}
+                        hitSlop={10}
+                        style={({ pressed }) => [
+                          styles.chatDeleteBtn,
+                          pressed && styles.chatDeleteBtnPressed,
+                        ]}
+                      >
+                        <Trash2 size={15} color={colors.textMuted} />
                       </Pressable>
                     </Pressable>
                   ))}
@@ -1394,7 +1529,7 @@ ${names}`);
                               <Text style={[styles.modelItemText, isActive && styles.modelItemTextActive]}>
                                 {m}
                               </Text>
-                              {isActive && <Check size={16} color="#a78bfa" />}
+                              {isActive && <Check size={16} color={colors.accent} />}
                             </Pressable>
                           );
                         })}
@@ -1491,6 +1626,12 @@ const styles = StyleSheet.create({
     width: 30,
     zIndex: 100,
   },
+  fixedMenuBtnWrap: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 52 : 12,
+    left: 18,
+    zIndex: 100,
+  },
   drawerOverlay: {
     backgroundColor: 'rgba(0,0,0,0.5)',
     position: 'absolute',
@@ -1501,8 +1642,9 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   drawerPanelContainer: {
-    backgroundColor: colors.backgroundSoft,
-    borderRightColor: colors.border,
+    backgroundColor: 'rgba(10, 10, 15, 0.45)',
+    ...(Platform.OS === 'web' ? ({ backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)' } as any) : {}),
+    borderRightColor: 'rgba(255, 255, 255, 0.08)',
     borderRightWidth: 1,
     height: '100%',
     left: 0,
@@ -1513,8 +1655,9 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   wsPanelContainer: {
-    backgroundColor: colors.backgroundSoft,
-    borderLeftColor: colors.border,
+    backgroundColor: 'rgba(10, 10, 15, 0.55)',
+    ...(Platform.OS === 'web' ? ({ backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)' } as any) : {}),
+    borderLeftColor: 'rgba(255, 255, 255, 0.08)',
     borderLeftWidth: 1,
     height: '100%',
     paddingTop: 0,
@@ -1532,9 +1675,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: 'rgba(9, 9, 11, 0.55)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'transparent',
   },
   headerBtn: {
     alignItems: 'center',
@@ -1567,7 +1708,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   modelPillStar: {
-    color: '#a78bfa',
+    color: colors.accent,
     fontSize: typography.body,
     fontWeight: '600',
   },
@@ -1667,11 +1808,11 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   modelItemTextActive: {
-    color: '#a78bfa',
+    color: colors.accent,
     fontWeight: '600',
   },
   modelItemCheck: {
-    color: '#a78bfa',
+    color: colors.accent,
     fontSize: typography.body,
     fontWeight: '700',
     marginLeft: spacing.sm,
@@ -1739,7 +1880,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   newChatIcon: {
-    color: '#a78bfa',
+    color: colors.accent,
     fontSize: 17,
     fontWeight: '700',
   },
@@ -1779,7 +1920,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   chatItemActive: {
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1,
   },
   chatItemPressed: {
     backgroundColor: colors.userBubble,
@@ -1867,9 +2010,7 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? spacing.lg : spacing.md,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    backgroundColor: 'rgba(9, 9, 11, 0.55)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'transparent',
   },
   composer: {
     alignItems: 'center',
@@ -1879,8 +2020,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 4,
+    minHeight: 52,
   },
   composerFocused: {
     borderColor: colors.borderStrong,
@@ -1939,10 +2081,11 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     lineHeight: 22,
     maxHeight: 120,
-    minHeight: 22,
-    paddingTop: 7,
-    paddingBottom: 7,
+    minHeight: 34,
+    paddingTop: 11,
+    paddingBottom: 11,
     paddingHorizontal: 0,
+    alignSelf: 'center',
     outlineStyle: 'none' as any,
     outlineWidth: 0 as any,
   },
@@ -2150,7 +2293,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   docChipText: {
-    color: '#a78bfa',
+    color: colors.accent,
     fontSize: 12,
   },
   docDelete: {
@@ -2184,7 +2327,7 @@ const styles = StyleSheet.create({
   },
   navRowIcon: {
     alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
     borderRadius: radius.md,
     height: 32,
     justifyContent: 'center',

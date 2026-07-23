@@ -1,26 +1,144 @@
-import { memo, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { memo, useEffect, useRef, useState } from 'react';
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import Markdown, { ASTNode } from 'react-native-markdown-display';
+import { Check, ChevronRight, Copy, RotateCw } from 'lucide-react-native';
 import { ChatMessage } from '../types';
 import { colors, radius, spacing, typography } from '../styles/theme';
 import MermaidChart from './MermaidChart';
 
-type Props = {
-  message: ChatMessage;
+const TypingDots = memo(() => {
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+  const dot3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animateDot = (anim: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(anim, {
+            toValue: -6,
+            duration: 250,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: 250,
+            useNativeDriver: true,
+          }),
+          Animated.delay(350),
+        ])
+      );
+    };
+
+    const anim1 = animateDot(dot1, 0);
+    const anim2 = animateDot(dot2, 120);
+    const anim3 = animateDot(dot3, 240);
+
+    anim1.start();
+    anim2.start();
+    anim3.start();
+
+    return () => {
+      anim1.stop();
+      anim2.stop();
+      anim3.stop();
+    };
+  }, [dot1, dot2, dot3]);
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6, height: 26, paddingHorizontal: 4 }}>
+      <Animated.View
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: 4,
+          backgroundColor: colors.accent,
+          transform: [{ translateY: dot1 }],
+        }}
+      />
+      <Animated.View
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: 4,
+          backgroundColor: colors.accent,
+          transform: [{ translateY: dot2 }],
+          opacity: 0.85,
+        }}
+      />
+      <Animated.View
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: 4,
+          backgroundColor: colors.accent,
+          transform: [{ translateY: dot3 }],
+          opacity: 0.7,
+        }}
+      />
+    </View>
+  );
+});
+
+const getExtColor = (ext: string) => {
+  const e = ext.toLowerCase();
+  if (e === 'ts' || e === 'tsx' || e === 'jsx' || e === 'js') return 'rgba(59, 130, 246, 0.15)';
+  if (e === 'json' || e === 'yml' || e === 'yaml') return 'rgba(234, 179, 8, 0.15)';
+  if (e === 'py') return 'rgba(34, 197, 94, 0.15)';
+  if (e === 'html' || e === 'css') return 'rgba(249, 115, 22, 0.15)';
+  return 'rgba(168, 85, 247, 0.15)';
 };
 
-export const MessageBubble = memo(({ message }: Props) => {
+const getExtTextColor = (ext: string) => {
+  const e = ext.toLowerCase();
+  if (e === 'ts' || e === 'tsx' || e === 'jsx' || e === 'js') return '#60a5fa';
+  if (e === 'json' || e === 'yml' || e === 'yaml') return '#facc15';
+  if (e === 'py') return '#4ade80';
+  if (e === 'html' || e === 'css') return '#fb923c';
+  return '#c084fc';
+};
+
+type Props = {
+  message: ChatMessage;
+  onRegenerate?: () => void;
+  onDelete?: () => void;
+};
+
+export const MessageBubble = memo(({ message, onRegenerate, onDelete }: Props) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [copiedMessage, setCopiedMessage] = useState(false);
+
   const isUser = message.role === 'user';
   const isEmpty = !isUser && message.content.length === 0;
   const raw = isEmpty ? '...' : message.content;
 
+  const copyFullMessage = async () => {
+    if (!message.content.trim()) return;
+    await Clipboard.setStringAsync(message.content);
+    setCopiedMessage(true);
+    setTimeout(() => setCopiedMessage(false), 1500);
+  };
+
+  const toggleLike = () => setLiked((prev) => (prev === true ? null : true));
+  const toggleDislike = () => setLiked((prev) => (prev === false ? null : false));
+
   if (isUser) {
     return (
       <View style={[styles.row, styles.rowUser]}>
-        <View style={styles.userBubble}>
-          <Text style={styles.userContent}>{raw}</Text>
+        <View style={styles.userContainer}>
+          <View style={styles.userBubble}>
+            <Text style={styles.userContent}>{raw}</Text>
+          </View>
+          <View style={[styles.actionBar, { justifyContent: 'flex-end', marginTop: 2 }]}>
+            <Pressable
+              onPress={copyFullMessage}
+              style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+            >
+              {copiedMessage ? <Check size={13} color={colors.success} /> : <Copy size={13} color={colors.textMuted} />}
+            </Pressable>
+          </View>
         </View>
       </View>
     );
@@ -69,6 +187,8 @@ export const MessageBubble = memo(({ message }: Props) => {
     code_block: (node: ASTNode) => renderCodeBlock(node),
   };
 
+  const [stepsExpanded, setStepsExpanded] = useState(true);
+
   return (
     <View style={styles.row}>
       <View style={styles.avatar}>
@@ -79,9 +199,90 @@ export const MessageBubble = memo(({ message }: Props) => {
         />
       </View>
       <View style={styles.assistantBubble}>
-        <Markdown style={markdownStyles} rules={rules}>
-          {raw}
-        </Markdown>
+        {message.steps && message.steps.length > 0 && (
+          <View style={styles.stepsWrap}>
+            <Pressable
+              onPress={() => setStepsExpanded((prev) => !prev)}
+              style={({ pressed }) => [styles.stepsHeader, pressed && styles.pressed]}
+            >
+              <ChevronRight
+                size={13}
+                color={colors.textMuted}
+                style={{ transform: [{ rotate: stepsExpanded ? '90deg' : '0deg' }] }}
+              />
+              <Text style={styles.stepsHeaderText}>
+                Exploring {message.steps.length} {message.steps.length === 1 ? 'file' : 'files'}
+              </Text>
+            </Pressable>
+
+            {stepsExpanded && (
+              <View style={styles.stepsList}>
+                {message.steps.map((step) => (
+                  <View key={step.id} style={styles.stepRow}>
+                    <Text style={styles.stepActionText}>{step.label}</Text>
+
+                    {step.ext && (
+                      <View style={[styles.extBadge, { backgroundColor: getExtColor(step.ext) }]}>
+                        <Text style={[styles.extBadgeText, { color: getExtTextColor(step.ext) }]}>{step.ext}</Text>
+                      </View>
+                    )}
+
+                    <Text style={styles.stepFilename} numberOfLines={1}>
+                      {step.filename || step.detail}
+                    </Text>
+
+                    {typeof step.addedLines === 'number' && (
+                      <Text style={styles.diffAdded}>+{step.addedLines}</Text>
+                    )}
+                    {typeof step.deletedLines === 'number' && (
+                      <Text style={styles.diffDeleted}>-{step.deletedLines}</Text>
+                    )}
+
+                    {step.status === 'running' && (
+                      <Text style={styles.stepBadgeRunning}>running…</Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {isEmpty && (!message.steps || message.steps.length === 0) ? (
+          <TypingDots />
+        ) : (
+          <Markdown style={markdownStyles} rules={rules}>
+            {message.content}
+          </Markdown>
+        )}
+
+        {/* Message Action Bar (Copy, Like, Dislike, Regenerate, Delete) */}
+        {(!isEmpty || (message.steps && message.steps.length > 0)) && (
+          <View style={styles.actionBar}>
+            <Pressable
+              onPress={copyFullMessage}
+              style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+            >
+              {copiedMessage ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Check size={14} color={colors.success} />
+                  <Text style={{ color: colors.success, fontSize: 11, fontWeight: '600' }}>Скопировано</Text>
+                </View>
+              ) : (
+                <Copy size={14} color={colors.textMuted} />
+              )}
+            </Pressable>
+
+            {onRegenerate ? (
+              <Pressable
+                onPress={onRegenerate}
+                style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+              >
+                <RotateCw size={14} color={colors.textMuted} />
+              </Pressable>
+            ) : null}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -142,7 +343,7 @@ const markdownStyles = StyleSheet.create({
   th: {
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#a78bfa',
+    color: colors.accent,
     fontWeight: '700',
     fontSize: 13,
   },
@@ -153,7 +354,7 @@ const markdownStyles = StyleSheet.create({
     fontSize: 13,
   },
   link: {
-    color: '#a78bfa',
+    color: colors.accent,
     textDecorationLine: 'underline',
   },
   heading1: { color: 'rgba(240, 240, 248, 0.98)', fontWeight: 'bold', fontSize: 24, marginVertical: 10, textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
@@ -194,13 +395,17 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
   },
+  userContainer: {
+    maxWidth: '82%',
+    alignItems: 'flex-end',
+  },
   userBubble: {
     backgroundColor: colors.userBubble,
-    borderRadius: radius.xxl,
-    borderBottomRightRadius: radius.sm,
+    borderRadius: radius.xl,
+    borderBottomRightRadius: radius.xs,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    maxWidth: '82%',
+    alignSelf: 'flex-end',
   },
   userContent: {
     color: colors.text,
@@ -222,7 +427,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   codeBlockPressed: {
-    borderColor: '#a78bfa',
+    borderColor: colors.accent,
     opacity: 0.92,
   },
   codeHeader: {
@@ -236,7 +441,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   codeLang: {
-    color: '#a78bfa',
+    color: colors.accent,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -257,5 +462,97 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     padding: spacing.md,
     minWidth: 40,
+  },
+  actionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+    paddingTop: 4,
+  },
+  actionBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  actionBtnPressed: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    opacity: 0.8,
+  },
+  pressed: {
+    opacity: 0.8,
+  },
+  stepsWrap: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
+  },
+  stepsHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+  },
+  stepsHeaderText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  stepsList: {
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    borderTopWidth: 1,
+    gap: 4,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  stepRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  stepActionText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  extBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  extBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  stepFilename: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  diffAdded: {
+    color: '#4ade80',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 2,
+  },
+  diffDeleted: {
+    color: '#f87171',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 2,
+  },
+  stepBadgeRunning: {
+    color: colors.accent,
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginLeft: 4,
   },
 });

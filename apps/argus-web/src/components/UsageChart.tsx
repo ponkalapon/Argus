@@ -130,7 +130,7 @@ export const UsageChart = ({ data }: Props) => {
           return (
             <React.Fragment key={record.date}>
               {inputH > 0 && (
-                <Rect x={x} y={inputY} width={barWidth} height={inputH} rx={3} fill="#a78bfa" />
+                <Rect x={x} y={inputY} width={barWidth} height={inputH} rx={3} fill={colors.accent} />
               )}
               {outputH > 0 && (
                 <Rect x={x} y={outputY} width={barWidth} height={outputH} rx={3} fill="#34d399" />
@@ -157,7 +157,7 @@ export const UsageChart = ({ data }: Props) => {
       {/* Legend */}
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xl, marginTop: spacing.lg }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: '#a78bfa' }} />
+          <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: colors.accent }} />
           <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '500' }}>Входные токены</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
