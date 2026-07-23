@@ -59,7 +59,7 @@ npm run api
 ### Запустить веб/десктоп приложение
 
 ```bash
-cd apps/argus-web
+cd apps/argus-desktop
 npm install --legacy-peer-deps
 npx expo start
 ```

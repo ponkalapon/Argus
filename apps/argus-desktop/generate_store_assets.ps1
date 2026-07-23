@@ -1,7 +1,7 @@
 Add-Type -AssemblyName System.Drawing
 
-$srcPath = "H:\argus\apps\argus-web\assets\icon.png"
-$outDir = "H:\argus\apps\argus-web\store_assets"
+$srcPath = "H:\argus\apps\argus-desktop\assets\icon.png"
+$outDir = "H:\argus\apps\argus-desktop\store_assets"
 
 if (-not (Test-Path $outDir)) {
     New-Item -ItemType Directory -Path $outDir | Out-Null
