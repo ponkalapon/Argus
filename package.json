@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "expo": "~56.0.8",
+    "@expo/config-plugins": "~56.0.0",
     "react": "19.2.3",
     "react-native": "0.85.3",
     "@bittingz/expo-widgets": "3.0.2"
