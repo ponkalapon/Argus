@@ -13,7 +13,7 @@ import { FileManagerScreen } from './src/components/FileManagerScreen';
 import { loadApiKey, loadSettings, saveSettings } from './src/api';
 import { loadThemeConfig, ThemeConfig, WallpaperType } from './src/services/themeStorage';
 import { AgentSettings } from './src/types';
-import { colors, spacing, typography } from './src/styles/theme';
+import { applyAccentColor, colors, spacing, typography } from './src/styles/theme';
 
 try { SplashScreen.preventAutoHideAsync(); } catch {}
 
@@ -42,19 +42,30 @@ const WALLPAPER_MAP: Record<WallpaperType, any> = {
   cyber_mesh: require('./assets/wallpapers/cyber_mesh.jpg'),
   argus_nebula: require('./assets/wallpapers/argus_nebula.jpg'),
   minimal_carbon: require('./assets/wallpapers/minimal_carbon.jpg'),
+  neon_waves: require('./assets/wallpapers/neon_waves.jpg'),
+  deep_space: require('./assets/wallpapers/deep_space.jpg'),
 };
 
 export default function App() {
   const [screen, setScreen] = useState<'workspace' | 'settings' | 'sandbox' | 'files'>('workspace');
   const [settings, setSettings] = useState<AgentSettings | null>(null);
   const [apiKey, setApiKey] = useState('');
-  const [themeConfig, setThemeConfig] = useState<ThemeConfig>({ wallpaper: 'default', layoutWidth: 'fluid' });
+  const [themeConfig, setThemeConfig] = useState<ThemeConfig>({
+    wallpaper: 'default',
+    layoutWidth: 'fluid',
+    language: 'ru',
+    accentColor: 'purple',
+    wallpaperOpacity: 0.45,
+    bubbleStyle: 'glass',
+    fontSize: 'standard',
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [pendingAttach, setPendingAttach] = useState<{ name: string; content: string } | null>(null);
 
   const refreshTheme = useCallback(async () => {
     const cfg = await loadThemeConfig();
+    applyAccentColor(cfg.accentColor);
     setThemeConfig(cfg);
   }, []);
 
@@ -64,6 +75,7 @@ export default function App() {
     Promise.all([loadSettings(), loadApiKey(), loadThemeConfig()])
       .then(([storedSettings, storedApiKey, storedTheme]) => {
         if (mounted) {
+          applyAccentColor(storedTheme.accentColor);
           setSettings(storedSettings);
           setApiKey(storedApiKey);
           setThemeConfig(storedTheme);
@@ -106,7 +118,11 @@ export default function App() {
     );
   }
 
-  const wallpaperSource = WALLPAPER_MAP[themeConfig.wallpaper];
+  const wallpaperSource =
+    themeConfig.wallpaper === 'custom' && themeConfig.customWallpaperUri
+      ? { uri: themeConfig.customWallpaperUri }
+      : WALLPAPER_MAP[themeConfig.wallpaper];
+  const overlayOpacity = themeConfig.wallpaperOpacity ?? 0.45;
 
   const renderContent = () => (
     <>
@@ -152,7 +168,7 @@ export default function App() {
             style={{ flex: 1, width: '100%', height: '100%' }}
             resizeMode="cover"
           >
-            <View style={{ flex: 1, width: '100%', height: '100%', backgroundColor: 'rgba(9, 9, 11, 0.45)' }}>
+            <View style={{ flex: 1, width: '100%', height: '100%', backgroundColor: `rgba(9, 9, 11, ${overlayOpacity})` }}>
               {renderContent()}
             </View>
           </ImageBackground>

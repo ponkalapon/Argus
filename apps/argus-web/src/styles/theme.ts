@@ -1,3 +1,48 @@
+export const ACCENT_PALETTES = {
+  purple: {
+    name: 'Фиолетовый Argus',
+    primary: '#a855f7',
+    strong: '#c084fc',
+    soft: 'rgba(168,85,247,0.14)',
+    border: 'rgba(168,85,247,0.4)',
+  },
+  cyan: {
+    name: 'Кибер Бирюзовый',
+    primary: '#06b6d4',
+    strong: '#22d3ee',
+    soft: 'rgba(6,182,212,0.14)',
+    border: 'rgba(6,182,212,0.4)',
+  },
+  emerald: {
+    name: 'Неоновый Изумруд',
+    primary: '#10b981',
+    strong: '#34d399',
+    soft: 'rgba(16,185,129,0.14)',
+    border: 'rgba(16,185,129,0.4)',
+  },
+  amber: {
+    name: 'Янтарное Пламя',
+    primary: '#f59e0b',
+    strong: '#fbbf24',
+    soft: 'rgba(245,158,11,0.14)',
+    border: 'rgba(245,158,11,0.4)',
+  },
+  blue: {
+    name: 'Электрический Синий',
+    primary: '#3b82f6',
+    strong: '#60a5fa',
+    soft: 'rgba(59,130,246,0.14)',
+    border: 'rgba(59,130,246,0.4)',
+  },
+  rose: {
+    name: 'Магический Рубин',
+    primary: '#f43f5e',
+    strong: '#fb7185',
+    soft: 'rgba(244,63,94,0.14)',
+    border: 'rgba(244,63,94,0.4)',
+  },
+} as const;
+
 export const colors = {
   background: '#09090b',
   backgroundSoft: '#121215',
@@ -24,6 +69,14 @@ export const colors = {
   codeSurface: '#121215',
   overlay: 'rgba(255,255,255,0.04)',
 };
+
+export function applyAccentColor(accentKey?: keyof typeof ACCENT_PALETTES) {
+  const key = accentKey && ACCENT_PALETTES[accentKey] ? accentKey : 'purple';
+  const pal = ACCENT_PALETTES[key];
+  colors.accent = pal.primary;
+  colors.accentStrong = pal.strong;
+  colors.accentSoft = pal.soft;
+}
 
 export const spacing = {
   xs: 4,
@@ -65,3 +118,4 @@ export const shadow = {
   shadowRadius: 14,
   elevation: 6,
 };
+

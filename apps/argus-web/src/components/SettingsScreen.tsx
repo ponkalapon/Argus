@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   BarChart3,
   Check,
+  ChevronDown,
   ChevronRight,
   Cpu,
   Eye,
@@ -34,15 +35,17 @@ import {
   Shield,
   Sparkles,
   Trash2,
+  Upload,
   Zap,
 } from 'lucide-react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { AgentSettings } from '../types';
 import { loadApiKey, saveApiKey, sanitizeSettings } from '../services/storage';
 import { getTokenStats, getDailyStats, resetTokenStats, DailyRecord, TokenStats } from '../services/tokenStats';
 import { listSkills, deleteSkill, Skill } from '../services/skills';
-import { loadThemeConfig, saveThemeConfig, WallpaperType, LayoutWidthType } from '../services/themeStorage';
+import { loadThemeConfig, saveThemeConfig, WallpaperType, LayoutWidthType, LanguageType, AccentColorType, BubbleStyleType, FontSizeScaleType } from '../services/themeStorage';
 import { UsageChart } from './UsageChart';
-import { colors, motion, radius, spacing, typography } from '../styles/theme';
+import { colors, motion, radius, spacing, typography, ACCENT_PALETTES, applyAccentColor } from '../styles/theme';
 
 type Props = {
   initialSettings: AgentSettings;
@@ -64,7 +67,7 @@ const WALLPAPER_PRESETS: { id: WallpaperType; title: string; desc: string; sourc
   {
     id: 'default',
     title: 'Классический темный',
-    desc: 'Стандартный элегантный глубокий темный фон Hermes',
+    desc: 'Стандартный элегантный глубокий темный фон Argus',
     source: null,
   },
   {
@@ -85,6 +88,18 @@ const WALLPAPER_PRESETS: { id: WallpaperType; title: string; desc: string; sourc
     desc: 'Строгая матовая текстура карбона с фиолетовым отливом',
     source: require('../../assets/wallpapers/minimal_carbon.jpg'),
   },
+  {
+    id: 'neon_waves',
+    title: 'Неоновые Волны',
+    desc: 'Яркие динамические волны светящегося неона',
+    source: require('../../assets/wallpapers/neon_waves.jpg'),
+  },
+  {
+    id: 'deep_space',
+    title: 'Глубокий Космос',
+    desc: 'Тёмно-изумрудная космическая пыль и галактики',
+    source: require('../../assets/wallpapers/deep_space.jpg'),
+  },
 ];
 
 export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange }: Props) => {
@@ -104,8 +119,14 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
   const [newSkillPattern, setNewSkillPattern] = useState('');
 
   const [wallpaper, setWallpaper] = useState<WallpaperType>('default');
+  const [customWallpaperUri, setCustomWallpaperUri] = useState<string | null>(null);
   const [layoutWidth, setLayoutWidth] = useState<LayoutWidthType>('fluid');
   const [language, setLanguage] = useState<LanguageType>('ru');
+  const [showLangPicker, setShowLangPicker] = useState(false);
+  const [accentColor, setAccentColor] = useState<AccentColorType>('purple');
+  const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(0.45);
+  const [bubbleStyle, setBubbleStyle] = useState<BubbleStyleType>('glass');
+  const [fontSize, setFontSize] = useState<FontSizeScaleType>('standard');
 
   const entrance = useRef(new Animated.Value(0)).current;
 
@@ -130,7 +151,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
   useEffect(() => {
     let mounted = true;
     Animated.timing(entrance, {
-      duration: motion.normal,
+      duration: motion.base,
       toValue: 1,
       useNativeDriver: true,
     }).start();
@@ -142,8 +163,14 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
     loadThemeConfig().then((cfg) => {
       if (mounted) {
         setWallpaper(cfg.wallpaper);
+        setCustomWallpaperUri(cfg.customWallpaperUri || null);
         setLayoutWidth(cfg.layoutWidth);
         setLanguage(cfg.language);
+        setAccentColor(cfg.accentColor);
+        setWallpaperOpacity(cfg.wallpaperOpacity);
+        setBubbleStyle(cfg.bubbleStyle);
+        setFontSize(cfg.fontSize);
+        applyAccentColor(cfg.accentColor);
       }
     });
 
@@ -180,7 +207,8 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
     setIsSaving(true);
     try {
       await saveApiKey(apiKey);
-      await saveThemeConfig({ wallpaper, layoutWidth, language });
+      await saveThemeConfig({ wallpaper, customWallpaperUri, layoutWidth, language, accentColor, wallpaperOpacity, bubbleStyle, fontSize });
+      applyAccentColor(accentColor);
       if (onThemeChange) onThemeChange();
       await onSave(settings, apiKey.trim());
       Alert.alert('Готово', 'Настройки сохранены.', [{ text: 'OK', onPress: onBack }]);
@@ -191,29 +219,115 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
     }
   };
 
-  const handleSelectWallpaper = async (wp: WallpaperType) => {
-    setWallpaper(wp);
-    await saveThemeConfig({ wallpaper: wp, layoutWidth, language });
+  const updateTheme = async (updates: Partial<{
+    wallpaper: WallpaperType;
+    customWallpaperUri?: string | null;
+    layoutWidth: LayoutWidthType;
+    language: LanguageType;
+    accentColor: AccentColorType;
+    wallpaperOpacity: number;
+    bubbleStyle: BubbleStyleType;
+    fontSize: FontSizeScaleType;
+  }>) => {
+    const nextWallpaper = updates.wallpaper ?? wallpaper;
+    const nextCustomUri = updates.customWallpaperUri !== undefined ? updates.customWallpaperUri : customWallpaperUri;
+    const nextLayoutWidth = updates.layoutWidth ?? layoutWidth;
+    const nextLanguage = updates.language ?? language;
+    const nextAccent = updates.accentColor ?? accentColor;
+    const nextOpacity = updates.wallpaperOpacity ?? wallpaperOpacity;
+    const nextBubble = updates.bubbleStyle ?? bubbleStyle;
+    const nextFontSize = updates.fontSize ?? fontSize;
+
+    if (updates.wallpaper !== undefined) setWallpaper(updates.wallpaper);
+    if (updates.customWallpaperUri !== undefined) setCustomWallpaperUri(updates.customWallpaperUri);
+    if (updates.layoutWidth !== undefined) setLayoutWidth(updates.layoutWidth);
+    if (updates.language !== undefined) setLanguage(updates.language);
+    if (updates.accentColor !== undefined) setAccentColor(updates.accentColor);
+    if (updates.wallpaperOpacity !== undefined) setWallpaperOpacity(updates.wallpaperOpacity);
+    if (updates.bubbleStyle !== undefined) setBubbleStyle(updates.bubbleStyle);
+    if (updates.fontSize !== undefined) setFontSize(updates.fontSize);
+
+    applyAccentColor(nextAccent);
+
+    await saveThemeConfig({
+      wallpaper: nextWallpaper,
+      customWallpaperUri: nextCustomUri,
+      layoutWidth: nextLayoutWidth,
+      language: nextLanguage,
+      accentColor: nextAccent,
+      wallpaperOpacity: nextOpacity,
+      bubbleStyle: nextBubble,
+      fontSize: nextFontSize,
+    });
     if (onThemeChange) onThemeChange();
   };
 
-  const handleSelectLayoutWidth = async (lw: LayoutWidthType) => {
-    setLayoutWidth(lw);
-    await saveThemeConfig({ wallpaper, layoutWidth: lw, language });
-    if (onThemeChange) onThemeChange();
+  const handlePickCustomWallpaper = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: 'image/*',
+        copyToCacheDirectory: true,
+      });
+      if (!res.canceled && res.assets && res.assets.length > 0) {
+        const asset = res.assets[0];
+        let dataUri = asset.uri;
+
+        try {
+          if (asset.file) {
+            dataUri = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(asset.file!);
+            });
+          } else if (asset.uri) {
+            const resp = await fetch(asset.uri);
+            const blob = await resp.blob();
+            dataUri = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+          }
+        } catch {
+          // fallback to asset.uri if conversion fails
+        }
+
+        setCustomWallpaperUri(dataUri);
+        await updateTheme({ wallpaper: 'custom', customWallpaperUri: dataUri });
+      }
+    } catch (error) {
+      Alert.alert('Ошибка выбора файла', 'Не удалось загрузить изображение.');
+    }
   };
 
-  const handleSelectLanguage = async (lang: LanguageType) => {
-    setLanguage(lang);
-    await saveThemeConfig({ wallpaper, layoutWidth, language: lang });
-    if (onThemeChange) onThemeChange();
-  };
+  const handleSelectWallpaper = (wp: WallpaperType) => updateTheme({ wallpaper: wp });
+  const handleSelectLayoutWidth = (lw: LayoutWidthType) => updateTheme({ layoutWidth: lw });
+  const handleSelectLanguage = (lang: LanguageType) => updateTheme({ language: lang });
+  const handleSelectAccentColor = (acc: AccentColorType) => updateTheme({ accentColor: acc });
+  const handleSelectWallpaperOpacity = (op: number) => updateTheme({ wallpaperOpacity: op });
+  const handleSelectBubbleStyle = (bs: BubbleStyleType) => updateTheme({ bubbleStyle: bs });
+  const handleSelectFontSize = (fs: FontSizeScaleType) => updateTheme({ fontSize: fs });
 
   const handleResetStats = () => {
-    Alert.alert('Сбросить статистику', 'Обнулить счётчики токенов?', [
+    const title = '⚠️ Сброс статистики';
+    const message = 'Вы действительно хотите полностью обнулить всю сохраненную статистику использования токенов? Это действие нельзя отменить.';
+
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(`${title}\n\n${message}`)) {
+        resetTokenStats().then(() => {
+          setTokenStats({ totalInput: 0, totalOutput: 0, totalRequests: 0 });
+          setDailyStats([]);
+        });
+      }
+      return;
+    }
+
+    Alert.alert(title, message, [
       { text: 'Отмена', style: 'cancel' },
       {
-        text: 'Сбросить',
+        text: 'Да, обнулить',
         style: 'destructive',
         onPress: async () => {
           await resetTokenStats();
@@ -286,7 +400,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Icon size={18} color={active ? '#a78bfa' : colors.textMuted} />
+                  <Icon size={18} color={active ? colors.accent : colors.textMuted} />
                   <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
                     {item.label}
                   </Text>
@@ -300,7 +414,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
             {activeTab === 'connection' && (
               <View style={styles.sectionCard}>
                 <View style={styles.cardHeader}>
-                  <Globe size={18} color="#a78bfa" />
+                  <Globe size={18} color={colors.accent} />
                   <Text style={styles.cardTitle}>Подключение ИИ</Text>
                 </View>
                 <Text style={styles.cardDesc}>Настройка подключения к ИИ серверу (OpenAI-compatible API)</Text>
@@ -345,7 +459,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                         ]}
                       >
                         <Text style={[styles.chipText, model === m && styles.chipTextActive]}>{m}</Text>
-                        {model === m && <Check size={12} color="#a78bfa" style={{ marginLeft: 4 }} />}
+                        {model === m && <Check size={12} color={colors.accent} style={{ marginLeft: 4 }} />}
                       </Pressable>
                     ))}
                   </View>
@@ -388,110 +502,204 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
             {activeTab === 'customization' && (
               <View style={styles.sectionCard}>
                 <View style={styles.cardHeader}>
-                  <Palette size={18} color="#a78bfa" />
+                  <Palette size={18} color={colors.accent} />
                   <Text style={styles.cardTitle}>Внешний вид и кастомизация</Text>
                 </View>
-                <Text style={styles.cardDesc}>Настройка языка, темы и внешнего вида интерфейса</Text>
+                <Text style={styles.cardDesc}>Настройка языка, внешнего вида и обоев приложения</Text>
 
-                {/* Language Option (Hermes Style) */}
+                {/* Wallpaper Opacity */}
                 <View style={{ marginBottom: spacing.xl, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <View>
-                      <Text style={styles.fieldLabel}>Language / Язык</Text>
-                      <Text style={styles.fieldHint}>Choose the language for the desktop interface.</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: spacing.xs, backgroundColor: '#18181b', borderRadius: radius.md, padding: 4, borderWidth: 1, borderColor: '#27272a' }}>
-                      <Pressable
-                        onPress={() => handleSelectLanguage('ru')}
-                        style={({ pressed }) => [
-                          {
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 6,
-                            paddingHorizontal: 12,
-                            paddingVertical: 6,
-                            borderRadius: radius.sm - 2,
-                            backgroundColor: language === 'ru' ? '#27272a' : 'transparent',
-                          },
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <Globe size={14} color={language === 'ru' ? '#a78bfa' : colors.textMuted} />
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: language === 'ru' ? colors.text : colors.textMuted }}>
-                          Русский
-                        </Text>
-                      </Pressable>
-
-                      <Pressable
-                        onPress={() => handleSelectLanguage('en')}
-                        style={({ pressed }) => [
-                          {
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 6,
-                            paddingHorizontal: 12,
-                            paddingVertical: 6,
-                            borderRadius: radius.sm - 2,
-                            backgroundColor: language === 'en' ? '#27272a' : 'transparent',
-                          },
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <Globe size={14} color={language === 'en' ? '#a78bfa' : colors.textMuted} />
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: language === 'en' ? colors.text : colors.textMuted }}>
-                          English
-                        </Text>
-                      </Pressable>
-                    </View>
+                  <Text style={[styles.fieldLabel, { marginBottom: 4 }]}>Интенсивность затемнения обоев</Text>
+                  <Text style={[styles.fieldHint, { marginBottom: spacing.md }]}>Регулируйте видимость выбранного фона для максимального удобства чтения</Text>
+                  <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                    {[
+                      { val: 0.25, label: 'Легкое (25%)' },
+                      { val: 0.45, label: 'Баланс (45%)' },
+                      { val: 0.65, label: 'Мягкое (65%)' },
+                      { val: 0.85, label: 'Матовое (85%)' },
+                    ].map((opt) => {
+                      const active = Math.abs(wallpaperOpacity - opt.val) < 0.05;
+                      return (
+                        <Pressable
+                          key={opt.val}
+                          onPress={() => handleSelectWallpaperOpacity(opt.val)}
+                          style={({ pressed }) => [
+                            {
+                              flex: 1,
+                              alignItems: 'center',
+                              justify: 'center',
+                              paddingVertical: 8,
+                              borderRadius: radius.md,
+                              backgroundColor: active ? '#27272a' : '#18181b',
+                              borderWidth: 1,
+                              borderColor: active ? '#a78bfa' : '#27272a',
+                            },
+                            pressed && styles.pressed,
+                          ]}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: active ? colors.text : colors.textMuted }}>
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
                   </View>
                 </View>
 
-                {/* Layout Width Option */}
-                <Text style={[styles.fieldLabel, { marginBottom: spacing.sm }]}>Ширина интерфейса на ПК</Text>
-                <View style={{ flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xl }}>
-                  <Pressable
-                    onPress={() => handleSelectLayoutWidth('fluid')}
-                    style={({ pressed }) => [
-                      styles.layoutOption,
-                      layoutWidth === 'fluid' && styles.layoutOptionActive,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Maximize2 size={20} color={layoutWidth === 'fluid' ? '#a78bfa' : colors.textMuted} />
-                    <Text style={[styles.layoutOptionTitle, layoutWidth === 'fluid' && styles.layoutOptionTitleActive]}>
-                      Широкий экран (Full Width)
-                    </Text>
-                    <Text style={styles.layoutOptionDesc}>Заполняет всё окно без больших черных полос по бокам</Text>
-                  </Pressable>
+                {/* Language Option (Dropdown Select) */}
+                <View style={{ marginBottom: spacing.xl, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', zIndex: 50 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View>
+                      <Text style={styles.fieldLabel}>Язык приложения / Language</Text>
+                      <Text style={styles.fieldHint}>Выберите язык интерфейса и ответов ИИ-Агента.</Text>
+                    </View>
 
-                  <Pressable
-                    onPress={() => handleSelectLayoutWidth('compact')}
-                    style={({ pressed }) => [
-                      styles.layoutOption,
-                      layoutWidth === 'compact' && styles.layoutOptionActive,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Minimize2 size={20} color={layoutWidth === 'compact' ? '#a78bfa' : colors.textMuted} />
-                    <Text style={[styles.layoutOptionTitle, layoutWidth === 'compact' && styles.layoutOptionTitleActive]}>
-                      Компактный колонка
-                    </Text>
-                    <Text style={styles.layoutOptionDesc}>Классический центрированный столбец 880px</Text>
-                  </Pressable>
+                    <View style={{ position: 'relative' }}>
+                      <Pressable
+                        onPress={() => setShowLangPicker((prev) => !prev)}
+                        style={({ pressed }) => [
+                          {
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 8,
+                            backgroundColor: '#18181b',
+                            borderColor: colors.accent,
+                            borderWidth: 1,
+                            paddingHorizontal: 14,
+                            paddingVertical: 7,
+                            borderRadius: radius.md,
+                            minWidth: 135,
+                            justifyContent: 'space-between',
+                          },
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Globe size={14} color={colors.accent} />
+                          <Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>
+                            {language === 'ru' ? 'Русский' : 'English'}
+                          </Text>
+                        </View>
+                        <ChevronDown size={14} color={colors.textMuted} />
+                      </Pressable>
+
+                      {showLangPicker && (
+                        <View
+                          style={{
+                            position: 'absolute',
+                            top: 42,
+                            right: 0,
+                            width: 145,
+                            backgroundColor: '#121215',
+                            borderColor: '#27272a',
+                            borderWidth: 1,
+                            borderRadius: radius.md,
+                            padding: 4,
+                            zIndex: 100,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.3,
+                            shadowRadius: 8,
+                            elevation: 10,
+                          }}
+                        >
+                          <Pressable
+                            onPress={() => {
+                              handleSelectLanguage('ru');
+                              setShowLangPicker(false);
+                            }}
+                            style={({ pressed }) => [
+                              {
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                borderRadius: radius.sm,
+                                backgroundColor: language === 'ru' ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                              },
+                              pressed && styles.pressed,
+                            ]}
+                          >
+                            <Text style={{ color: language === 'ru' ? colors.accent : colors.text, fontSize: 13, fontWeight: '600' }}>
+                              Русский
+                            </Text>
+                            {language === 'ru' && <Check size={14} color={colors.accent} />}
+                          </Pressable>
+
+                          <Pressable
+                            onPress={() => {
+                              handleSelectLanguage('en');
+                              setShowLangPicker(false);
+                            }}
+                            style={({ pressed }) => [
+                              {
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                borderRadius: radius.sm,
+                                backgroundColor: language === 'en' ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                              },
+                              pressed && styles.pressed,
+                            ]}
+                          >
+                            <Text style={{ color: language === 'en' ? colors.accent : colors.text, fontSize: 13, fontWeight: '600' }}>
+                              English
+                            </Text>
+                            {language === 'en' && <Check size={14} color={colors.accent} />}
+                          </Pressable>
+                        </View>
+                      )}
+                    </View>
+                  </View>
                 </View>
 
                 {/* Wallpaper Preset Options */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
                   <Text style={styles.fieldLabel}>Фоновые обои приложения</Text>
-                  {wallpaper !== 'default' && (
-                    <Pressable onPress={() => handleSelectWallpaper('default')} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <RotateCcw size={12} color={colors.textMuted} />
-                      <Text style={{ color: colors.textMuted, fontSize: 12 }}>Вернуть классический</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                    <Pressable
+                      onPress={handlePickCustomWallpaper}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#18181b', borderColor: colors.accent, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 4, borderRadius: radius.pill }}
+                    >
+                      <Upload size={13} color={colors.accent} />
+                      <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '600' }}>+ Свои обои</Text>
                     </Pressable>
-                  )}
+                    {wallpaper !== 'default' && (
+                      <Pressable onPress={() => handleSelectWallpaper('default')} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <RotateCcw size={12} color={colors.textMuted} />
+                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Вернуть классический</Text>
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
 
                 <View style={styles.wallpaperGrid}>
+                  {/* Custom Wallpaper Card if set */}
+                  {customWallpaperUri ? (
+                    <Pressable
+                      onPress={() => handleSelectWallpaper('custom')}
+                      style={({ pressed }) => [
+                        styles.wallpaperCard,
+                        wallpaper === 'custom' && styles.wallpaperCardActive,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Image source={{ uri: customWallpaperUri }} style={styles.wallpaperPreviewImage} resizeMode="cover" />
+                      <View style={styles.wallpaperCardBody}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Text style={[styles.wallpaperTitle, wallpaper === 'custom' && styles.wallpaperTitleActive]}>
+                            Свои обои
+                          </Text>
+                          {wallpaper === 'custom' && <Check size={14} color={colors.accent} />}
+                        </View>
+                        <Text style={styles.wallpaperDesc}>Загруженное пользователем изображение</Text>
+                      </View>
+                    </Pressable>
+                  ) : null}
+
                   {WALLPAPER_PRESETS.map((wp) => {
                     const active = wallpaper === wp.id;
                     return (
@@ -514,7 +722,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                         <View style={styles.wallpaperCardBody}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                             <Text style={[styles.wallpaperTitle, active && styles.wallpaperTitleActive]}>{wp.title}</Text>
-                            {active && <Check size={14} color="#a78bfa" />}
+                            {active && <Check size={14} color={colors.accent} />}
                           </View>
                           <Text style={styles.wallpaperDesc}>{wp.desc}</Text>
                         </View>
@@ -528,7 +736,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
             {activeTab === 'stats' && (
               <View style={styles.sectionCard}>
                 <View style={styles.cardHeader}>
-                  <BarChart3 size={18} color="#a78bfa" />
+                  <BarChart3 size={18} color={colors.accent} />
                   <Text style={styles.cardTitle}>Статистика использования</Text>
                 </View>
 
@@ -562,14 +770,14 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
               <View style={styles.sectionCard}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                   <View style={styles.cardHeader}>
-                    <Sparkles size={18} color="#a78bfa" />
+                    <Sparkles size={18} color={colors.accent} />
                     <Text style={styles.cardTitle}>Навыки ИИ (Skills)</Text>
                   </View>
                   <Pressable
                     onPress={() => setShowAddSkill(!showAddSkill)}
-                    style={{ backgroundColor: '#1e1b4b', borderColor: '#a78bfa', borderWidth: 1, paddingHorizontal: 12, paddingVertical: 4, borderRadius: radius.pill }}
+                    style={{ backgroundColor: colors.surface, borderColor: colors.accent, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 4, borderRadius: radius.pill }}
                   >
-                    <Text style={{ color: '#a78bfa', fontSize: 12, fontWeight: '600' }}>
+                    <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '600' }}>
                       {showAddSkill ? 'Отмена' : '+ Добавить навык'}
                     </Text>
                   </Pressable>
@@ -625,7 +833,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                         setShowAddSkill(false);
                         await refreshSkills();
                       }}
-                      style={{ backgroundColor: '#a78bfa', paddingVertical: 8, borderRadius: radius.lg, alignItems: 'center', marginTop: 12 }}
+                      style={{ backgroundColor: colors.accent, paddingVertical: 8, borderRadius: radius.lg, alignItems: 'center', marginTop: 12 }}
                     >
                       <Text style={{ color: '#000000', fontWeight: '700', fontSize: 13 }}>Сохранить навык</Text>
                     </Pressable>
@@ -694,19 +902,6 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                     thumbColor="#ffffff"
                   />
                 </View>
-
-                <View style={{ height: 1, backgroundColor: '#27272a', marginVertical: spacing.lg }} />
-
-                {/* Local Data Privacy */}
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, backgroundColor: '#18181b', padding: spacing.md, borderRadius: radius.lg, borderWidth: 1, borderColor: '#27272a' }}>
-                  <Shield size={20} color="#34d399" style={{ marginTop: 2 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>Локальное хранение на ПК</Text>
-                    <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2, lineHeight: 18 }}>
-                      Все ваши диалоги, API-ключи и файлы проектов хранятся исключительно на вашем компьютере и не передаются на сторонние серверы аналитики.
-                    </Text>
-                  </View>
-                </View>
               </View>
             )}
           </ScrollView>
@@ -745,7 +940,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   saveBtn: {
-    backgroundColor: '#a78bfa',
+    backgroundColor: colors.accent,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs + 2,
     borderRadius: radius.pill,

@@ -325,6 +325,7 @@ export const requestChatCompletion = async ({
   messages,
   context,
   onToken,
+  onStep,
   tools,
 }: ChatCompletionRequest): Promise<ChatCompletionResult> => {
   const baseUrl = normalizeBaseUrl(settings.baseUrl);
@@ -348,7 +349,7 @@ export const requestChatCompletion = async ({
   const extendedCtx: ChatCompletionContext = {
     ...context,
     workspaceContext: workspaceCtx
-      ? `Текущая рабочая область (workspace):\n${workspaceCtx}\n\nИНСТРУКЦИЯ: Когда пользователь просит создать код, приложение, проект или любые файлы — обязательно используй workspace_write_file для сохранения файлов в рабочую область. Для многофайловых проектов создавай полноценную структуру (папки, package.json, конфиги, исходники). Пиши код сразу в файлы через workspace_write_file, а не просто показывай его в чате.`
+      ? `Текущая рабочая область (workspace):\n${workspaceCtx}\n\nИНСТРУКЦИЯ: Ты самостоятельный ИИ-агент разработчик. Когда пользователь просит исследовать, создать код или проект, ОБЯЗАТЕЛЬНО используй инструменты read_file, write_file, workspace_write_file для прямого создания и чтения файлов на диске/в рабочей области.`
       : undefined,
   };
 
@@ -456,7 +457,6 @@ export const requestChatCompletion = async ({
       if (!text.trim() && !toolCalls) {
         throw new Error('API ответил без текста. Проверь совместимость модели с /v1/chat/completions.');
       }
-      // Auto-detect if model declared creating/saving a skill in text
       try {
         const skillMatch = /(?:навык|skill)\s+[`"']?([a-z0-9_\-а-я]+)[`"']?\s+(?:успешно\s+)?(?:сохранен|сохранён|создан|сохраненный)/i.exec(text);
         if (skillMatch && skillMatch[1]) {
@@ -484,7 +484,7 @@ export const requestChatCompletion = async ({
     });
 
     for (const toolCall of toolCalls) {
-      const functionName = toolCall.function?.name;
+      const functionName = toolCall.function?.name || 'tool';
       const argsRaw = toolCall.function?.arguments || '{}';
       let args: any = {};
 
@@ -494,11 +494,69 @@ export const requestChatCompletion = async ({
         args = {};
       }
 
+      const stepId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      let stepType: 'read' | 'write' | 'search' | 'think' | 'tool' = 'tool';
+      
+      const pathStr = String(args.path || args.file || '');
+      const filename = pathStr.split('/').pop() || pathStr;
+      const rawExt = filename.includes('.') ? filename.split('.').pop() || '' : '';
+      const ext = rawExt ? rawExt.toUpperCase() : undefined;
+
+      let addedLines: number | undefined = undefined;
+      let deletedLines: number | undefined = undefined;
+
+      if (functionName.includes('read') || functionName === 'read_file') {
+        stepType = 'read';
+      } else if (functionName.includes('write') || functionName === 'write_file') {
+        stepType = 'write';
+        if (args.content) {
+          addedLines = String(args.content).split('\n').length;
+          deletedLines = 0;
+        }
+      } else if (functionName.includes('search') || functionName.includes('visit')) {
+        stepType = 'search';
+      } else if (functionName.includes('memory') || functionName.includes('soul')) {
+        stepType = 'think';
+      }
+
+      let stepLabel = stepType === 'write' ? `Edited` : stepType === 'read' ? `Analyzed` : stepType === 'search' ? `Searched` : `Analyzed`;
+      let stepDetail = pathStr || args.query || args.name || '';
+
+      if (onStep) {
+        onStep({
+          id: stepId,
+          type: stepType,
+          label: stepLabel,
+          detail: stepDetail,
+          filename: filename || undefined,
+          ext,
+          addedLines,
+          deletedLines,
+          status: 'running',
+        });
+      }
+
       let toolResult = '';
       try {
         toolResult = await executeTool(functionName, args, extendedCtx);
+        if (onStep) {
+          onStep({
+            id: stepId,
+            type: stepType,
+            label: stepLabel,
+            detail: stepDetail,
+            filename: filename || undefined,
+            ext,
+            addedLines,
+            deletedLines,
+            status: 'done',
+          });
+        }
       } catch (err) {
         toolResult = `Ошибка выполнения инструмента ${functionName}: ${err instanceof Error ? err.message : String(err)}`;
+        if (onStep) {
+          onStep({ id: stepId, type: stepType, label: stepLabel, detail: stepDetail, status: 'error' });
+        }
       }
 
       currentMessages.push({

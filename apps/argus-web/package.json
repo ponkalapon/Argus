@@ -13,7 +13,8 @@
     "test:stream": "rm -rf .tmp-test && tsc --ignoreConfig --target ES2022 --module Node16 --moduleResolution node16 --esModuleInterop --skipLibCheck --outDir .tmp-test src/services/openaiStream.ts && node --test tests/openaiStream.test.js",
     "build:web": "npm pkg set main=expo/AppEntry.js && set CI=1&& expo export -p web --output-dir dist && npm pkg set main=electron/main.js",
     "electron:dev": "electron .",
-    "electron:dist": "npm run build:web && electron-builder"
+    "electron:dist": "npm run build:web && electron-builder",
+    "electron:msix": "npm run build:web && electron-builder -w appx"
   },
   "dependencies": {
     "@bittingz/expo-widgets": "^3.0.2",
@@ -30,6 +31,7 @@
     "expo-sharing": "~56.0.15",
     "expo-splash-screen": "~56.0.10",
     "expo-status-bar": "56.0.4",
+    "js-yaml": "^4.2.0",
     "jszip": "^3.10.1",
     "lucide-react-native": "^1.17.0",
     "punycode": "^2.3.1",
@@ -45,6 +47,7 @@
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
+    "@types/js-yaml": "^4.0.9",
     "@types/react": "^19.2.15",
     "electron": "^30.0.0",
     "electron-builder": "^24.0.0",
@@ -74,8 +77,20 @@
       "shortcutName": "Argus"
     },
     "win": {
-      "target": "nsis",
+      "target": [
+        "nsis",
+        "appx"
+      ],
       "icon": "assets/icon.png"
+    },
+    "appx": {
+      "applicationId": "Argus",
+      "identityName": "Argus.AI",
+      "publisherDisplayName": "Argus Team",
+      "languages": [
+        "ru-RU",
+        "en-US"
+      ]
     }
   }
 }

@@ -321,6 +321,46 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     function: {
+      name: 'read_file',
+      description: 'Читает файл из рабочей области/проекта (например src/App.tsx). Используй для исследования кода.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Относительный путь к файлу' },
+        },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'write_file',
+      description: 'Создаёт или редактирует файл в рабочей области/проекте. Напиши полный код файла.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Относительный путь к файлу (напр. index.js)' },
+          content: { type: 'string', description: 'Полный код/текст файла' },
+        },
+        required: ['path', 'content'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_files',
+      description: 'Возвращает список всех файлов в рабочей области ПК/проекте',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'workspace_read_file',
       description: 'Читает содержимое файла из рабочей области',
       parameters: {
@@ -730,6 +770,20 @@ export const TOOL_HANDLERS: Record<
         triggerKeywords: s.triggerKeywords,
       })),
     };
+  },
+  read_file: async ({ path }, ctx) => {
+    if (!ctx?.workspaceId) return { error: 'Нет активной рабочей области' };
+    const content = await readWorkspaceFile(ctx.workspaceId, path);
+    return { path, content, length: content.length };
+  },
+  write_file: async ({ path, content }, ctx) => {
+    if (!ctx?.workspaceId) return { error: 'Нет активной рабочей области' };
+    const result = await writeWorkspaceFile(ctx.workspaceId, path, content);
+    return { success: true, path: result.path, size: result.size };
+  },
+  list_files: async (_args, ctx) => {
+    if (!ctx?.workspaceId) return { error: 'Нет активной рабочей области' };
+    return { summary: await workspaceSummary(ctx.workspaceId) };
   },
   workspace_summary: async (_args, ctx) => {
     if (!ctx?.workspaceId) return { error: 'Нет активной рабочей области' };
