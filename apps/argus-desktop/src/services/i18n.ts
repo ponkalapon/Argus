@@ -1,6 +1,4 @@
-// Import built-in localization files
-import ruYaml from '../locales/ru.yml';
-import enYaml from '../locales/en.yml';
+import jsYaml from 'js-yaml';
 
 export interface LanguageOption {
   code: string;
@@ -10,34 +8,29 @@ export interface LanguageOption {
 export const dictionaries: Record<string, Record<string, any>> = {};
 export const availableLanguages: LanguageOption[] = [];
 
-/**
- * Register a custom YML localization string or object
- */
-export function registerYmlLanguage(yamlData: string | Record<string, any>) {
-  try {
-    const dict: Record<string, any> = typeof yamlData === 'string'
-      ? ((jsYaml.load(yamlData) as Record<string, any>) || {})
-      : (yamlData || {});
+// Automatically scan and load ALL .yml files inside ../locales folder
+try {
+  // @ts-ignore
+  const localesContext = require.context('../locales', false, /\.yml$/);
+  localesContext.keys().forEach((key: string) => {
+    const rawData = localesContext(key);
+    const dict: Record<string, any> = typeof rawData === 'string'
+      ? ((jsYaml.load(rawData) as Record<string, any>) || {})
+      : (rawData?.default || rawData || {});
 
     const code = dict.meta?.code;
     const label = dict.meta?.name;
     if (code && label) {
       dictionaries[code] = dict;
-      const existingIdx = availableLanguages.findIndex((l) => l.code === code);
-      if (existingIdx !== -1) {
-        availableLanguages[existingIdx] = { code, label };
-      } else {
+      if (!availableLanguages.some((l) => l.code === code)) {
         availableLanguages.push({ code, label });
       }
     }
-  } catch (e) {
-    console.error('Failed to register YML language:', e);
-  }
+  });
+} catch (e) {
+  console.warn('Auto yml scanner failed, falling back to manual load:', e);
 }
 
-// Auto-register built-in YAML localization files
-registerYmlLanguage(ruYaml);
-registerYmlLanguage(enYaml);
 
 
 let activeLanguage = 'ru';
