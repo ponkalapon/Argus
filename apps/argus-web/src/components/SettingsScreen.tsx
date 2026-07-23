@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   BarChart3,
   Check,
+  ChevronDown,
   ChevronRight,
   Cpu,
   Eye,
@@ -121,6 +122,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
   const [customWallpaperUri, setCustomWallpaperUri] = useState<string | null>(null);
   const [layoutWidth, setLayoutWidth] = useState<LayoutWidthType>('fluid');
   const [language, setLanguage] = useState<LanguageType>('ru');
+  const [showLangPicker, setShowLangPicker] = useState(false);
   const [accentColor, setAccentColor] = useState<AccentColorType>('purple');
   const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(0.45);
   const [bubbleStyle, setBubbleStyle] = useState<BubbleStyleType>('glass');
@@ -309,10 +311,23 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
   const handleSelectFontSize = (fs: FontSizeScaleType) => updateTheme({ fontSize: fs });
 
   const handleResetStats = () => {
-    Alert.alert('Сбросить статистику', 'Обнулить счётчики токенов?', [
+    const title = '⚠️ Сброс статистики';
+    const message = 'Вы действительно хотите полностью обнулить всю сохраненную статистику использования токенов? Это действие нельзя отменить.';
+
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(`${title}\n\n${message}`)) {
+        resetTokenStats().then(() => {
+          setTokenStats({ totalInput: 0, totalOutput: 0, totalRequests: 0 });
+          setDailyStats([]);
+        });
+      }
+      return;
+    }
+
+    Alert.alert(title, message, [
       { text: 'Отмена', style: 'cancel' },
       {
-        text: 'Сбросить',
+        text: 'Да, обнулить',
         style: 'destructive',
         onPress: async () => {
           await resetTokenStats();
@@ -531,91 +546,114 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                   </View>
                 </View>
 
-                {/* Language Option (Hermes Style) */}
-                <View style={{ marginBottom: spacing.xl, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                {/* Language Option (Dropdown Select) */}
+                <View style={{ marginBottom: spacing.xl, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', zIndex: 50 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                     <View>
-                      <Text style={styles.fieldLabel}>Language / Язык</Text>
-                      <Text style={styles.fieldHint}>Choose the language for the desktop interface.</Text>
+                      <Text style={styles.fieldLabel}>Язык приложения / Language</Text>
+                      <Text style={styles.fieldHint}>Выберите язык интерфейса и ответов ИИ-Агента.</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: spacing.xs, backgroundColor: '#18181b', borderRadius: radius.md, padding: 4, borderWidth: 1, borderColor: '#27272a' }}>
+
+                    <View style={{ position: 'relative' }}>
                       <Pressable
-                        onPress={() => handleSelectLanguage('ru')}
+                        onPress={() => setShowLangPicker((prev) => !prev)}
                         style={({ pressed }) => [
                           {
                             flexDirection: 'row',
                             alignItems: 'center',
-                            gap: 6,
-                            paddingHorizontal: 12,
-                            paddingVertical: 6,
-                            borderRadius: radius.sm - 2,
-                            backgroundColor: language === 'ru' ? '#27272a' : 'transparent',
+                            gap: 8,
+                            backgroundColor: '#18181b',
+                            borderColor: colors.accent,
+                            borderWidth: 1,
+                            paddingHorizontal: 14,
+                            paddingVertical: 7,
+                            borderRadius: radius.md,
+                            minWidth: 135,
+                            justifyContent: 'space-between',
                           },
                           pressed && styles.pressed,
                         ]}
                       >
-                        <Globe size={14} color={language === 'ru' ? colors.accent : colors.textMuted} />
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: language === 'ru' ? colors.text : colors.textMuted }}>
-                          Русский
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Globe size={14} color={colors.accent} />
+                          <Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>
+                            {language === 'ru' ? 'Русский' : 'English'}
+                          </Text>
+                        </View>
+                        <ChevronDown size={14} color={colors.textMuted} />
                       </Pressable>
 
-                      <Pressable
-                        onPress={() => handleSelectLanguage('en')}
-                        style={({ pressed }) => [
-                          {
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 6,
-                            paddingHorizontal: 12,
-                            paddingVertical: 6,
-                            borderRadius: radius.sm - 2,
-                            backgroundColor: language === 'en' ? '#27272a' : 'transparent',
-                          },
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <Globe size={14} color={language === 'en' ? colors.accent : colors.textMuted} />
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: language === 'en' ? colors.text : colors.textMuted }}>
-                          English
-                        </Text>
-                      </Pressable>
+                      {showLangPicker && (
+                        <View
+                          style={{
+                            position: 'absolute',
+                            top: 42,
+                            right: 0,
+                            width: 145,
+                            backgroundColor: '#121215',
+                            borderColor: '#27272a',
+                            borderWidth: 1,
+                            borderRadius: radius.md,
+                            padding: 4,
+                            zIndex: 100,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.3,
+                            shadowRadius: 8,
+                            elevation: 10,
+                          }}
+                        >
+                          <Pressable
+                            onPress={() => {
+                              handleSelectLanguage('ru');
+                              setShowLangPicker(false);
+                            }}
+                            style={({ pressed }) => [
+                              {
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                borderRadius: radius.sm,
+                                backgroundColor: language === 'ru' ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                              },
+                              pressed && styles.pressed,
+                            ]}
+                          >
+                            <Text style={{ color: language === 'ru' ? colors.accent : colors.text, fontSize: 13, fontWeight: '600' }}>
+                              Русский
+                            </Text>
+                            {language === 'ru' && <Check size={14} color={colors.accent} />}
+                          </Pressable>
+
+                          <Pressable
+                            onPress={() => {
+                              handleSelectLanguage('en');
+                              setShowLangPicker(false);
+                            }}
+                            style={({ pressed }) => [
+                              {
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                borderRadius: radius.sm,
+                                backgroundColor: language === 'en' ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                              },
+                              pressed && styles.pressed,
+                            ]}
+                          >
+                            <Text style={{ color: language === 'en' ? colors.accent : colors.text, fontSize: 13, fontWeight: '600' }}>
+                              English
+                            </Text>
+                            {language === 'en' && <Check size={14} color={colors.accent} />}
+                          </Pressable>
+                        </View>
+                      )}
                     </View>
                   </View>
-                </View>
-
-                {/* Layout Width Option */}
-                <Text style={[styles.fieldLabel, { marginBottom: spacing.sm }]}>Ширина интерфейса на ПК</Text>
-                <View style={{ flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xl }}>
-                  <Pressable
-                    onPress={() => handleSelectLayoutWidth('fluid')}
-                    style={({ pressed }) => [
-                      styles.layoutOption,
-                      layoutWidth === 'fluid' && styles.layoutOptionActive,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Maximize2 size={20} color={layoutWidth === 'fluid' ? colors.accent : colors.textMuted} />
-                    <Text style={[styles.layoutOptionTitle, layoutWidth === 'fluid' && styles.layoutOptionTitleActive]}>
-                      Широкий экран (Full Width)
-                    </Text>
-                    <Text style={styles.layoutOptionDesc}>Заполняет всё окно без больших черных полос по бокам</Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => handleSelectLayoutWidth('compact')}
-                    style={({ pressed }) => [
-                      styles.layoutOption,
-                      layoutWidth === 'compact' && styles.layoutOptionActive,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Minimize2 size={20} color={layoutWidth === 'compact' ? colors.accent : colors.textMuted} />
-                    <Text style={[styles.layoutOptionTitle, layoutWidth === 'compact' && styles.layoutOptionTitleActive]}>
-                      Компактный колонка
-                    </Text>
-                    <Text style={styles.layoutOptionDesc}>Классический центрированный столбец 880px</Text>
-                  </Pressable>
                 </View>
 
                 {/* Wallpaper Preset Options */}
@@ -863,19 +901,6 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                     trackColor={{ false: '#27272a', true: '#a78bfa' }}
                     thumbColor="#ffffff"
                   />
-                </View>
-
-                <View style={{ height: 1, backgroundColor: '#27272a', marginVertical: spacing.lg }} />
-
-                {/* Local Data Privacy */}
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, backgroundColor: '#18181b', padding: spacing.md, borderRadius: radius.lg, borderWidth: 1, borderColor: '#27272a' }}>
-                  <Shield size={20} color="#34d399" style={{ marginTop: 2 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>Локальное хранение на ПК</Text>
-                    <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2, lineHeight: 18 }}>
-                      Все ваши диалоги, API-ключи и файлы проектов хранятся исключительно на вашем компьютере и не передаются на сторонние серверы аналитики.
-                    </Text>
-                  </View>
                 </View>
               </View>
             )}
