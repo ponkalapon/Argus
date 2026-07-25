@@ -137,6 +137,8 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
   const [language, setLanguage] = useState<LanguageType>('ru');
   const [fontFamily, setFontFamily] = useState<string>('system');
   const [showLangFontMenu, setShowLangFontMenu] = useState(false);
+  const [langSearch, setLangSearch] = useState('');
+  const [showFontPanel, setShowFontPanel] = useState(false);
   const [accentColor, setAccentColor] = useState<AccentColorType>('purple');
   const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(0.45);
   const [bubbleStyle, setBubbleStyle] = useState<BubbleStyleType>('glass');
@@ -804,11 +806,6 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
               <View style={styles.sectionCard}>
                 <View style={styles.cardHeader}>
                   <Shield size={18} color="#a78bfa" />
-                  <Text style={styles.cardTitle}>{t('settings.privacy_title', 'Разрешения и безопасность ПК')}</Text>
-                </View>
-                <Text style={styles.cardDesc}>{t('settings.privacy_desc', 'Настройка доступа и локальной приватности ассистента на компьютере')}</Text>
-
-                {/* Workspace File Access */}
                 <View style={styles.switchRow}>
                   <View style={{ flex: 1, paddingRight: spacing.md }}>
                     <Text style={styles.switchTitle}>{t('settings.project_files_title', 'Доступ к файлам проекта')}</Text>
@@ -846,111 +843,147 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
         {showLangFontMenu && (
           <View style={styles.langFontOverlay}>
             {/* Backdrop */}
-            <Pressable style={styles.langFontBackdrop} onPress={() => setShowLangFontMenu(false)} />
+            <Pressable
+              style={styles.langFontBackdrop}
+              onPress={() => { setShowLangFontMenu(false); setShowFontPanel(false); setLangSearch(''); }}
+            />
 
-            {/* Panel */}
-            <View style={styles.langFontPanel}>
-              {/* Panel header */}
-              <View style={styles.langFontPanelHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Globe size={16} color={colors.accent} />
-                  <Text style={styles.langFontPanelTitle}>Язык и шрифт</Text>
-                </View>
-                <Pressable onPress={() => setShowLangFontMenu(false)} style={styles.langFontCloseBtn}>
-                  <Text style={{ color: colors.textMuted, fontSize: 18, lineHeight: 20 }}>✕</Text>
-                </Pressable>
-              </View>
+            {/* Minecraft-style panel */}
+            <View style={styles.mcPanel}>
+              {!showFontPanel ? (
+                /* ════════ LANGUAGE SCREEN ════════ */
+                <>
+                  <Text style={styles.mcTitle}>Язык</Text>
 
-              {/* ── Language section ── */}
-              <Text style={styles.langFontSectionLabel}>🌍 Язык интерфейса</Text>
-              <Text style={[styles.fieldHint, { marginBottom: spacing.md }]}>
-                Загружается из .yml файлов — просто добавь файл локализации в папку
-              </Text>
-              <View style={styles.langChipRow}>
-                {availableLanguages.map((langOpt) => {
-                  const isSel = language === langOpt.code;
-                  return (
+                  <TextInput
+                    style={styles.mcSearchInput}
+                    value={langSearch}
+                    onChangeText={setLangSearch}
+                    placeholder="Поиск..."
+                    placeholderTextColor="#555"
+                    autoCorrect={false}
+                    spellCheck={false}
+                  />
+
+                  <ScrollView
+                    style={styles.mcListScroll}
+                    showsVerticalScrollIndicator
+                    contentContainerStyle={{ paddingVertical: 2 }}
+                  >
+                    {availableLanguages
+                      .filter((l) => l.label.toLowerCase().includes(langSearch.toLowerCase()))
+                      .map((langOpt) => {
+                        const isSel = language === langOpt.code;
+                        return (
+                          <Pressable
+                            key={langOpt.code}
+                            onPress={() => handleSelectLanguage(langOpt.code as LanguageType)}
+                            style={({ pressed }) => [
+                              styles.mcListItem,
+                              isSel && styles.mcListItemActive,
+                              pressed && { opacity: 0.7 },
+                            ]}
+                          >
+                            <Text style={[styles.mcListItemText, isSel && styles.mcListItemTextActive]}>
+                              {langOpt.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                  </ScrollView>
+
+                  <Text style={styles.mcFooterNote}>(Переводы могут содержать ошибки)</Text>
+
+                  <View style={styles.mcBtnRow}>
                     <Pressable
-                      key={langOpt.code}
-                      onPress={() => handleSelectLanguage(langOpt.code as LanguageType)}
-                      style={({ pressed }) => [
-                        styles.langChip,
-                        isSel && styles.langChipActive,
-                        pressed && styles.pressed,
-                      ]}
+                      style={({ pressed }) => [styles.mcBtn, pressed && styles.mcBtnPressed]}
+                      onPress={() => setShowFontPanel(true)}
                     >
-                      {isSel && <Check size={12} color={colors.accent} />}
-                      <Text style={[styles.langChipText, isSel && { color: colors.accent }]}>
-                        {langOpt.label}
-                      </Text>
+                      <Text style={styles.mcBtnText}>Настройки шрифта...</Text>
                     </Pressable>
-                  );
-                })}
-              </View>
-
-              {/* ── Font section ── */}
-              <View style={styles.langFontDivider} />
-              <Text style={styles.langFontSectionLabel}>🔤 Шрифт интерфейса</Text>
-              <Text style={[styles.fieldHint, { marginBottom: spacing.md }]}>
-                Выбери готовый или загрузи свой .ttf/.otf файл
-              </Text>
-              <View style={styles.langChipRow}>
-                {[
-                  { key: 'system', label: 'Системный' },
-                  { key: 'monospace', label: 'Моноширинный' },
-                  { key: 'serif', label: 'Serif' },
-                  { key: 'sans-serif', label: 'Sans-serif' },
-                ].map((fontOpt) => {
-                  const isSel = fontFamily === fontOpt.key;
-                  return (
                     <Pressable
-                      key={fontOpt.key}
-                      onPress={() => updateTheme({ fontFamily: fontOpt.key })}
-                      style={({ pressed }) => [
-                        styles.langChip,
-                        isSel && styles.langChipActive,
-                        pressed && styles.pressed,
-                      ]}
+                      style={({ pressed }) => [styles.mcBtn, styles.mcBtnPrimary, pressed && styles.mcBtnPressed]}
+                      onPress={() => { setShowLangFontMenu(false); setLangSearch(''); }}
                     >
-                      {isSel && <Check size={12} color={colors.accent} />}
-                      <Text style={[styles.langChipText, { fontFamily: fontOpt.key === 'system' ? undefined : fontOpt.key }, isSel && { color: colors.accent }]}>
-                        {fontOpt.label}
-                      </Text>
+                      <Text style={[styles.mcBtnText, styles.mcBtnTextPrimary]}>Готово</Text>
                     </Pressable>
-                  );
-                })}
-              </View>
+                  </View>
+                </>
+              ) : (
+                /* ════════ FONT SCREEN ════════ */
+                <>
+                  <Text style={styles.mcTitle}>Настройки шрифта</Text>
 
-              {/* Custom font upload */}
-              <Pressable
-                onPress={async () => {
-                  try {
-                    const result = await DocumentPicker.getDocumentAsync({
-                      type: ['font/ttf', 'font/otf', 'application/octet-stream'],
-                      copyToCacheDirectory: true,
-                    });
-                    if (!result.canceled && result.assets?.[0]) {
-                      const asset = result.assets[0];
-                      const name = asset.name.replace(/\.[^.]+$/, '');
-                      setFontFamily(name);
-                    }
-                  } catch (e) {
-                    // ignore
-                  }
-                }}
-                style={({ pressed }) => [styles.langFontUploadBtn, pressed && styles.pressed]}
-              >
-                <Upload size={14} color={colors.accent} />
-                <Text style={styles.langFontUploadText}>Загрузить свой шрифт (.ttf / .otf)</Text>
-              </Pressable>
+                  <ScrollView
+                    style={styles.mcListScroll}
+                    showsVerticalScrollIndicator
+                    contentContainerStyle={{ paddingVertical: 2 }}
+                  >
+                    {[
+                      { key: 'system',     label: 'Системный (по умолчанию)' },
+                      { key: 'monospace',  label: 'Моноширинный' },
+                      { key: 'serif',      label: 'Serif' },
+                      { key: 'sans-serif', label: 'Sans-serif' },
+                    ].map((fontOpt) => {
+                      const isSel = fontFamily === fontOpt.key;
+                      return (
+                        <Pressable
+                          key={fontOpt.key}
+                          onPress={() => setFontFamily(fontOpt.key)}
+                          style={({ pressed }) => [
+                            styles.mcListItem,
+                            isSel && styles.mcListItemActive,
+                            pressed && { opacity: 0.7 },
+                          ]}
+                        >
+                          <Text style={[
+                            styles.mcListItemText,
+                            { fontFamily: fontOpt.key === 'system' ? undefined : fontOpt.key },
+                            isSel && styles.mcListItemTextActive,
+                          ]}>
+                            {fontOpt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
 
-              {/* Close button */}
-              <Pressable
-                onPress={() => setShowLangFontMenu(false)}
-                style={({ pressed }) => [styles.langFontApplyBtn, pressed && styles.pressed]}
-              >
-                <Text style={styles.langFontApplyText}>Готово</Text>
-              </Pressable>
+                  <Pressable
+                    onPress={async () => {
+                      try {
+                        const result = await DocumentPicker.getDocumentAsync({
+                          type: ['font/ttf', 'font/otf', 'application/octet-stream'],
+                          copyToCacheDirectory: true,
+                        });
+                        if (!result.canceled && result.assets?.[0]) {
+                          setFontFamily(result.assets[0].name.replace(/\.[^.]+$/, ''));
+                        }
+                      } catch (e) { /* ignore */ }
+                    }}
+                    style={({ pressed }) => [styles.mcUploadBtn, pressed && { opacity: 0.7 }]}
+                  >
+                    <Upload size={14} color="#aaa" />
+                    <Text style={styles.mcUploadBtnText}>Загрузить свой шрифт (.ttf / .otf)</Text>
+                  </Pressable>
+
+                  <Text style={styles.mcFooterNote}>(Шрифт применяется к интерфейсу приложения)</Text>
+
+                  <View style={styles.mcBtnRow}>
+                    <Pressable
+                      style={({ pressed }) => [styles.mcBtn, pressed && styles.mcBtnPressed]}
+                      onPress={() => setShowFontPanel(false)}
+                    >
+                      <Text style={styles.mcBtnText}>← Назад</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [styles.mcBtn, styles.mcBtnPrimary, pressed && styles.mcBtnPressed]}
+                      onPress={() => { setShowLangFontMenu(false); setShowFontPanel(false); }}
+                    >
+                      <Text style={[styles.mcBtnText, styles.mcBtnTextPrimary]}>Готово</Text>
+                    </Pressable>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         )}
@@ -1290,7 +1323,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Language + Font overlay
+  // Overlay shared
   langFontOverlay: {
     position: 'absolute',
     top: 0,
@@ -1298,7 +1331,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 9999,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1308,116 +1340,143 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: 'rgba(0,0,0,0.78)',
   },
-  langFontPanel: {
-    width: 480,
-    maxWidth: '90%' as any,
-    backgroundColor: '#0f0f11',
-    borderColor: colors.accent,
-    borderWidth: 1.5,
-    borderRadius: radius.xl,
-    padding: spacing.xl,
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 32,
-    elevation: 50,
+
+  // Minecraft-style panel
+  mcPanel: {
+    width: 520,
+    maxWidth: '88%' as any,
+    maxHeight: '82%' as any,
+    backgroundColor: '#1c1c1c',
+    borderWidth: 3,
+    borderColor: '#555',
+    padding: 0,
+    overflow: 'hidden' as any,
+    // outer shadow bevel effect (Minecraft-ish)
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.9,
+    shadowRadius: 0,
+    elevation: 30,
   },
-  langFontPanelHeader: {
+  mcTitle: {
+    color: '#e0e0e0',
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    letterSpacing: 0.5,
+    backgroundColor: '#1c1c1c',
+  },
+  mcSearchInput: {
+    marginHorizontal: 12,
+    marginBottom: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    fontSize: 13,
+    color: '#e0e0e0',
+    backgroundColor: '#111',
+    borderWidth: 2,
+    borderColor: '#555',
+    outlineStyle: 'none' as any,
+  },
+  mcListScroll: {
+    flex: 1,
+    marginHorizontal: 0,
+    borderTopWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: '#444',
+  },
+  mcListItem: {
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    alignItems: 'center' as any,
+    backgroundColor: 'transparent',
+  },
+  mcListItemActive: {
+    backgroundColor: '#333',
+    borderWidth: 2,
+    borderColor: '#ddd',
+    marginHorizontal: 4,
+  },
+  mcListItemText: {
+    color: '#bbb',
+    fontSize: 13,
+    fontWeight: '400',
+    textAlign: 'center' as any,
+  },
+  mcListItemTextActive: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  mcFooterNote: {
+    color: '#777',
+    fontSize: 11,
+    textAlign: 'center' as any,
+    paddingVertical: 8,
+    backgroundColor: '#1c1c1c',
+  },
+  mcBtnRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.07)',
+    gap: 8,
+    padding: 12,
+    backgroundColor: '#1c1c1c',
+    borderTopWidth: 2,
+    borderTopColor: '#444',
   },
-  langFontPanelTitle: {
-    color: colors.text,
-    fontSize: 16,
+  mcBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center' as any,
+    backgroundColor: '#555',
+    borderWidth: 2,
+    borderColor: '#888',
+    // bevel
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 0,
+    elevation: 4,
+  },
+  mcBtnPrimary: {
+    backgroundColor: '#666',
+    borderColor: '#999',
+  },
+  mcBtnPressed: {
+    opacity: 0.75,
+    transform: [{ translateY: 1 }],
+  },
+  mcBtnText: {
+    color: '#ccc',
+    fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.3,
   },
-  langFontCloseBtn: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#18181b',
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: '#27272a',
+  mcBtnTextPrimary: {
+    color: '#fff',
   },
-  langFontSectionLabel: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
-    letterSpacing: 0.4,
-  },
-  langFontDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    marginVertical: spacing.lg,
-  },
-  langChipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  langChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: radius.md,
-    backgroundColor: '#18181b',
-    borderWidth: 1,
-    borderColor: '#27272a',
-  },
-  langChipActive: {
-    borderColor: colors.accent,
-    backgroundColor: '#1e1523',
-  },
-  langChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  langFontUploadBtn: {
+  mcUploadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: spacing.sm,
-    paddingVertical: 9,
-    paddingHorizontal: 16,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: 'rgba(168,85,247,0.08)',
-    alignSelf: 'flex-start',
+    marginHorizontal: 12,
+    marginTop: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: '#333',
+    borderWidth: 2,
+    borderColor: '#555',
+    alignSelf: 'flex-start' as any,
   },
-  langFontUploadText: {
-    color: colors.accent,
-    fontSize: 13,
+  mcUploadBtnText: {
+    color: '#aaa',
+    fontSize: 12,
     fontWeight: '600',
   },
-  langFontApplyBtn: {
-    marginTop: spacing.xl,
-    paddingVertical: 11,
-    borderRadius: radius.md,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-  },
-  langFontApplyText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
+
+  // Keep for button in settings row
   langFontBtn: {
     flexDirection: 'row',
     alignItems: 'center',
