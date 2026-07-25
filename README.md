@@ -1,62 +1,109 @@
-# Argus — AI-агент на вашем устройстве
+# Argus — Personal AI Assistant
 
-Argus — это персональный AI-ассистент с памятью, историей чатов и поддержкой любого OpenAI-совместимого API (OpenAI, OpenRouter, Ollama, LM Studio и т.д.).
+<div align="center">
 
-> Вдохновлён [Hermes Agent](https://github.com/ponkalapon/hermes-agent), написан на TypeScript.
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![React Native](https://img.shields.io/badge/React_Native-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
+
+**Argus** is a personal AI assistant with persistent memory, chat history, and support for any OpenAI-compatible API — running on your own device.
+
+*Inspired by [Hermes Agent](https://github.com/ponkalapon/hermes-agent) · Built with TypeScript*
+
+</div>
 
 ---
 
-## 📱 Просто хочу поставить приложение
+## ✨ Features
 
-1. Перейди на страницу **[Releases](https://github.com/ponkalapon/Argus/releases)**
-2. Скачай последний `.apk` файл
-3. Открой его на Android-телефоне
-4. Если появится предупреждение — разреши установку из неизвестных источников
-5. Готово! При первом запуске укажи свой API-ключ в настройках
+- 🧠 **Persistent memory** — the assistant remembers facts across sessions
+- 💬 **Full chat history** — sessions are stored locally and exportable
+- 🔌 **Multi-provider support** — works with OpenAI, OpenRouter, Ollama, LM Studio, or any OpenAI-compatible endpoint
+- 📱 **Android app** — standalone mobile client, no server required
+- 🖥 **Web / Desktop app** — thin client connected to `argus-core`
+- 📡 **Offline queue** — messages sent while offline are automatically retried (up to 90 attempts)
+- 📦 **Backup & restore** — export/import all chats and memory as a single JSON file
+- 🔍 **RAG support** — semantic search over stored knowledge base
+- 🛠 **Extensible tools** — agent tool system for custom integrations
 
 ---
 
-## ⚙️ Настройка
+## 🏗 Architecture
 
-Скопируй файл с переменными окружения и заполни:
+Argus is a monorepo consisting of three packages:
+
+| Package | Description |
+|---|---|
+| **argus-core** | Core engine: LLM client, memory, sessions, RAG, HTTP API (port 3456) |
+| **argus-mobile** | React Native (Expo) Android app — connects **directly** to your AI endpoint |
+| **argus-web** | React Native (Expo) web/desktop app — thin client to `argus-core` |
+
+```
+┌─────────────────┐        ┌──────────────────────────────────┐
+│  argus-mobile   │───────▶│  Your AI Endpoint                │
+│  (Android)      │        │  (OpenAI / OpenRouter / Ollama)  │
+└─────────────────┘        └──────────────────────────────────┘
+                                           ▲
+┌─────────────────┐        ┌──────────────┴───────┐
+│  argus-web      │───────▶│  argus-core          │
+│  (Web/Desktop)  │        │  localhost:3456       │
+└─────────────────┘        └──────────────────────┘
+```
+
+---
+
+## 📋 Prerequisites
+
+- **Node.js** v18 or higher
+- **npm** v9 or higher
+- An OpenAI-compatible API key (OpenAI, OpenRouter, etc.) or a local model server (Ollama, LM Studio)
+- **Android** 8.0+ for the mobile app
+
+---
+
+## ⚙️ Configuration
+
+Copy the environment template and fill in your credentials:
 
 ```bash
 cp .env.example .env
 ```
 
-Открой `.env` и укажи:
+Edit `.env`:
 
 ```env
-ARGUS_API_KEY=sk-...       # твой API-ключ (OpenAI, OpenRouter и т.д.)
-ARGUS_BASE_URL=https://api.openai.com/v1   # или другой совместимый endpoint
+ARGUS_API_KEY=sk-...                          # Your API key
+ARGUS_BASE_URL=https://api.openai.com/v1      # Or any compatible endpoint
 ```
 
 ---
 
-## 🚀 Быстрый старт
+## 🚀 Quick Start
 
-### Установка зависимостей
+### Install dependencies
 
 ```bash
 npm install
 ```
 
-### Запустить чат в терминале
+### Run CLI chat
 
 ```bash
 cd packages/argus-core
 npm run cli
 ```
 
-### Запустить API-сервер
+### Run API server
 
 ```bash
 cd packages/argus-core
 npm run api
-# Сервер запустится на http://localhost:3456
+# Server starts at http://localhost:3456
 ```
 
-### Запустить веб/десктоп приложение
+### Run web / desktop app
 
 ```bash
 cd apps/argus-desktop
@@ -64,34 +111,25 @@ npm install --legacy-peer-deps
 npx expo start
 ```
 
----
+### Install Android APK
 
-## 🗂 Как это устроено
-
-Проект состоит из трёх частей:
-
-| Часть | Что это |
-|-------|---------|
-| **argus-core** | Ядро: AI, память, история чатов, HTTP API на порту 3456 |
-| **argus-mobile** | Мобильное приложение (Android). Работает **автономно** — подключается напрямую к твоему API |
-| **argus-web** | Веб/десктоп приложение. Работает как **тонкий клиент** к argus-core |
-
-```
-argus-mobile ──→ твой AI endpoint (OpenAI / OpenRouter / etc.)
-argus-web    ──→ argus-core (localhost:3456) ──→ твой AI endpoint
-```
+1. Go to [**Releases**](https://github.com/ponkalapon/Argus/releases)
+2. Download the latest `.apk` file
+3. Open it on your Android device
+4. Allow installation from unknown sources if prompted
+5. Enter your API key in Settings on first launch
 
 ---
 
-## 💾 Резервная копия данных
+## 💾 Backup & Restore
 
-Можно экспортировать все чаты и память в один JSON-файл:
+Export all chats and memory to a single JSON file:
 
 ```bash
-# Сохранить
+# Export
 curl http://localhost:3456/export > backup.json
 
-# Восстановить
+# Import
 curl -X POST http://localhost:3456/import \
   -H "Content-Type: application/json" \
   -d @backup.json
@@ -99,85 +137,95 @@ curl -X POST http://localhost:3456/import \
 
 ---
 
-## 📡 Офлайн-режим
-
-Если интернет пропал — мобильное приложение не теряет сообщения. Они сохраняются в очередь и автоматически отправляются при восстановлении соединения (до 90 попыток с паузами).
-
----
-
-## 🔌 API (argus-core, порт 3456)
+## 🔌 API Reference
 
 <details>
-<summary>Показать все эндпоинты</summary>
+<summary>Show all endpoints (argus-core, port 3456)</summary>
 
-| Метод | Путь | Описание |
-|-------|------|----------|
-| GET | `/health` | Проверка статуса |
-| POST | `/chat` | Отправить сообщение (SSE stream) |
-| GET | `/sessions` | Список сессий |
-| POST | `/sessions` | Создать сессию |
-| GET | `/sessions/:id` | Сессия с сообщениями |
-| POST | `/sessions/:id/message` | Добавить сообщение |
-| GET | `/memory` | Получить память |
-| POST | `/memory` | Добавить в память |
-| GET | `/stats` | Статистика токенов |
-| GET | `/export` | Экспорт всего в JSON |
-| POST | `/import` | Импорт из JSON |
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Health check |
+| POST | `/chat` | Send message (SSE stream) |
+| GET | `/sessions` | List all sessions |
+| POST | `/sessions` | Create a session |
+| GET | `/sessions/:id` | Get session with messages |
+| POST | `/sessions/:id/message` | Add message to session |
+| GET | `/memory` | Retrieve memory |
+| POST | `/memory` | Add to memory |
+| GET | `/stats` | Token usage statistics |
+| GET | `/export` | Export everything to JSON |
+| POST | `/import` | Import from JSON |
 
 </details>
 
 ---
 
-## 🛠 Для разработчиков
+## 🗂 Project Structure
 
 <details>
-<summary>Структура проекта</summary>
+<summary>Show project tree</summary>
 
 ```
 argus/
 ├── packages/
-│   └── argus-core/          ← Ядро (AI, память, API)
-│       └── src/core/        ← 16 модулей
-│           ├── llm.ts       — LLM-клиент (retry, multi-provider)
-│           ├── memory.ts    — Память
-│           ├── session.ts   — Сессии
-│           ├── sessionExport.ts — Экспорт/импорт
-│           ├── rag.ts       — Поиск по базе
-│           ├── tools.ts     — Инструменты агента
-│           └── ...          — ещё 10 модулей
+│   └── argus-core/              ← Core engine (AI, memory, API)
+│       └── src/core/            ← 16 modules
+│           ├── llm.ts           — LLM client (retry, multi-provider)
+│           ├── memory.ts        — Persistent memory
+│           ├── session.ts       — Session management
+│           ├── sessionExport.ts — Export / import
+│           ├── rag.ts           — Semantic search (RAG)
+│           ├── tools.ts         — Agent tool system
+│           └── ...              — 10 more modules
 ├── apps/
-│   ├── argus-mobile/        ← React Native (Expo), автономный
+│   ├── argus-mobile/            ← React Native (Expo), standalone
 │   │   └── src/services/
-│   │       └── offlineQueue.ts — Очередь офлайн-запросов
-│   └── argus-web/           ← React Native (Expo), тонкий клиент
+│   │       └── offlineQueue.ts  — Offline request queue
+│   └── argus-web/               ← React Native (Expo), thin client
 ├── .env.example
-└── package.json             ← npm workspaces
+└── package.json                 ← npm workspaces
 ```
 
 </details>
 
+---
+
+## 🛠 Development
+
 <details>
-<summary>Сборка и разработка</summary>
+<summary>Build & development commands</summary>
 
 ```bash
-# Сборка всего monorepo
+# Build entire monorepo
 npm run build
 
-# Watch-режим
+# Watch mode
 npm run dev
 
-# Собрать APK вручную
+# Build Android APK manually
 cd apps/argus-mobile
 npm install --legacy-peer-deps
 cd android && ./gradlew assembleRelease
 ```
 
-Готовый APK: `apps/argus-mobile/android/app/build/outputs/apk/release/app-release.apk`
+Built APK location: `apps/argus-mobile/android/app/build/outputs/apk/release/app-release.apk`
 
 </details>
 
 ---
 
-## Лицензия
+## 🤝 Contributing
 
-MIT
+Contributions are welcome! Please open an issue first to discuss what you would like to change, then submit a pull request.
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Commit your changes: `git commit -m 'feat: add my feature'`
+4. Push to the branch: `git push origin feature/my-feature`
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+[MIT](LICENSE)
