@@ -135,6 +135,8 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
   const [customWallpaperUri, setCustomWallpaperUri] = useState<string | null>(null);
   const [layoutWidth, setLayoutWidth] = useState<LayoutWidthType>('fluid');
   const [language, setLanguage] = useState<LanguageType>('ru');
+  const [fontFamily, setFontFamily] = useState<string>('system');
+  const [showLangFontMenu, setShowLangFontMenu] = useState(false);
   const [accentColor, setAccentColor] = useState<AccentColorType>('purple');
   const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(0.45);
   const [bubbleStyle, setBubbleStyle] = useState<BubbleStyleType>('glass');
@@ -560,39 +562,28 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                 </View>
 
                 {/* Language Option — chips like opacity selector */}
+                {/* Language + Font button */}
                 <View style={{ marginBottom: spacing.xl, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
-                  <Text style={[styles.fieldLabel, { marginBottom: 4 }]}>{t('settings.language_title', 'Язык приложения / Language')}</Text>
-                  <Text style={[styles.fieldHint, { marginBottom: spacing.md }]}>{t('settings.language_hint', 'Загружено из .yml файлов локализации.')}</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-                    {availableLanguages.map((langOpt) => {
-                      const isSel = language === langOpt.code;
-                      return (
-                        <Pressable
-                          key={langOpt.code}
-                          onPress={() => handleSelectLanguage(langOpt.code as LanguageType)}
-                          style={({ pressed }) => [
-                            {
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              paddingVertical: 8,
-                              paddingHorizontal: 14,
-                              borderRadius: radius.md,
-                              backgroundColor: isSel ? '#27272a' : '#18181b',
-                              borderWidth: 1,
-                              borderColor: isSel ? colors.accent : '#27272a',
-                              flexDirection: 'row',
-                              gap: 6,
-                            },
-                            pressed && styles.pressed,
-                          ]}
-                        >
-                          {isSel && <Globe size={12} color={colors.accent} />}
-                          <Text style={{ fontSize: 12, fontWeight: '600', color: isSel ? colors.text : colors.textMuted }}>
-                            {langOpt.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flex: 1, paddingRight: spacing.md }}>
+                      <Text style={styles.fieldLabel}>{t('settings.lang_font_title', 'Язык и шрифт')}</Text>
+                      <Text style={styles.fieldHint}>
+                        {availableLanguages.find((l) => l.code === language)?.label || 'Русский'}
+                        {' · '}
+                        {fontFamily === 'system' ? 'Системный' : fontFamily}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => setShowLangFontMenu(true)}
+                      style={({ pressed }) => [
+                        styles.langFontBtn,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Globe size={15} color={colors.accent} />
+                      <Text style={styles.langFontBtnText}>{t('settings.lang_font_open', 'Изменить')}</Text>
+                      <ChevronDown size={13} color={colors.textMuted} />
+                    </Pressable>
                   </View>
                 </View>
 
@@ -848,6 +839,119 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
             )}
           </ScrollView>
         </View>
+
+        {/* ═══ Language + Font overlay — sibling to ScrollView, never clipped ═══ */}
+        {showLangFontMenu && (
+          <View style={styles.langFontOverlay}>
+            {/* Backdrop */}
+            <Pressable style={styles.langFontBackdrop} onPress={() => setShowLangFontMenu(false)} />
+
+            {/* Panel */}
+            <View style={styles.langFontPanel}>
+              {/* Panel header */}
+              <View style={styles.langFontPanelHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Globe size={16} color={colors.accent} />
+                  <Text style={styles.langFontPanelTitle}>Язык и шрифт</Text>
+                </View>
+                <Pressable onPress={() => setShowLangFontMenu(false)} style={styles.langFontCloseBtn}>
+                  <Text style={{ color: colors.textMuted, fontSize: 18, lineHeight: 20 }}>✕</Text>
+                </Pressable>
+              </View>
+
+              {/* ── Language section ── */}
+              <Text style={styles.langFontSectionLabel}>🌍 Язык интерфейса</Text>
+              <Text style={[styles.fieldHint, { marginBottom: spacing.md }]}>
+                Загружается из .yml файлов — просто добавь файл локализации в папку
+              </Text>
+              <View style={styles.langChipRow}>
+                {availableLanguages.map((langOpt) => {
+                  const isSel = language === langOpt.code;
+                  return (
+                    <Pressable
+                      key={langOpt.code}
+                      onPress={() => handleSelectLanguage(langOpt.code as LanguageType)}
+                      style={({ pressed }) => [
+                        styles.langChip,
+                        isSel && styles.langChipActive,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      {isSel && <Check size={12} color={colors.accent} />}
+                      <Text style={[styles.langChipText, isSel && { color: colors.accent }]}>
+                        {langOpt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* ── Font section ── */}
+              <View style={styles.langFontDivider} />
+              <Text style={styles.langFontSectionLabel}>🔤 Шрифт интерфейса</Text>
+              <Text style={[styles.fieldHint, { marginBottom: spacing.md }]}>
+                Выбери готовый или загрузи свой .ttf/.otf файл
+              </Text>
+              <View style={styles.langChipRow}>
+                {[
+                  { key: 'system', label: 'Системный' },
+                  { key: 'monospace', label: 'Моноширинный' },
+                  { key: 'serif', label: 'Serif' },
+                  { key: 'sans-serif', label: 'Sans-serif' },
+                ].map((fontOpt) => {
+                  const isSel = fontFamily === fontOpt.key;
+                  return (
+                    <Pressable
+                      key={fontOpt.key}
+                      onPress={() => setFontFamily(fontOpt.key)}
+                      style={({ pressed }) => [
+                        styles.langChip,
+                        isSel && styles.langChipActive,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      {isSel && <Check size={12} color={colors.accent} />}
+                      <Text style={[styles.langChipText, { fontFamily: fontOpt.key === 'system' ? undefined : fontOpt.key }, isSel && { color: colors.accent }]}>
+                        {fontOpt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* Custom font upload */}
+              <Pressable
+                onPress={async () => {
+                  try {
+                    const result = await DocumentPicker.getDocumentAsync({
+                      type: ['font/ttf', 'font/otf', 'application/octet-stream'],
+                      copyToCacheDirectory: true,
+                    });
+                    if (!result.canceled && result.assets?.[0]) {
+                      const asset = result.assets[0];
+                      const name = asset.name.replace(/\.[^.]+$/, '');
+                      setFontFamily(name);
+                    }
+                  } catch (e) {
+                    // ignore
+                  }
+                }}
+                style={({ pressed }) => [styles.langFontUploadBtn, pressed && styles.pressed]}
+              >
+                <Upload size={14} color={colors.accent} />
+                <Text style={styles.langFontUploadText}>Загрузить свой шрифт (.ttf / .otf)</Text>
+              </Pressable>
+
+              {/* Close button */}
+              <Pressable
+                onPress={() => setShowLangFontMenu(false)}
+                style={({ pressed }) => [styles.langFontApplyBtn, pressed && styles.pressed]}
+              >
+                <Text style={styles.langFontApplyText}>Готово</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
       </Animated.View>
     </SafeAreaView>
   );
@@ -1182,5 +1286,150 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
     marginTop: 2,
+  },
+
+  // Language + Font overlay
+  langFontOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  langFontBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+  },
+  langFontPanel: {
+    width: 480,
+    maxWidth: '90%' as any,
+    backgroundColor: '#0f0f11',
+    borderColor: colors.accent,
+    borderWidth: 1.5,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 32,
+    elevation: 50,
+  },
+  langFontPanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.07)',
+  },
+  langFontPanelTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  langFontCloseBtn: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#18181b',
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
+  langFontSectionLabel: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+    letterSpacing: 0.4,
+  },
+  langFontDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    marginVertical: spacing.lg,
+  },
+  langChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  langChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    backgroundColor: '#18181b',
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
+  langChipActive: {
+    borderColor: colors.accent,
+    backgroundColor: '#1e1523',
+  },
+  langChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  langFontUploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: spacing.sm,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(168,85,247,0.08)',
+    alignSelf: 'flex-start',
+  },
+  langFontUploadText: {
+    color: colors.accent,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  langFontApplyBtn: {
+    marginTop: spacing.xl,
+    paddingVertical: 11,
+    borderRadius: radius.md,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+  },
+  langFontApplyText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  langFontBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    backgroundColor: '#18181b',
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+  langFontBtnText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
