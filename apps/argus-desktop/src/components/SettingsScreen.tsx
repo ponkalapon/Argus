@@ -135,7 +135,6 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
   const [customWallpaperUri, setCustomWallpaperUri] = useState<string | null>(null);
   const [layoutWidth, setLayoutWidth] = useState<LayoutWidthType>('fluid');
   const [language, setLanguage] = useState<LanguageType>('ru');
-  const [showLangPicker, setShowLangPicker] = useState(false);
   const [accentColor, setAccentColor] = useState<AccentColorType>('purple');
   const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(0.45);
   const [bubbleStyle, setBubbleStyle] = useState<BubbleStyleType>('glass');
@@ -560,89 +559,41 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                   </View>
                 </View>
 
-                {/* Language Option */}
+                {/* Language Option — chips like opacity selector */}
                 <View style={{ marginBottom: spacing.xl, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
-                  {/* Header row */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: showLangPicker ? spacing.sm : 0 }}>
-                    <View style={{ flex: 1, paddingRight: spacing.md }}>
-                      <Text style={styles.fieldLabel}>{t('settings.language_title', 'Язык приложения / Language')}</Text>
-                      <Text style={styles.fieldHint}>{t('settings.language_hint', 'Загружено из .yml файлов локализации.')}</Text>
-                    </View>
-
-                    <Pressable
-                      onPress={() => setShowLangPicker((prev) => !prev)}
-                      style={({ pressed }) => [
-                        {
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 8,
-                          backgroundColor: '#18181b',
-                          borderColor: colors.accent,
-                          borderWidth: 1,
-                          paddingHorizontal: 14,
-                          paddingVertical: 7,
-                          borderRadius: radius.md,
-                          minWidth: 145,
-                          justifyContent: 'space-between',
-                        },
-                        pressed && styles.pressed,
-                      ]}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Globe size={14} color={colors.accent} />
-                        <Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>
-                          {availableLanguages.find((l) => l.code === language)?.label || availableLanguages[0]?.label || 'Русский'}
-                        </Text>
-                      </View>
-                      <ChevronDown size={14} color={colors.textMuted} />
-                    </Pressable>
+                  <Text style={[styles.fieldLabel, { marginBottom: 4 }]}>{t('settings.language_title', 'Язык приложения / Language')}</Text>
+                  <Text style={[styles.fieldHint, { marginBottom: spacing.md }]}>{t('settings.language_hint', 'Загружено из .yml файлов локализации.')}</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                    {availableLanguages.map((langOpt) => {
+                      const isSel = language === langOpt.code;
+                      return (
+                        <Pressable
+                          key={langOpt.code}
+                          onPress={() => handleSelectLanguage(langOpt.code as LanguageType)}
+                          style={({ pressed }) => [
+                            {
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              paddingVertical: 8,
+                              paddingHorizontal: 14,
+                              borderRadius: radius.md,
+                              backgroundColor: isSel ? '#27272a' : '#18181b',
+                              borderWidth: 1,
+                              borderColor: isSel ? colors.accent : '#27272a',
+                              flexDirection: 'row',
+                              gap: 6,
+                            },
+                            pressed && styles.pressed,
+                          ]}
+                        >
+                          {isSel && <Globe size={12} color={colors.accent} />}
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: isSel ? colors.text : colors.textMuted }}>
+                            {langOpt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
                   </View>
-
-                  {/* Inline language list — no absolute, no Modal, no zIndex */}
-                  {showLangPicker && (
-                    <View
-                      style={{
-                        marginTop: 6,
-                        backgroundColor: '#18181b',
-                        borderColor: colors.accent,
-                        borderWidth: 1,
-                        borderRadius: radius.md,
-                        padding: 4,
-                        alignSelf: 'flex-end',
-                        minWidth: 175,
-                      }}
-                    >
-                      {availableLanguages.map((langOpt) => {
-                        const isSel = language === langOpt.code;
-                        return (
-                          <Pressable
-                            key={langOpt.code}
-                            onPress={() => {
-                              handleSelectLanguage(langOpt.code as LanguageType);
-                              setShowLangPicker(false);
-                            }}
-                            style={({ pressed }) => [
-                              {
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                paddingHorizontal: 12,
-                                paddingVertical: 9,
-                                borderRadius: radius.sm,
-                                backgroundColor: isSel ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
-                              },
-                              pressed && styles.pressed,
-                            ]}
-                          >
-                            <Text style={{ color: isSel ? colors.accent : colors.text, fontSize: 13, fontWeight: '600' }}>
-                              {langOpt.label}
-                            </Text>
-                            {isSel && <Check size={14} color={colors.accent} />}
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  )}
                 </View>
 
                 {/* Wallpaper Preset Options */}
