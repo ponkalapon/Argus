@@ -806,6 +806,11 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
               <View style={styles.sectionCard}>
                 <View style={styles.cardHeader}>
                   <Shield size={18} color="#a78bfa" />
+                  <Text style={styles.cardTitle}>{t('settings.privacy_title', 'Разрешения и безопасность ПК')}</Text>
+                </View>
+                <Text style={styles.cardDesc}>{t('settings.privacy_desc', 'Настройка доступа и локальной приватности ассистента на компьютере')}</Text>
+
+                {/* Workspace File Access */}
                 <View style={styles.switchRow}>
                   <View style={{ flex: 1, paddingRight: spacing.md }}>
                     <Text style={styles.switchTitle}>{t('settings.project_files_title', 'Доступ к файлам проекта')}</Text>
