@@ -9,6 +9,7 @@ import { SettingsScreen } from './src/components/SettingsScreen';
 import { SandboxScreen } from './src/components/SandboxScreen';
 import { WorkspaceScreen } from './src/components/WorkspaceScreen';
 import { FileManagerScreen } from './src/components/FileManagerScreen';
+import { AnimatedSplashScreen } from './src/components/AnimatedSplashScreen';
 
 import { loadApiKey, loadSettings, saveSettings } from './src/api';
 import { loadThemeConfig, ThemeConfig, WallpaperType } from './src/services/themeStorage';
@@ -111,12 +112,8 @@ export default function App() {
   if (isLoading || !settings) {
     return (
       <SafeAreaProvider>
-        <StatusBar style="light" />
-        <View style={styles.loadingScreen}>
-          <ActivityIndicator color={colors.accent} size="large" />
-          <Text style={styles.loadingTitle}>Загрузка…</Text>
-          {loadError ? <Text style={styles.loadingError}>{loadError}</Text> : null}
-        </View>
+        <StatusBar style="light" hidden />
+        <AnimatedSplashScreen />
       </SafeAreaProvider>
     );
   }

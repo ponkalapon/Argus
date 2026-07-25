@@ -41,7 +41,10 @@
       "expo-sharing",
       "expo-splash-screen",
       "@react-native-voice/voice",
-      ["@bittingz/expo-widgets", {}],
+      [
+        "@bittingz/expo-widgets",
+        {}
+      ],
       [
         "expo-font",
         {
@@ -51,7 +54,8 @@
             "./assets/Roboto-Medium.ttf"
           ]
         }
-      ]
+      ],
+      "expo-video"
     ]
   }
 }
