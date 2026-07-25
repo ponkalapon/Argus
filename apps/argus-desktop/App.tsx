@@ -48,12 +48,26 @@ const WALLPAPER_MAP: Record<WallpaperType, any> = {
   deep_space: require('./assets/wallpapers/deep_space.jpg'),
 };
 
-const FONT_FAMILY_MAP: Record<string, string | undefined> = {
-  system: undefined, // use OS default
+const FONT_FAMILY_MAP: Record<string, string> = {
+  system: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   monospace: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
   serif: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
   'sans-serif': 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
 };
+
+const FONT_STYLE_ID = 'argus-font-family';
+
+function applyFontFamily(fontKey: string) {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+  const cssFont = FONT_FAMILY_MAP[fontKey] || FONT_FAMILY_MAP.system;
+  let el = document.getElementById(FONT_STYLE_ID);
+  if (!el) {
+    el = document.createElement('style');
+    el.id = FONT_STYLE_ID;
+    document.head.appendChild(el);
+  }
+  el.innerHTML = `* { font-family: ${cssFont} !important; }`;
+}
 
 export default function App() {
   const [screen, setScreen] = useState<'workspace' | 'settings' | 'sandbox' | 'files'>('workspace');
@@ -77,17 +91,23 @@ export default function App() {
     const cfg = await loadThemeConfig();
     applyAccentColor(cfg.accentColor);
     setI18nLanguage(cfg.language);
+    applyFontFamily(cfg.fontFamily);
     setThemeConfig(cfg);
   }, []);
 
+  // Apply font on every themeConfig change
+  useEffect(() => {
+    applyFontFamily(themeConfig.fontFamily);
+  }, [themeConfig.fontFamily]);
+
   useEffect(() => {
     let mounted = true;
-
     Promise.all([loadSettings(), loadApiKey(), loadThemeConfig()])
       .then(([storedSettings, storedApiKey, storedTheme]) => {
         if (mounted) {
           applyAccentColor(storedTheme.accentColor);
           setI18nLanguage(storedTheme.language);
+          applyFontFamily(storedTheme.fontFamily);
           setSettings(storedSettings);
           setApiKey(storedApiKey);
           setThemeConfig(storedTheme);
@@ -131,9 +151,9 @@ export default function App() {
       ? { uri: themeConfig.customWallpaperUri }
       : WALLPAPER_MAP[themeConfig.wallpaper];
   const overlayOpacity = themeConfig.wallpaperOpacity ?? 0.45;
-  const resolvedFontFamily = FONT_FAMILY_MAP[themeConfig.fontFamily] || FONT_FAMILY_MAP.system;
+
   const renderContent = () => (
-    <View style={[{ flex: 1, width: '100%', height: '100%' }, resolvedFontFamily ? { fontFamily: resolvedFontFamily } : undefined]}>
+    <>
       <StatusBar style="light" />
       {screen === 'settings' ? (
         <SettingsScreen
@@ -164,7 +184,7 @@ export default function App() {
           layoutWidth={themeConfig.layoutWidth}
         />
       )}
-    </View>
+    </>
   );
 
   return (

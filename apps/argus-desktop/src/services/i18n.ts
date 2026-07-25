@@ -1,5 +1,3 @@
-import jsYaml from 'js-yaml';
-
 export interface LanguageOption {
   code: string;
   label: string;
@@ -8,18 +6,15 @@ export interface LanguageOption {
 export const dictionaries: Record<string, Record<string, any>> = {};
 export const availableLanguages: LanguageOption[] = [];
 
-// Manually import all .yml locale files (require.context is webpack-only, doesn't work in Metro)
+// Import JSON locale files directly (Metro doesn't support YML)
 const localeModules: Record<string, any> = {
-  en: require('../locales/en.yml'),
-  ru: require('../locales/ru.yml'),
+  en: require('../locales/en.json'),
+  ru: require('../locales/ru.json'),
 };
 
 Object.entries(localeModules).forEach(([key, rawData]) => {
   try {
-    const dict: Record<string, any> = typeof rawData === 'string'
-      ? ((jsYaml.load(rawData) as Record<string, any>) || {})
-      : (rawData?.default || rawData || {});
-
+    const dict: Record<string, any> = rawData?.default || rawData || {};
     const code = dict.meta?.code;
     const label = dict.meta?.name;
     if (code && label) {
