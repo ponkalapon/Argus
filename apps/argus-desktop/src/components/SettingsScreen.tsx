@@ -64,41 +64,53 @@ const MODEL_PRESETS = [
   'qwen/qwen3-coder',
 ];
 
-const WALLPAPER_PRESETS_RAW: { id: WallpaperType; titleKey: string; descKey: string; source: any }[] = [
+const WALLPAPER_PRESETS_RAW: { id: WallpaperType; titleKey: string; descKey: string; title: string; desc: string; source: any }[] = [
   {
     id: 'default',
     titleKey: 'settings.default_wallpaper_title',
     descKey: 'settings.default_wallpaper_desc',
+    title: 'Классический темный',
+    desc: 'Стандартный элегантный глубокий темный фон Argus',
     source: null,
   },
   {
     id: 'cyber_mesh',
     titleKey: 'settings.cyber_mesh_title',
     descKey: 'settings.cyber_mesh_desc',
+    title: 'Кибер-сетка',
+    desc: 'Неоновая анимированная кибернетическая сетка',
     source: require('../../assets/wallpapers/cyber_mesh.jpg'),
   },
   {
     id: 'argus_nebula',
     titleKey: 'settings.argus_nebula_title',
     descKey: 'settings.argus_nebula_desc',
+    title: 'Космическая туманность',
+    desc: 'Глубокий космос со звездной туманностью',
     source: require('../../assets/wallpapers/argus_nebula.jpg'),
   },
   {
     id: 'minimal_carbon',
     titleKey: 'settings.minimal_carbon_title',
     descKey: 'settings.minimal_carbon_desc',
+    title: 'Минимал Карбон',
+    desc: 'Строгая матовая текстура карбона с фиолетовым отливом',
     source: require('../../assets/wallpapers/minimal_carbon.jpg'),
   },
   {
     id: 'neon_waves',
     titleKey: 'settings.neon_waves_title',
     descKey: 'settings.neon_waves_desc',
+    title: 'Неоновые Волны',
+    desc: 'Яркие динамические волны светящегося неона',
     source: require('../../assets/wallpapers/neon_waves.jpg'),
   },
   {
     id: 'deep_space',
     titleKey: 'settings.deep_space_title',
     descKey: 'settings.deep_space_desc',
+    title: 'Глубокий Космос',
+    desc: 'Тёмно-изумрудная космическая пыль и галактики',
     source: require('../../assets/wallpapers/deep_space.jpg'),
   },
 ];
@@ -686,8 +698,8 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
 
                   {WALLPAPER_PRESETS_RAW.map((wp) => {
                     const active = wallpaper === wp.id;
-                    const wpTitle = t(wp.titleKey, wp.titleKey);
-                    const wpDesc = t(wp.descKey, wp.descKey);
+                    const wpTitle = t(wp.titleKey, wp.title);
+                    const wpDesc = t(wp.descKey, wp.desc);
                     return (
                       <Pressable
                         key={wp.id}
