@@ -43,7 +43,7 @@ import { AgentSettings } from '../types';
 import { loadApiKey, saveApiKey, sanitizeSettings } from '../services/storage';
 import { getTokenStats, getDailyStats, resetTokenStats, DailyRecord, TokenStats } from '../services/tokenStats';
 import { listSkills, deleteSkill, Skill } from '../services/skills';
-import { loadThemeConfig, saveThemeConfig, WallpaperType, LayoutWidthType, LanguageType, AccentColorType, BubbleStyleType, FontSizeScaleType } from '../services/themeStorage';
+import { loadThemeConfig, saveThemeConfig, WallpaperType, LayoutWidthType, LanguageType, FontFamilyType, AccentColorType, BubbleStyleType, FontSizeScaleType } from '../services/themeStorage';
 import { availableLanguages, setLanguage as setI18nLanguage, t } from '../services/i18n';
 import { UsageChart } from './UsageChart';
 import { colors, motion, radius, spacing, typography, ACCENT_PALETTES, applyAccentColor } from '../styles/theme';
@@ -180,6 +180,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
         setCustomWallpaperUri(cfg.customWallpaperUri || null);
         setLayoutWidth(cfg.layoutWidth);
         setLanguage(cfg.language);
+        setFontFamily(cfg.fontFamily || 'system');
         setAccentColor(cfg.accentColor);
         setWallpaperOpacity(cfg.wallpaperOpacity);
         setBubbleStyle(cfg.bubbleStyle);
@@ -221,7 +222,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
     setIsSaving(true);
     try {
       await saveApiKey(apiKey);
-      await saveThemeConfig({ wallpaper, customWallpaperUri, layoutWidth, language, accentColor, wallpaperOpacity, bubbleStyle, fontSize });
+      await saveThemeConfig({ wallpaper, customWallpaperUri, layoutWidth, language, fontFamily, accentColor, wallpaperOpacity, bubbleStyle, fontSize });
       applyAccentColor(accentColor);
       if (onThemeChange) onThemeChange();
       await onSave(settings, apiKey.trim());
@@ -238,6 +239,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
     customWallpaperUri?: string | null;
     layoutWidth: LayoutWidthType;
     language: LanguageType;
+    fontFamily: FontFamilyType;
     accentColor: AccentColorType;
     wallpaperOpacity: number;
     bubbleStyle: BubbleStyleType;
@@ -247,28 +249,28 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
     const nextCustomUri = updates.customWallpaperUri !== undefined ? updates.customWallpaperUri : customWallpaperUri;
     const nextLayoutWidth = updates.layoutWidth ?? layoutWidth;
     const nextLanguage = updates.language ?? language;
+    const nextFontFamily = updates.fontFamily ?? fontFamily;
     const nextAccent = updates.accentColor ?? accentColor;
     const nextOpacity = updates.wallpaperOpacity ?? wallpaperOpacity;
     const nextBubble = updates.bubbleStyle ?? bubbleStyle;
     const nextFontSize = updates.fontSize ?? fontSize;
-
     setI18nLanguage(nextLanguage);
     if (updates.wallpaper !== undefined) setWallpaper(updates.wallpaper);
     if (updates.customWallpaperUri !== undefined) setCustomWallpaperUri(updates.customWallpaperUri);
     if (updates.layoutWidth !== undefined) setLayoutWidth(updates.layoutWidth);
     if (updates.language !== undefined) setLanguage(updates.language);
+    if (updates.fontFamily !== undefined) setFontFamily(updates.fontFamily);
     if (updates.accentColor !== undefined) setAccentColor(updates.accentColor);
     if (updates.wallpaperOpacity !== undefined) setWallpaperOpacity(updates.wallpaperOpacity);
     if (updates.bubbleStyle !== undefined) setBubbleStyle(updates.bubbleStyle);
     if (updates.fontSize !== undefined) setFontSize(updates.fontSize);
-
     applyAccentColor(nextAccent);
-
     await saveThemeConfig({
       wallpaper: nextWallpaper,
       customWallpaperUri: nextCustomUri,
       layoutWidth: nextLayoutWidth,
       language: nextLanguage,
+      fontFamily: nextFontFamily,
       accentColor: nextAccent,
       wallpaperOpacity: nextOpacity,
       bubbleStyle: nextBubble,
@@ -903,7 +905,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                   return (
                     <Pressable
                       key={fontOpt.key}
-                      onPress={() => setFontFamily(fontOpt.key)}
+                      onPress={() => updateTheme({ fontFamily: fontOpt.key })}
                       style={({ pressed }) => [
                         styles.langChip,
                         isSel && styles.langChipActive,

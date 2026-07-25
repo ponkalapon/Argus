@@ -48,6 +48,13 @@ const WALLPAPER_MAP: Record<WallpaperType, any> = {
   deep_space: require('./assets/wallpapers/deep_space.jpg'),
 };
 
+const FONT_FAMILY_MAP: Record<string, string | undefined> = {
+  system: undefined, // use OS default
+  monospace: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+  serif: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+  'sans-serif': 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+};
+
 export default function App() {
   const [screen, setScreen] = useState<'workspace' | 'settings' | 'sandbox' | 'files'>('workspace');
   const [settings, setSettings] = useState<AgentSettings | null>(null);
@@ -56,6 +63,7 @@ export default function App() {
     wallpaper: 'default',
     layoutWidth: 'fluid',
     language: 'ru',
+    fontFamily: 'system',
     accentColor: 'purple',
     wallpaperOpacity: 0.45,
     bubbleStyle: 'glass',
@@ -123,9 +131,9 @@ export default function App() {
       ? { uri: themeConfig.customWallpaperUri }
       : WALLPAPER_MAP[themeConfig.wallpaper];
   const overlayOpacity = themeConfig.wallpaperOpacity ?? 0.45;
-
+  const resolvedFontFamily = FONT_FAMILY_MAP[themeConfig.fontFamily] || FONT_FAMILY_MAP.system;
   const renderContent = () => (
-    <>
+    <View style={[{ flex: 1, width: '100%', height: '100%' }, resolvedFontFamily ? { fontFamily: resolvedFontFamily } : undefined]}>
       <StatusBar style="light" />
       {screen === 'settings' ? (
         <SettingsScreen
@@ -156,7 +164,7 @@ export default function App() {
           layoutWidth={themeConfig.layoutWidth}
         />
       )}
-    </>
+    </View>
   );
 
   return (

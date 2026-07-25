@@ -10,7 +10,8 @@ export type WallpaperType =
   | 'custom';
 
 export type LayoutWidthType = 'fluid' | 'compact';
-export type LanguageType = 'ru' | 'en';
+export type LanguageType = string;
+export type FontFamilyType = string;
 export type AccentColorType = 'purple' | 'cyan' | 'emerald' | 'amber' | 'blue' | 'rose';
 export type BubbleStyleType = 'glass' | 'rounded' | 'cyber';
 export type FontSizeScaleType = 'compact' | 'standard' | 'large';
@@ -20,6 +21,7 @@ export type ThemeConfig = {
   customWallpaperUri?: string | null;
   layoutWidth: LayoutWidthType;
   language: LanguageType;
+  fontFamily: FontFamilyType;
   accentColor: AccentColorType;
   wallpaperOpacity: number;
   bubbleStyle: BubbleStyleType;
@@ -33,6 +35,7 @@ export const defaultThemeConfig: ThemeConfig = {
   customWallpaperUri: null,
   layoutWidth: 'fluid',
   language: 'ru',
+  fontFamily: 'system',
   accentColor: 'purple',
   wallpaperOpacity: 0.45,
   bubbleStyle: 'glass',
@@ -49,6 +52,7 @@ export const loadThemeConfig = async (): Promise<ThemeConfig> => {
       customWallpaperUri: parsed.customWallpaperUri || null,
       layoutWidth: parsed.layoutWidth || 'fluid',
       language: parsed.language || 'ru',
+      fontFamily: parsed.fontFamily || 'system',
       accentColor: parsed.accentColor || 'purple',
       wallpaperOpacity: typeof parsed.wallpaperOpacity === 'number' ? parsed.wallpaperOpacity : 0.45,
       bubbleStyle: parsed.bubbleStyle || 'glass',

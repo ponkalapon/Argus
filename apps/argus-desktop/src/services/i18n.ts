@@ -8,12 +8,14 @@ export interface LanguageOption {
 export const dictionaries: Record<string, Record<string, any>> = {};
 export const availableLanguages: LanguageOption[] = [];
 
-// Automatically scan and load ALL .yml files inside ../locales folder
-try {
-  // @ts-ignore
-  const localesContext = require.context('../locales', false, /\.yml$/);
-  localesContext.keys().forEach((key: string) => {
-    const rawData = localesContext(key);
+// Manually import all .yml locale files (require.context is webpack-only, doesn't work in Metro)
+const localeModules: Record<string, any> = {
+  en: require('../locales/en.yml'),
+  ru: require('../locales/ru.yml'),
+};
+
+Object.entries(localeModules).forEach(([key, rawData]) => {
+  try {
     const dict: Record<string, any> = typeof rawData === 'string'
       ? ((jsYaml.load(rawData) as Record<string, any>) || {})
       : (rawData?.default || rawData || {});
@@ -26,12 +28,10 @@ try {
         availableLanguages.push({ code, label });
       }
     }
-  });
-} catch (e) {
-  console.warn('Auto yml scanner failed, falling back to manual load:', e);
-}
-
-
+  } catch (e) {
+    console.warn(`Failed to load locale ${key}:`, e);
+  }
+});
 
 let activeLanguage = 'ru';
 
