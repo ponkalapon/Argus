@@ -934,7 +934,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                       return (
                         <Pressable
                           key={fontOpt.key}
-                          onPress={() => setFontFamily(fontOpt.key)}
+                          onPress={() => updateTheme({ fontFamily: fontOpt.key })}
                           style={({ pressed }) => [
                             styles.mcListItem,
                             isSel && styles.mcListItemActive,
@@ -961,7 +961,8 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                           copyToCacheDirectory: true,
                         });
                         if (!result.canceled && result.assets?.[0]) {
-                          setFontFamily(result.assets[0].name.replace(/\.[^.]+$/, ''));
+                          const name = result.assets[0].name.replace(/\.[^.]+$/, '');
+                          updateTheme({ fontFamily: name });
                         }
                       } catch (e) { /* ignore */ }
                     }}

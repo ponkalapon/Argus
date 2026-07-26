@@ -59,14 +59,14 @@ const FONT_STYLE_ID = 'argus-font-family';
 
 function applyFontFamily(fontKey: string) {
   if (Platform.OS !== 'web' || typeof document === 'undefined') return;
-  const cssFont = FONT_FAMILY_MAP[fontKey] || FONT_FAMILY_MAP.system;
+  const cssFont = FONT_FAMILY_MAP[fontKey] || fontKey || FONT_FAMILY_MAP.system;
   let el = document.getElementById(FONT_STYLE_ID);
   if (!el) {
     el = document.createElement('style');
     el.id = FONT_STYLE_ID;
     document.head.appendChild(el);
   }
-  el.innerHTML = `* { font-family: ${cssFont} !important; }`;
+  el.innerHTML = `* { font-family: ${cssFont}, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important; }`;
 }
 
 export default function App() {
