@@ -29,7 +29,9 @@ import {
   Key,
   Maximize2,
   Minimize2,
+  Network,
   Palette,
+  Plus,
   RefreshCw,
   RotateCcw,
   Shield,
@@ -43,6 +45,8 @@ import { AgentSettings } from '../types';
 import { loadApiKey, saveApiKey, sanitizeSettings } from '../services/storage';
 import { getTokenStats, getDailyStats, resetTokenStats, DailyRecord, TokenStats } from '../services/tokenStats';
 import { listSkills, deleteSkill, Skill } from '../services/skills';
+import { McpServer, loadMcpServers, addMcpServer, updateMcpServer, deleteMcpServer } from '../services/mcpStorage';
+import { testMcpServer } from '../services/mcpClient';
 import { loadThemeConfig, saveThemeConfig, WallpaperType, LayoutWidthType, LanguageType, FontFamilyType, AccentColorType, BubbleStyleType, FontSizeScaleType } from '../services/themeStorage';
 import { availableLanguages, setLanguage as setI18nLanguage, t } from '../services/i18n';
 import { UsageChart } from './UsageChart';
@@ -55,7 +59,7 @@ type Props = {
   onThemeChange?: () => void;
 };
 
-type TabType = 'connection' | 'customization' | 'stats' | 'skills' | 'privacy';
+type TabType = 'connection' | 'customization' | 'mcp' | 'stats' | 'skills' | 'privacy';
 
 const MODEL_PRESETS = [
   'mimo-v2.5',
@@ -131,6 +135,12 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
   const [newSkillDesc, setNewSkillDesc] = useState('');
   const [newSkillPattern, setNewSkillPattern] = useState('');
 
+  const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
+  const [showAddMcp, setShowAddMcp] = useState(false);
+  const [newMcpName, setNewMcpName] = useState('');
+  const [newMcpUrl, setNewMcpUrl] = useState('');
+  const [testingMcpId, setTestingMcpId] = useState<string | null>(null);
+
   const [wallpaper, setWallpaper] = useState<WallpaperType>('default');
   const [customWallpaperUri, setCustomWallpaperUri] = useState<string | null>(null);
   const [layoutWidth, setLayoutWidth] = useState<LayoutWidthType>('fluid');
@@ -158,11 +168,18 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
     setDailyStats(daily);
   }, []);
 
+  const refreshMcpServers = useCallback(async () => {
+    const s = await loadMcpServers();
+    setMcpServers(s);
+  }, []);
+
   useEffect(() => {
     if (activeTab === 'skills') {
       refreshSkills();
+    } else if (activeTab === 'mcp') {
+      refreshMcpServers();
     }
-  }, [activeTab, refreshSkills]);
+  }, [activeTab, refreshSkills, refreshMcpServers]);
 
   useEffect(() => {
     let mounted = true;
@@ -374,6 +391,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
   const navItems: { id: TabType; label: string; icon: any }[] = [
     { id: 'connection', label: t('settings.tab_general', 'Подключение'), icon: Cpu },
     { id: 'customization', label: t('settings.tab_customization', 'Кастомизация'), icon: Palette },
+    { id: 'mcp', label: 'MCP Серверы', icon: Network },
     { id: 'stats', label: t('settings.tab_stats', 'Использование'), icon: BarChart3 },
     { id: 'skills', label: t('settings.tab_skills', 'Навыки'), icon: Sparkles },
     { id: 'privacy', label: t('settings.tab_privacy', 'Безопасность'), icon: Shield },
@@ -839,6 +857,161 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                     thumbColor="#ffffff"
                   />
                 </View>
+              </View>
+            )}
+
+            {activeTab === 'mcp' && (
+              <View style={styles.sectionCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                    <Network size={18} color={colors.accent} />
+                    <Text style={styles.cardTitle}>MCP Серверы (Model Context Protocol)</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => setShowAddMcp(!showAddMcp)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      backgroundColor: showAddMcp ? '#27272a' : colors.accent,
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: radius.md,
+                    }}
+                  >
+                    <Plus size={14} color={showAddMcp ? colors.text : '#000'} />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: showAddMcp ? colors.text : '#000' }}>
+                      {showAddMcp ? 'Отмена' : 'Добавить MCP'}
+                    </Text>
+                  </Pressable>
+                </View>
+                <Text style={[styles.cardDesc, { marginBottom: spacing.md }]}>
+                  Подключай внешние MCP-серверы для расширения возможностей ассистента дополнительными инструментами.
+                </Text>
+
+                {showAddMcp && (
+                  <View style={{ backgroundColor: '#18181b', borderWidth: 1, borderColor: colors.accent, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.lg }}>
+                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700', marginBottom: spacing.sm }}>Подключение нового MCP сервера</Text>
+                    <TextInput
+                      style={[styles.textInput, { marginBottom: spacing.sm }]}
+                      placeholder="Название (например: GitHub Tools, Database MCP)"
+                      placeholderTextColor={colors.textMuted}
+                      value={newMcpName}
+                      onChangeText={setNewMcpName}
+                    />
+                    <TextInput
+                      style={[styles.textInput, { marginBottom: spacing.md }]}
+                      placeholder="URL (например: http://localhost:8000/mcp или sse://...)"
+                      placeholderTextColor={colors.textMuted}
+                      value={newMcpUrl}
+                      onChangeText={setNewMcpUrl}
+                      autoCapitalize="none"
+                    />
+                    <Pressable
+                      onPress={async () => {
+                        if (!newMcpName.trim() || !newMcpUrl.trim()) {
+                          Alert.alert('Заполните поля', 'Укажите название и URL сервера');
+                          return;
+                        }
+                        await addMcpServer({ name: newMcpName.trim(), url: newMcpUrl.trim(), enabled: true, status: 'untested' });
+                        setNewMcpName('');
+                        setNewMcpUrl('');
+                        setShowAddMcp(false);
+                        refreshMcpServers();
+                      }}
+                      style={{ backgroundColor: colors.accent, paddingVertical: 8, borderRadius: radius.md, alignItems: 'center' }}
+                    >
+                      <Text style={{ color: '#000', fontWeight: '700', fontSize: 13 }}>Сохранить сервер</Text>
+                    </Pressable>
+                  </View>
+                )}
+
+                {mcpServers.length === 0 ? (
+                  <View style={{ padding: spacing.xl, alignItems: 'center', backgroundColor: 'rgba(24, 24, 27, 0.4)', borderRadius: radius.lg, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
+                    <Network size={32} color={colors.textMuted} style={{ marginBottom: spacing.sm, opacity: 0.5 }} />
+                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600', marginBottom: 4 }}>Нет подключенных MCP серверов</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 12, textAlign: 'center' }}>
+                      Нажми кнопку «Добавить MCP» выше, чтобы подключить сервер с инструментами по стандарту Model Context Protocol.
+                    </Text>
+                  </View>
+                ) : (
+                  mcpServers.map((server) => (
+                    <View key={server.id} style={{ backgroundColor: '#18181b', borderWidth: 1, borderColor: '#27272a', borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.sm }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <View style={{ flex: 1, paddingRight: spacing.md }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>{server.name}</Text>
+                            <View style={{
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                              borderRadius: radius.pill,
+                              backgroundColor: server.status === 'ok' ? 'rgba(34, 197, 94, 0.15)' : server.status === 'error' ? 'rgba(239, 68, 68, 0.15)' : '#27272a',
+                            }}>
+                              <Text style={{
+                                fontSize: 10,
+                                fontWeight: '700',
+                                color: server.status === 'ok' ? '#4ade80' : server.status === 'error' ? '#f87171' : colors.textMuted,
+                              }}>
+                                {server.status === 'ok' ? 'АКТИВЕН' : server.status === 'error' ? 'ОШИБКА' : 'НЕ ПРОВЕРЕН'}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>{server.url}</Text>
+                          {server.statusMessage && (
+                            <Text style={{ color: server.status === 'error' ? '#f87171' : colors.accent, fontSize: 11, marginTop: 4 }}>
+                              {server.statusMessage}
+                            </Text>
+                          )}
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                          <Pressable
+                            disabled={testingMcpId === server.id}
+                            onPress={async () => {
+                              setTestingMcpId(server.id);
+                              await testMcpServer(server);
+                              setTestingMcpId(null);
+                              refreshMcpServers();
+                            }}
+                            style={{ padding: 6, backgroundColor: '#27272a', borderRadius: radius.md }}
+                          >
+                            <RefreshCw size={14} color={testingMcpId === server.id ? colors.accent : colors.textMuted} />
+                          </Pressable>
+
+                          <Switch
+                            value={server.enabled}
+                            onValueChange={async (val) => {
+                              await updateMcpServer(server.id, { enabled: val });
+                              refreshMcpServers();
+                            }}
+                            trackColor={{ false: '#27272a', true: colors.accent }}
+                            thumbColor="#ffffff"
+                          />
+
+                          <Pressable
+                            onPress={async () => {
+                              await deleteMcpServer(server.id);
+                              refreshMcpServers();
+                            }}
+                            style={{ padding: 6 }}
+                          >
+                            <Trash2 size={16} color={colors.danger} />
+                          </Pressable>
+                        </View>
+                      </View>
+
+                      {server.tools && server.tools.length > 0 && (
+                        <View style={{ marginTop: spacing.sm, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                          {server.tools.map((t) => (
+                            <View key={t.name} style={{ backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm }}>
+                              <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: 'monospace' }}>⚡ {t.name}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  ))
+                )}
               </View>
             )}
           </ScrollView>

@@ -3,6 +3,8 @@ import { listSkills } from './skills';
 import { searchMemory } from './memory';
 import { TOOL_DEFINITIONS, executeTool } from './tools';
 import { workspaceSummary } from './workspace';
+import { loadMcpServers } from './mcpStorage';
+import { mcpToolsToOpenAI, tryExecuteMcpTool } from './mcpClient';
 import {
   AgentSettings,
   ChatCompletionContext,
@@ -340,6 +342,11 @@ export const requestChatCompletion = async ({
 
   const userContent = messages.map((m) => m.content || '').join(' ');
 
+  // Load MCP servers to inject their tools
+  const mcpServers = await loadMcpServers().catch(() => []);
+  const enabledMcpServers = mcpServers.filter((s) => s.enabled && s.tools?.length);
+  const mcpToolDefs = enabledMcpServers.flatMap(mcpToolsToOpenAI);
+
   const [workspaceCtx] = await Promise.all([
     context?.workspaceId
       ? workspaceSummary(context.workspaceId).catch(() => '')
@@ -421,7 +428,7 @@ export const requestChatCompletion = async ({
         max_tokens: 4096,
         max_output_tokens: 4096,
         stream: Boolean(onToken),
-        tools: tools || TOOL_DEFINITIONS,
+        tools: tools || [...TOOL_DEFINITIONS, ...mcpToolDefs],
       }),
     });
 
@@ -538,7 +545,13 @@ export const requestChatCompletion = async ({
 
       let toolResult = '';
       try {
-        toolResult = await executeTool(functionName, args, extendedCtx);
+        // Check if this is an MCP tool call
+        const mcpResult = await tryExecuteMcpTool(functionName, args, enabledMcpServers);
+        if (mcpResult !== null) {
+          toolResult = mcpResult;
+        } else {
+          toolResult = await executeTool(functionName, args, extendedCtx);
+        }
         if (onStep) {
           onStep({
             id: stepId,
