@@ -3,7 +3,7 @@
 <div align="center">
 
 <p align="center">
-  [English](README.md) | <b>Русский</b>
+  <a href="README.md">English</a> | <b>Русский</b>
 </p>
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
