@@ -19,7 +19,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install dependencies
@@ -30,12 +30,9 @@ jobs:
         run: npm run electron:dist
 
       - name: Create or Update Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: "latest"
-          name: "Argus Latest Build (APK & EXE)"
-          files: |
-            apps/argus-desktop/releases/electron/*.exe
-          generate_release_notes: true
-          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "latest" || gh release create "latest" --title "Argus Latest Build (APK & EXE)" --notes "Latest automated build."
+          gh release upload "latest" apps/argus-desktop/releases/electron/*.exe --clobber
 
