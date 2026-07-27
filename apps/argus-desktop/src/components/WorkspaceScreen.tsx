@@ -390,19 +390,6 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     loadChats().then((storedChats) => {
       chatsRef.current = storedChats;
       setChats(storedChats);
-      if (storedChats.length > 0 && !activeChatId) {
-        const latest = storedChats[0];
-        setActiveChatId(latest.id);
-        const restoredMsgs: ChatMessage[] = latest.messages.map((m, idx) => ({
-          id: `restored_${idx}_${Date.now()}`,
-          role: m.role as any,
-          content: m.content,
-          createdAt: Date.now(),
-        }));
-        if (restoredMsgs.length > 0) {
-          setMessages(restoredMsgs);
-        }
-      }
     });
   }, []);
 
