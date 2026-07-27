@@ -840,7 +840,12 @@ ${names}`);
   };
 
   const openDrawer = useCallback(() => setShowChatList(true), []);
-  const closeDrawer = useCallback(() => setShowChatList(false), []);
+  const closeDrawer = useCallback(() => {
+    setShowChatList(false);
+    setIsSearching(false);
+    setSearchQuery('');
+    setSearchResults([]);
+  }, []);
 
   const openSearch = () => {
     setIsSearching(true);
@@ -901,19 +906,21 @@ ${names}`);
   return (
     <View style={styles.slideRoot}>
       {/* Fixed top-left Menu <-> X Toggle Button */}
-      <View style={styles.fixedMenuBtnWrap}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={showChatList ? closeDrawer : openDrawer}
-          style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
-        >
-          {showChatList ? (
-            <X size={20} color={colors.text} />
-          ) : (
-            <Menu size={20} color={colors.text} />
-          )}
-        </Pressable>
-      </View>
+      {!isSearching && (
+        <View style={styles.fixedMenuBtnWrap}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={showChatList ? closeDrawer : openDrawer}
+            style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
+          >
+            {showChatList ? (
+              <X size={20} color={colors.text} />
+            ) : (
+              <Menu size={20} color={colors.text} />
+            )}
+          </Pressable>
+        </View>
+      )}
 
       {/* Main content - slides right when drawer opens */}
       <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateX: contentTranslate }] }]}>
@@ -2372,7 +2379,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: typography.body,
     height: 36,
-    marginLeft: spacing.sm,
+    marginHorizontal: spacing.sm,
     paddingHorizontal: spacing.md,
   },
   searchExcerpt: {
