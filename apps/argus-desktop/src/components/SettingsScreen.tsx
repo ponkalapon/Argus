@@ -790,7 +790,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm }}>
                     <Gift size={16} color="#fbbf24" />
                     <Text style={{ fontSize: 13, color: colors.text, fontWeight: '700' }}>
-                      Каталог готовых скиллов (добавление в 1 клик)
+                      Каталог готовых скиллов
                     </Text>
                   </View>
                   <View style={{ gap: spacing.sm }}>
