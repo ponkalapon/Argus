@@ -22,7 +22,7 @@ import { Trash2, ChevronRight, ChevronDown, BarChart3, ArrowLeft, RefreshCw, Che
 import { AgentSettings, ApiFormat } from '../types';
 import { loadApiKey, saveApiKey, sanitizeSettings } from '../services/storage';
 import { getTokenStats, getDailyStats, resetTokenStats, TokenStats, DailyRecord } from '../services/tokenStats';
-import { listSkills, deleteSkill, Skill } from '../services/skills';
+import { listSkills, deleteSkill, Skill, PRESET_SKILLS, installPresetSkill } from '../services/skills';
 import { checkForUpdate, downloadAndInstallUpdate, CURRENT_VERSION } from '../services/autoUpdate';
 import { UsageChart } from './UsageChart';
 import { colors, fontFamily, motion, radius, spacing, typography } from '../styles/theme';
@@ -1002,11 +1002,64 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
         return (
           <>
             <Text style={styles.modalTitle}>{t('settings.skills')}</Text>
+
+            {/* Catalog of preset skills */}
+            <Text style={[styles.sectionHeader, { marginTop: spacing.sm }]}>КАТАЛОГ ГОТОВЫХ СКИЛЛОВ</Text>
+            <View style={{ gap: spacing.xs, marginBottom: spacing.md }}>
+              {PRESET_SKILLS.map((preset) => {
+                const isInstalled = skills.some((s) => s.name.toLowerCase() === preset.name.toLowerCase());
+                return (
+                  <View
+                    key={preset.name}
+                    style={{
+                      backgroundColor: colors.surface,
+                      borderColor: isInstalled ? colors.accent + '50' : colors.border,
+                      borderWidth: 1,
+                      borderRadius: radius.md,
+                      padding: spacing.md,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <View style={{ flex: 1, paddingRight: spacing.sm }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <Text style={{ fontSize: 14 }}>{preset.icon}</Text>
+                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>{preset.name}</Text>
+                      </View>
+                      <Text style={{ color: colors.textMuted, fontSize: 11, lineHeight: 14 }}>{preset.description}</Text>
+                    </View>
+                    <Pressable
+                      disabled={isInstalled}
+                      onPress={async () => {
+                        await installPresetSkill(preset);
+                        const updated = await listSkills();
+                        setSkills(updated);
+                      }}
+                      style={({ pressed }) => [{
+                        backgroundColor: isInstalled ? '#18181b' : colors.accent,
+                        borderColor: isInstalled ? '#27272a' : colors.accent,
+                        borderWidth: 1,
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        borderRadius: radius.pill,
+                      }, pressed && styles.pressed]}
+                    >
+                      <Text style={{ color: isInstalled ? colors.textMuted : '#000', fontSize: 11, fontWeight: '700' }}>
+                        {isInstalled ? '✓ Добавлен' : '+ В 1 клик'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+
+            <Text style={styles.sectionHeader}>АКТИВНЫЕ НАВЫКИ ({skills.length})</Text>
             <View style={styles.card}>
               {skills.length === 0 ? (
                 <View style={styles.emptySkillsBox}>
                   <Text style={styles.emptySkillsTitle}>{t('settings.noSkills')}</Text>
-                  <Text style={styles.emptySkillsText}>{t('settings.skillsHint')}</Text>
+                  <Text style={styles.emptySkillsText}>Нажмите «+ В 1 клик» в каталоге выше или попросите ИИ запомнить навык.</Text>
                 </View>
               ) : (
                 skills.map((skill, index) => (

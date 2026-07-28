@@ -44,7 +44,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { AgentSettings } from '../types';
 import { loadApiKey, saveApiKey, sanitizeSettings } from '../services/storage';
 import { getTokenStats, getDailyStats, resetTokenStats, DailyRecord, TokenStats } from '../services/tokenStats';
-import { listSkills, deleteSkill, Skill } from '../services/skills';
+import { listSkills, deleteSkill, Skill, PRESET_SKILLS, installPresetSkill } from '../services/skills';
 import { McpServer, loadMcpServers, addMcpServer, updateMcpServer, deleteMcpServer } from '../services/mcpStorage';
 import { testMcpServer } from '../services/mcpClient';
 import { loadThemeConfig, saveThemeConfig, WallpaperType, LayoutWidthType, LanguageType, FontFamilyType, AccentColorType, BubbleStyleType, FontSizeScaleType } from '../services/themeStorage';
@@ -709,11 +709,11 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                     style={{ backgroundColor: colors.surface, borderColor: colors.accent, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 4, borderRadius: radius.pill }}
                   >
                     <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '600' }}>
-                      {showAddSkill ? t('settings.cancel', 'Отмена') : t('settings.add_skill', '+ Добавить навык')}
+                      {showAddSkill ? t('settings.cancel', 'Отмена') : t('settings.add_skill', '+ Свой навык')}
                     </Text>
                   </Pressable>
                 </View>
-                <Text style={styles.cardDesc}>{t('settings.skills_desc', 'Автономные навыки, создаваемые ИИ или вручную во время диалога')}</Text>
+                <Text style={styles.cardDesc}>{t('settings.skills_desc', 'Автономные навыки, создаваемые ИИ или добавляемые вручную в один клик')}</Text>
 
                 {showAddSkill && (
                   <View style={{ backgroundColor: '#18181b', borderColor: '#27272a', borderWidth: 1, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.lg }}>
@@ -771,9 +771,78 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                   </View>
                 )}
 
+                {/* Preset Skills Catalog Section */}
+                <View style={{ marginTop: spacing.md, marginBottom: spacing.xl }}>
+                  <Text style={[styles.fieldLabel, { marginBottom: spacing.sm, fontSize: 13, color: colors.text, fontWeight: '700' }]}>
+                    🎁 Каталог готовых скиллов (добавление в 1 клик)
+                  </Text>
+                  <View style={{ gap: spacing.sm }}>
+                    {PRESET_SKILLS.map((preset) => {
+                      const isInstalled = skills.some(
+                        (s) => s.name.toLowerCase() === preset.name.toLowerCase()
+                      );
+                      return (
+                        <View
+                          key={preset.name}
+                          style={{
+                            backgroundColor: '#141419',
+                            borderColor: isInstalled ? colors.accent + '50' : '#27272a',
+                            borderWidth: 1,
+                            borderRadius: radius.lg,
+                            padding: spacing.md,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <View style={{ flex: 1, paddingRight: spacing.md }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                              <Text style={{ fontSize: 16 }}>{preset.icon}</Text>
+                              <Text style={{ color: colors.text, fontWeight: '700', fontSize: 14 }}>{preset.name}</Text>
+                              <View style={{ backgroundColor: '#27272a', paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm }}>
+                                <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '600' }}>{preset.category}</Text>
+                              </View>
+                            </View>
+                            <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>{preset.description}</Text>
+                          </View>
+                          <Pressable
+                            disabled={isInstalled}
+                            onPress={async () => {
+                              await installPresetSkill(preset);
+                              await refreshSkills();
+                            }}
+                            style={({ pressed }) => [{
+                              backgroundColor: isInstalled ? '#18181b' : colors.accent,
+                              borderColor: isInstalled ? '#27272a' : colors.accent,
+                              borderWidth: 1,
+                              paddingHorizontal: 12,
+                              paddingVertical: 6,
+                              borderRadius: radius.pill,
+                              alignItems: 'center',
+                            }, pressed && styles.pressed]}
+                          >
+                            <Text style={{
+                              color: isInstalled ? colors.textMuted : '#000000',
+                              fontSize: 12,
+                              fontWeight: '700'
+                            }}>
+                              {isInstalled ? '✓ Установлен' : '+ Установить'}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* Installed Skills Section */}
+                <Text style={[styles.fieldLabel, { marginBottom: spacing.sm, fontSize: 13, color: colors.text, fontWeight: '700' }]}>
+                  ⚡ Ваши активные навыки ({skills.length})
+                </Text>
+
                 {skills.length === 0 ? (
                   <View style={styles.emptyCard}>
-                    <Text style={styles.emptyText}>{t('settings.no_skills', 'Нет активных навыков. Вы можете добавить новый навык по кнопке выше или попросить ИИ запомнить навык во время разговора.')}</Text>
+                    <Text style={styles.emptyText}>{t('settings.no_skills', 'Нет активных навыков. Нажмите «+ Установить» выше в каталоге или попросите ИИ запомнить навык во время разговора.')}</Text>
                   </View>
                 ) : (
                   skills.map((s) => (
