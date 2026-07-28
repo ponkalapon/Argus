@@ -21,6 +21,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Code2,
   Cpu,
   Database,
@@ -148,6 +149,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
   const [newSkillName, setNewSkillName] = useState('');
   const [newSkillDesc, setNewSkillDesc] = useState('');
   const [newSkillPattern, setNewSkillPattern] = useState('');
+  const [expandedSkillName, setExpandedSkillName] = useState<string | null>(null);
 
   const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
   const [showAddMcp, setShowAddMcp] = useState(false);
@@ -800,60 +802,98 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                       );
                       const iconMeta = PRESET_ICON_MAP[preset.icon] || { icon: Sparkles, color: colors.accent, bg: 'rgba(167, 139, 250, 0.15)' };
                       const IconComp = iconMeta.icon;
+                      const isExpanded = expandedSkillName === preset.name;
 
                       return (
-                        <View
+                        <Pressable
                           key={preset.name}
+                          onPress={() => setExpandedSkillName(isExpanded ? null : preset.name)}
                           style={{
                             backgroundColor: '#141419',
-                            borderColor: isInstalled ? colors.accent + '50' : '#27272a',
+                            borderColor: isExpanded ? colors.accent : (isInstalled ? colors.accent + '50' : '#27272a'),
                             borderWidth: 1,
                             borderRadius: radius.lg,
                             padding: spacing.md,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
                           }}
                         >
-                          <View style={{ flex: 1, paddingRight: spacing.md, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>
-                            <View style={{ width: 34, height: 34, borderRadius: radius.md, backgroundColor: iconMeta.bg, alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
-                              <IconComp size={18} color={iconMeta.color} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 14 }}>{preset.name}</Text>
-                                <View style={{ backgroundColor: '#27272a', paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm }}>
-                                  <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '600' }}>{preset.category}</Text>
-                                </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <View style={{ flex: 1, paddingRight: spacing.md, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>
+                              <View style={{ width: 34, height: 34, borderRadius: radius.md, backgroundColor: iconMeta.bg, alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
+                                <IconComp size={18} color={iconMeta.color} />
                               </View>
-                              <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>{preset.description}</Text>
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                  <Text style={{ color: colors.text, fontWeight: '700', fontSize: 14 }}>{preset.name}</Text>
+                                  <View style={{ backgroundColor: '#27272a', paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm }}>
+                                    <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '600' }}>{preset.category}</Text>
+                                  </View>
+                                </View>
+                                {!isExpanded && (
+                                  <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }} numberOfLines={1}>
+                                    {preset.description}
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                              <Pressable
+                                disabled={isInstalled}
+                                onPress={async (e) => {
+                                  e.stopPropagation();
+                                  await installPresetSkill(preset);
+                                  await refreshSkills();
+                                }}
+                                style={({ pressed }) => [{
+                                  backgroundColor: isInstalled ? '#18181b' : colors.accent,
+                                  borderColor: isInstalled ? '#27272a' : colors.accent,
+                                  borderWidth: 1,
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 6,
+                                  borderRadius: radius.pill,
+                                  alignItems: 'center',
+                                }, pressed && styles.pressed]}
+                              >
+                                <Text style={{
+                                  color: isInstalled ? colors.textMuted : '#000000',
+                                  fontSize: 12,
+                                  fontWeight: '700'
+                                }}>
+                                  {isInstalled ? '✓ Установлен' : '+ Установить'}
+                                </Text>
+                              </Pressable>
+                              <View style={{ padding: 4 }}>
+                                {isExpanded ? (
+                                  <ChevronUp size={16} color={colors.textMuted} />
+                                ) : (
+                                  <ChevronDown size={16} color={colors.textMuted} />
+                                )}
+                              </View>
                             </View>
                           </View>
-                          <Pressable
-                            disabled={isInstalled}
-                            onPress={async () => {
-                              await installPresetSkill(preset);
-                              await refreshSkills();
-                            }}
-                            style={({ pressed }) => [{
-                              backgroundColor: isInstalled ? '#18181b' : colors.accent,
-                              borderColor: isInstalled ? '#27272a' : colors.accent,
-                              borderWidth: 1,
-                              paddingHorizontal: 12,
-                              paddingVertical: 6,
-                              borderRadius: radius.pill,
-                              alignItems: 'center',
-                            }, pressed && styles.pressed]}
-                          >
-                            <Text style={{
-                              color: isInstalled ? colors.textMuted : '#000000',
-                              fontSize: 12,
-                              fontWeight: '700'
-                            }}>
-                              {isInstalled ? '✓ Установлен' : '+ Установить'}
-                            </Text>
-                          </Pressable>
-                        </View>
+
+                          {isExpanded && (
+                            <View style={{ marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: '#27272a' }}>
+                              <Text style={{ color: colors.text, fontSize: 12, fontWeight: '700', marginBottom: 4 }}>Описание:</Text>
+                              <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18, marginBottom: spacing.md }}>{preset.description}</Text>
+
+                              <Text style={{ color: colors.text, fontSize: 12, fontWeight: '700', marginBottom: 4 }}>Инструкция для ИИ (Промпт):</Text>
+                              <View style={{ backgroundColor: '#09090b', borderColor: '#27272a', borderWidth: 1, borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.md }}>
+                                <Text style={{ color: '#a1a1aa', fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', lineHeight: 17 }}>
+                                  {preset.pattern}
+                                </Text>
+                              </View>
+
+                              <Text style={{ color: colors.text, fontSize: 12, fontWeight: '700', marginBottom: 6 }}>Ключевые триггеры:</Text>
+                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                {preset.triggerKeywords.map((kw) => (
+                                  <View key={kw} style={{ backgroundColor: '#27272a', paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill }}>
+                                    <Text style={{ color: colors.accent, fontSize: 11, fontWeight: '600' }}>#{kw}</Text>
+                                  </View>
+                                ))}
+                              </View>
+                            </View>
+                          )}
+                        </Pressable>
                       );
                     })}
                   </View>
@@ -872,22 +912,65 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                     <Text style={styles.emptyText}>{t('settings.no_skills', 'Нет активных навыков. Нажмите «+ Установить» выше в каталоге или попросите ИИ запомнить навык во время разговора.')}</Text>
                   </View>
                 ) : (
-                  skills.map((s) => (
-                    <View key={s.id || s.name} style={styles.skillRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.skillTitle}>{s.name}</Text>
-                        <Text style={styles.skillDesc}>{s.description}</Text>
-                        {s.pattern ? (
-                          <Text style={{ color: colors.textDim, fontSize: 11, marginTop: 4, fontFamily: 'monospace' }}>
-                            {t('settings.skill_pattern_label', 'Инструкция:')} {s.pattern.slice(0, 100)}{s.pattern.length > 100 ? '...' : ''}
-                          </Text>
-                        ) : null}
-                      </View>
-                      <Pressable onPress={() => handleDeleteSkill(s.id || s.name)} style={styles.iconBtn}>
-                        <Trash2 size={16} color={colors.danger} />
+                  skills.map((s) => {
+                    const isExpanded = expandedSkillName === (s.id || s.name);
+                    return (
+                      <Pressable
+                        key={s.id || s.name}
+                        onPress={() => setExpandedSkillName(isExpanded ? null : (s.id || s.name))}
+                        style={[styles.skillRow, isExpanded && { borderColor: colors.accent, backgroundColor: '#141419' }]}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={styles.skillTitle}>{s.name}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                              <Pressable
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteSkill(s.id || s.name);
+                                }}
+                                style={styles.iconBtn}
+                              >
+                                <Trash2 size={16} color={colors.danger} />
+                              </Pressable>
+                              <View style={{ padding: 2 }}>
+                                {isExpanded ? (
+                                  <ChevronUp size={16} color={colors.textMuted} />
+                                ) : (
+                                  <ChevronDown size={16} color={colors.textMuted} />
+                                )}
+                              </View>
+                            </View>
+                          </View>
+                          <Text style={styles.skillDesc} numberOfLines={isExpanded ? undefined : 2}>{s.description}</Text>
+
+                          {isExpanded && (
+                            <View style={{ marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: '#27272a' }}>
+                              {s.pattern ? (
+                                <>
+                                  <Text style={{ color: colors.text, fontSize: 12, fontWeight: '700', marginBottom: 4 }}>Системная инструкция:</Text>
+                                  <View style={{ backgroundColor: '#09090b', borderColor: '#27272a', borderWidth: 1, borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.xs }}>
+                                    <Text style={{ color: '#a1a1aa', fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', lineHeight: 16 }}>
+                                      {s.pattern}
+                                    </Text>
+                                  </View>
+                                </>
+                              ) : null}
+                              {s.triggerKeywords && s.triggerKeywords.length > 0 && (
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                                  {s.triggerKeywords.map((kw) => (
+                                    <View key={kw} style={{ backgroundColor: '#27272a', paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill }}>
+                                      <Text style={{ color: colors.accent, fontSize: 10, fontWeight: '600' }}>#{kw}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              )}
+                            </View>
+                          )}
+                        </View>
                       </Pressable>
-                    </View>
-                  ))
+                    );
+                  })
                 )}
               </View>
             )}

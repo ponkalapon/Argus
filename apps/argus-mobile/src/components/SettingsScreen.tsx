@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Trash2, ChevronRight, ChevronDown, BarChart3, ArrowLeft, RefreshCw, Check, X, X as XIcon, Download, Shield, ShieldCheck, ShieldOff, Code2, FlaskConical, Database, FileText, Palette, Globe, Gift, Zap, Sparkles } from 'lucide-react-native';
+import { Trash2, ChevronRight, ChevronDown, ChevronUp, BarChart3, ArrowLeft, RefreshCw, Check, X, X as XIcon, Download, Shield, ShieldCheck, ShieldOff, Code2, FlaskConical, Database, FileText, Palette, Globe, Gift, Zap, Sparkles } from 'lucide-react-native';
 import { AgentSettings, ApiFormat } from '../types';
 import { loadApiKey, saveApiKey, sanitizeSettings } from '../services/storage';
 import { getTokenStats, getDailyStats, resetTokenStats, TokenStats, DailyRecord } from '../services/tokenStats';
@@ -208,6 +208,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
   const entrance = useRef(new Animated.Value(0)).current;
   const modalScale = useRef(new Animated.Value(0)).current;
   const modalOpacity = useRef(new Animated.Value(0)).current;
+  const [expandedSkillName, setExpandedSkillName] = useState<string | null>(null);
 
   const loadDaily = useCallback(async () => {
     const stats = await getDailyStats();
@@ -1022,51 +1023,87 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                 const isInstalled = skills.some((s) => s.name.toLowerCase() === preset.name.toLowerCase());
                 const iconMeta = PRESET_ICON_MAP[preset.icon] || { icon: Sparkles, color: colors.accent, bg: 'rgba(167, 139, 250, 0.15)' };
                 const IconComp = iconMeta.icon;
+                const isExpanded = expandedSkillName === preset.name;
 
                 return (
-                  <View
+                  <Pressable
                     key={preset.name}
+                    onPress={() => setExpandedSkillName(isExpanded ? null : preset.name)}
                     style={{
                       backgroundColor: colors.surface,
-                      borderColor: isInstalled ? colors.accent + '50' : colors.border,
+                      borderColor: isExpanded ? colors.accent : (isInstalled ? colors.accent + '50' : colors.border),
                       borderWidth: 1,
                       borderRadius: radius.md,
                       padding: spacing.md,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
                     }}
                   >
-                    <View style={{ flex: 1, paddingRight: spacing.sm, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
-                      <View style={{ width: 30, height: 30, borderRadius: radius.md, backgroundColor: iconMeta.bg, alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
-                        <IconComp size={15} color={iconMeta.color} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flex: 1, paddingRight: spacing.sm, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+                        <View style={{ width: 30, height: 30, borderRadius: radius.md, backgroundColor: iconMeta.bg, alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
+                          <IconComp size={15} color={iconMeta.color} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13, marginBottom: 2 }}>{preset.name}</Text>
+                          {!isExpanded && (
+                            <Text style={{ color: colors.textMuted, fontSize: 11, lineHeight: 14 }} numberOfLines={1}>{preset.description}</Text>
+                          )}
+                        </View>
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13, marginBottom: 2 }}>{preset.name}</Text>
-                        <Text style={{ color: colors.textMuted, fontSize: 11, lineHeight: 14 }}>{preset.description}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Pressable
+                          disabled={isInstalled}
+                          onPress={async (e) => {
+                            e.stopPropagation();
+                            await installPresetSkill(preset);
+                            const updated = await listSkills();
+                            setSkills(updated);
+                          }}
+                          style={({ pressed }) => [{
+                            backgroundColor: isInstalled ? '#18181b' : colors.accent,
+                            borderColor: isInstalled ? '#27272a' : colors.accent,
+                            borderWidth: 1,
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: radius.pill,
+                          }, pressed && styles.pressed]}
+                        >
+                          <Text style={{ color: isInstalled ? colors.textMuted : '#000', fontSize: 11, fontWeight: '700' }}>
+                            {isInstalled ? '✓ Добавлен' : '+ В 1 клик'}
+                          </Text>
+                        </Pressable>
+                        <View style={{ padding: 2 }}>
+                          {isExpanded ? (
+                            <ChevronUp size={14} color={colors.textMuted} />
+                          ) : (
+                            <ChevronDown size={14} color={colors.textMuted} />
+                          )}
+                        </View>
                       </View>
                     </View>
-                    <Pressable
-                      disabled={isInstalled}
-                      onPress={async () => {
-                        await installPresetSkill(preset);
-                        const updated = await listSkills();
-                        setSkills(updated);
-                      }}
-                      style={({ pressed }) => [{
-                        backgroundColor: isInstalled ? '#18181b' : colors.accent,
-                        borderColor: isInstalled ? '#27272a' : colors.accent,
-                        borderWidth: 1,
-                        paddingHorizontal: 10,
-                        paddingVertical: 5,
-                        borderRadius: radius.pill,
-                      }, pressed && styles.pressed]}
-                    >
-                      <Text style={{ color: isInstalled ? colors.textMuted : '#000', fontSize: 11, fontWeight: '700' }}>
-                        {isInstalled ? '✓ Добавлен' : '+ В 1 клик'}
-                      </Text>
-                    </Pressable>
-                  </View>
+
+                    {isExpanded && (
+                      <View style={{ marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: '#27272a' }}>
+                        <Text style={{ color: colors.text, fontSize: 11, fontWeight: '700', marginBottom: 2 }}>Описание:</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 11, lineHeight: 15, marginBottom: spacing.sm }}>{preset.description}</Text>
+
+                        <Text style={{ color: colors.text, fontSize: 11, fontWeight: '700', marginBottom: 2 }}>Инструкция для ИИ (Промпт):</Text>
+                        <View style={{ backgroundColor: '#09090b', borderColor: '#27272a', borderWidth: 1, borderRadius: radius.sm, padding: spacing.xs, marginBottom: spacing.sm }}>
+                          <Text style={{ color: '#a1a1aa', fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', lineHeight: 15 }}>
+                            {preset.pattern}
+                          </Text>
+                        </View>
+
+                        <Text style={{ color: colors.text, fontSize: 11, fontWeight: '700', marginBottom: 4 }}>Ключевые триггеры:</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                          {preset.triggerKeywords.map((kw) => (
+                            <View key={kw} style={{ backgroundColor: '#27272a', paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.pill }}>
+                              <Text style={{ color: colors.accent, fontSize: 10, fontWeight: '600' }}>#{kw}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </Pressable>
                 );
               })}
             </View>
@@ -1082,35 +1119,75 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                   <Text style={styles.emptySkillsText}>Нажмите «+ В 1 клик» в каталоге выше или попросите ИИ запомнить навык.</Text>
                 </View>
               ) : (
-                skills.map((skill, index) => (
-                  <View key={skill.id}>
-                    {index > 0 && <View style={styles.divider} />}
-                    <View style={styles.skillRow}>
-                      <View style={styles.skillInfo}>
-                        <Text style={styles.skillName}>{skill.name}</Text>
-                        <Text style={styles.skillDesc}>{skill.description}</Text>
-                        <View style={styles.skillMeta}>
-                          <Text style={styles.skillMetaText}>{t('settings.usedCount', { count: skill.usageCount })}</Text>
-                          {skill.triggerKeywords.length > 0 && (
-                            <Text style={styles.skillMetaText}> · {skill.triggerKeywords.slice(0, 3).join(', ')}</Text>
+                skills.map((skill, index) => {
+                  const isExpanded = expandedSkillName === (skill.id || skill.name);
+                  return (
+                    <View key={skill.id}>
+                      {index > 0 && <View style={styles.divider} />}
+                      <Pressable
+                        onPress={() => setExpandedSkillName(isExpanded ? null : (skill.id || skill.name))}
+                        style={styles.skillRow}
+                      >
+                        <View style={styles.skillInfo}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={styles.skillName}>{skill.name}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                              <Pressable
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  Alert.alert(t('settings.deleteSkillTitle'), t('settings.deleteSkillConfirm', { name: skill.name }), [
+                                    { text: t('settings.cancelAction'), style: 'cancel' },
+                                    { text: t('settings.deleteSkill'), style: 'destructive', onPress: () => handleDeleteSkill(skill.id) },
+                                  ]);
+                                }}
+                                style={({ pressed }) => [styles.skillDeleteBtn, pressed && styles.skillDeleteBtnPressed]}
+                                hitSlop={10}
+                              >
+                                <Trash2 size={16} color={colors.textMuted} />
+                              </Pressable>
+                              <View style={{ padding: 2 }}>
+                                {isExpanded ? (
+                                  <ChevronUp size={14} color={colors.textMuted} />
+                                ) : (
+                                  <ChevronDown size={14} color={colors.textMuted} />
+                                )}
+                              </View>
+                            </View>
+                          </View>
+                          <Text style={styles.skillDesc} numberOfLines={isExpanded ? undefined : 2}>{skill.description}</Text>
+
+                          {isExpanded ? (
+                            <View style={{ marginTop: spacing.sm, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: '#27272a' }}>
+                              {skill.pattern ? (
+                                <>
+                                  <Text style={{ color: colors.text, fontSize: 11, fontWeight: '700', marginBottom: 2 }}>Инструкция:</Text>
+                                  <View style={{ backgroundColor: '#09090b', borderColor: '#27272a', borderWidth: 1, borderRadius: radius.sm, padding: spacing.xs, marginBottom: spacing.xs }}>
+                                    <Text style={{ color: '#a1a1aa', fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', lineHeight: 15 }}>
+                                      {skill.pattern}
+                                    </Text>
+                                  </View>
+                                </>
+                              ) : null}
+                              <View style={styles.skillMeta}>
+                                <Text style={styles.skillMetaText}>{t('settings.usedCount', { count: skill.usageCount })}</Text>
+                                {skill.triggerKeywords.length > 0 && (
+                                  <Text style={styles.skillMetaText}> · #{skill.triggerKeywords.join(', #')}</Text>
+                                )}
+                              </View>
+                            </View>
+                          ) : (
+                            <View style={styles.skillMeta}>
+                              <Text style={styles.skillMetaText}>{t('settings.usedCount', { count: skill.usageCount })}</Text>
+                              {skill.triggerKeywords.length > 0 && (
+                                <Text style={styles.skillMetaText}> · {skill.triggerKeywords.slice(0, 3).join(', ')}</Text>
+                              )}
+                            </View>
                           )}
                         </View>
-                      </View>
-                      <Pressable
-                        onPress={() => {
-                          Alert.alert(t('settings.deleteSkillTitle'), t('settings.deleteSkillConfirm', { name: skill.name }), [
-                            { text: t('settings.cancelAction'), style: 'cancel' },
-                            { text: t('settings.deleteSkill'), style: 'destructive', onPress: () => handleDeleteSkill(skill.id) },
-                          ]);
-                        }}
-                        style={({ pressed }) => [styles.skillDeleteBtn, pressed && styles.skillDeleteBtnPressed]}
-                        hitSlop={10}
-                      >
-                        <Trash2 size={16} color={colors.textMuted} />
                       </Pressable>
                     </View>
-                  </View>
-                ))
+                  );
+                })
               )}
             </View>
           </>
