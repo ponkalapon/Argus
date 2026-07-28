@@ -201,7 +201,7 @@ export default function App() {
             </View>
           </ImageBackground>
         ) : (
-          <LinearGradient colors={["#09090b", "#121215"]} style={{ flex: 1, width: '100%', height: '100%' }}>
+          <LinearGradient colors={["#0b0b0e", "#111115"]} style={{ flex: 1, width: '100%', height: '100%' }}>
             {renderContent()}
           </LinearGradient>
         )}
