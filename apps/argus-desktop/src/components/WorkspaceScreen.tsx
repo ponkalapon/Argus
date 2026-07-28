@@ -698,8 +698,7 @@ ${names}`);
     setOutputTokens(0);
     streamedTextRef.current = '';
 
-    const streamStartTime = Date.now();
-    let totalStreamedTokens = 0;
+    let firstTokenTime: number | null = null;
 
     try {
       const result = await requestChatCompletion({
@@ -714,15 +713,20 @@ ${names}`);
           confirmCommunication,
         },
         onToken: (token) => {
+          const now = Date.now();
+          if (!firstTokenTime) {
+            firstTokenTime = now;
+          }
           streamQueue.current += token;
           streamedTextRef.current += token;
-          totalStreamedTokens += estimateTokens(token) || 1;
-          const elapsedSec = (Date.now() - streamStartTime) / 1000;
-          if (elapsedSec > 0.05) {
-            const speed = (totalStreamedTokens / elapsedSec).toFixed(1);
+          const tokensSoFar = estimateTokens(streamedTextRef.current);
+          setOutputTokens(tokensSoFar);
+
+          const elapsedSec = (now - firstTokenTime) / 1000;
+          if (elapsedSec > 0.05 && tokensSoFar > 0) {
+            const speed = (tokensSoFar / elapsedSec).toFixed(1);
             setStreamingSpeedMap((prev) => ({ ...prev, [assistantMessage.id]: speed }));
           }
-          setOutputTokens(estimateTokens(streamedTextRef.current));
         },
         onStep: (step) => {
           setMessages((prev) =>
