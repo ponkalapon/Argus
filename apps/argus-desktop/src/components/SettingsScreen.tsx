@@ -21,9 +21,14 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Code2,
   Cpu,
+  Database,
   Eye,
   EyeOff,
+  FileText,
+  FlaskConical,
+  Gift,
   Globe,
   Image as ImageIcon,
   Key,
@@ -118,6 +123,15 @@ const WALLPAPER_PRESETS_RAW: { id: WallpaperType; titleKey: string; descKey: str
     source: require('../../assets/wallpapers/deep_space.jpg'),
   },
 ];
+
+const PRESET_ICON_MAP: Record<string, { icon: any; color: string; bg: string }> = {
+  code: { icon: Code2, color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.15)' },
+  flask: { icon: FlaskConical, color: '#34d399', bg: 'rgba(52, 211, 153, 0.15)' },
+  database: { icon: Database, color: '#a78bfa', bg: 'rgba(167, 139, 250, 0.15)' },
+  file: { icon: FileText, color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.15)' },
+  palette: { icon: Palette, color: '#f472b6', bg: 'rgba(244, 114, 182, 0.15)' },
+  globe: { icon: Globe, color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.15)' },
+};
 
 export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange }: Props) => {
   const [activeTab, setActiveTab] = useState<TabType>('connection');
@@ -773,14 +787,20 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
 
                 {/* Preset Skills Catalog Section */}
                 <View style={{ marginTop: spacing.md, marginBottom: spacing.xl }}>
-                  <Text style={[styles.fieldLabel, { marginBottom: spacing.sm, fontSize: 13, color: colors.text, fontWeight: '700' }]}>
-                    🎁 Каталог готовых скиллов (добавление в 1 клик)
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm }}>
+                    <Gift size={16} color="#fbbf24" />
+                    <Text style={{ fontSize: 13, color: colors.text, fontWeight: '700' }}>
+                      Каталог готовых скиллов (добавление в 1 клик)
+                    </Text>
+                  </View>
                   <View style={{ gap: spacing.sm }}>
                     {PRESET_SKILLS.map((preset) => {
                       const isInstalled = skills.some(
                         (s) => s.name.toLowerCase() === preset.name.toLowerCase()
                       );
+                      const iconMeta = PRESET_ICON_MAP[preset.icon] || { icon: Sparkles, color: colors.accent, bg: 'rgba(167, 139, 250, 0.15)' };
+                      const IconComp = iconMeta.icon;
+
                       return (
                         <View
                           key={preset.name}
@@ -795,15 +815,19 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                             justifyContent: 'space-between',
                           }}
                         >
-                          <View style={{ flex: 1, paddingRight: spacing.md }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                              <Text style={{ fontSize: 16 }}>{preset.icon}</Text>
-                              <Text style={{ color: colors.text, fontWeight: '700', fontSize: 14 }}>{preset.name}</Text>
-                              <View style={{ backgroundColor: '#27272a', paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm }}>
-                                <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '600' }}>{preset.category}</Text>
-                              </View>
+                          <View style={{ flex: 1, paddingRight: spacing.md, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>
+                            <View style={{ width: 34, height: 34, borderRadius: radius.md, backgroundColor: iconMeta.bg, alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
+                              <IconComp size={18} color={iconMeta.color} />
                             </View>
-                            <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>{preset.description}</Text>
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 14 }}>{preset.name}</Text>
+                                <View style={{ backgroundColor: '#27272a', paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm }}>
+                                  <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '600' }}>{preset.category}</Text>
+                                </View>
+                              </View>
+                              <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>{preset.description}</Text>
+                            </View>
                           </View>
                           <Pressable
                             disabled={isInstalled}
@@ -836,9 +860,12 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                 </View>
 
                 {/* Installed Skills Section */}
-                <Text style={[styles.fieldLabel, { marginBottom: spacing.sm, fontSize: 13, color: colors.text, fontWeight: '700' }]}>
-                  ⚡ Ваши активные навыки ({skills.length})
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm }}>
+                  <Zap size={16} color="#f59e0b" />
+                  <Text style={{ fontSize: 13, color: colors.text, fontWeight: '700' }}>
+                    Ваши активные навыки ({skills.length})
+                  </Text>
+                </View>
 
                 {skills.length === 0 ? (
                   <View style={styles.emptyCard}>

@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Trash2, ChevronRight, ChevronDown, BarChart3, ArrowLeft, RefreshCw, Check, X, X as XIcon, Download, Shield, ShieldCheck, ShieldOff } from 'lucide-react-native';
+import { Trash2, ChevronRight, ChevronDown, BarChart3, ArrowLeft, RefreshCw, Check, X, X as XIcon, Download, Shield, ShieldCheck, ShieldOff, Code2, FlaskConical, Database, FileText, Palette, Globe, Gift, Zap, Sparkles } from 'lucide-react-native';
 import { AgentSettings, ApiFormat } from '../types';
 import { loadApiKey, saveApiKey, sanitizeSettings } from '../services/storage';
 import { getTokenStats, getDailyStats, resetTokenStats, TokenStats, DailyRecord } from '../services/tokenStats';
@@ -27,6 +27,15 @@ import { checkForUpdate, downloadAndInstallUpdate, CURRENT_VERSION } from '../se
 import { UsageChart } from './UsageChart';
 import { colors, fontFamily, motion, radius, spacing, typography } from '../styles/theme';
 import { t } from '../i18n';
+
+const PRESET_ICON_MAP: Record<string, { icon: any; color: string; bg: string }> = {
+  code: { icon: Code2, color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.15)' },
+  flask: { icon: FlaskConical, color: '#34d399', bg: 'rgba(52, 211, 153, 0.15)' },
+  database: { icon: Database, color: '#a78bfa', bg: 'rgba(167, 139, 250, 0.15)' },
+  file: { icon: FileText, color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.15)' },
+  palette: { icon: Palette, color: '#f472b6', bg: 'rgba(244, 114, 182, 0.15)' },
+  globe: { icon: Globe, color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.15)' },
+};
 
 type Props = {
   initialSettings: AgentSettings;
@@ -1004,10 +1013,16 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
             <Text style={styles.modalTitle}>{t('settings.skills')}</Text>
 
             {/* Catalog of preset skills */}
-            <Text style={[styles.sectionHeader, { marginTop: spacing.sm }]}>КАТАЛОГ ГОТОВЫХ СКИЛЛОВ</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm, marginBottom: spacing.xs }}>
+              <Gift size={14} color="#fbbf24" />
+              <Text style={styles.sectionHeader}>КАТАЛОГ ГОТОВЫХ СКИЛЛОВ</Text>
+            </View>
             <View style={{ gap: spacing.xs, marginBottom: spacing.md }}>
               {PRESET_SKILLS.map((preset) => {
                 const isInstalled = skills.some((s) => s.name.toLowerCase() === preset.name.toLowerCase());
+                const iconMeta = PRESET_ICON_MAP[preset.icon] || { icon: Sparkles, color: colors.accent, bg: 'rgba(167, 139, 250, 0.15)' };
+                const IconComp = iconMeta.icon;
+
                 return (
                   <View
                     key={preset.name}
@@ -1022,12 +1037,14 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
                       justifyContent: 'space-between',
                     }}
                   >
-                    <View style={{ flex: 1, paddingRight: spacing.sm }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                        <Text style={{ fontSize: 14 }}>{preset.icon}</Text>
-                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>{preset.name}</Text>
+                    <View style={{ flex: 1, paddingRight: spacing.sm, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+                      <View style={{ width: 30, height: 30, borderRadius: radius.md, backgroundColor: iconMeta.bg, alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
+                        <IconComp size={15} color={iconMeta.color} />
                       </View>
-                      <Text style={{ color: colors.textMuted, fontSize: 11, lineHeight: 14 }}>{preset.description}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13, marginBottom: 2 }}>{preset.name}</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 11, lineHeight: 14 }}>{preset.description}</Text>
+                      </View>
                     </View>
                     <Pressable
                       disabled={isInstalled}
@@ -1054,7 +1071,10 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave }: Props) => {
               })}
             </View>
 
-            <Text style={styles.sectionHeader}>АКТИВНЫЕ НАВЫКИ ({skills.length})</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.xs }}>
+              <Zap size={14} color="#f59e0b" />
+              <Text style={styles.sectionHeader}>АКТИВНЫЕ НАВЫКИ ({skills.length})</Text>
+            </View>
             <View style={styles.card}>
               {skills.length === 0 ? (
                 <View style={styles.emptySkillsBox}>
