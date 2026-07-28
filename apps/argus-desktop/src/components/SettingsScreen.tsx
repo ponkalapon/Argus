@@ -222,35 +222,18 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
     return normalized ? `${normalized}/v1/chat/completions` : t('settings.base_url_empty', 'Base URL не задан');
   }, [baseUrl]);
 
-  const handleSave = async () => {
+  const handleBack = async () => {
     const settings = sanitizeSettings({ baseUrl, model, allowAssistantContacts });
-
-    if (!settings.baseUrl.trim()) {
-      Alert.alert(t('settings.alert_need_url', 'Нужен Base URL'), t('settings.alert_need_url_msg', 'Укажи адрес OpenAI-compatible API.'));
-      return;
-    }
-    if (!/^https?:\/\//i.test(settings.baseUrl.trim())) {
-      Alert.alert(t('settings.alert_check_url', 'Проверь Base URL'), t('settings.alert_check_url_msg', 'Адрес должен начинаться с http:// или https://.'));
-      return;
-    }
-    if (!settings.model.trim()) {
-      Alert.alert(t('settings.alert_need_model', 'Нужна модель'), t('settings.alert_need_model_msg', 'Укажи название модели.'));
-      return;
-    }
-
-    setIsSaving(true);
     try {
       await saveApiKey(apiKey);
       await saveThemeConfig({ wallpaper, customWallpaperUri, layoutWidth, language, fontFamily, accentColor, wallpaperOpacity, bubbleStyle, fontSize });
       applyAccentColor(accentColor);
       if (onThemeChange) onThemeChange();
       await onSave(settings, apiKey.trim());
-      Alert.alert(t('settings.alert_saved', 'Готово'), t('settings.alert_saved_msg', 'Настройки сохранены.'), [{ text: 'OK', onPress: onBack }]);
-    } catch (error) {
-      Alert.alert(t('settings.alert_error', 'Ошибка'), error instanceof Error ? error.message : 'Неизвестная ошибка');
-    } finally {
-      setIsSaving(false);
+    } catch {
+      /* silent on back */
     }
+    onBack();
   };
 
   const updateTheme = async (updates: Partial<{
@@ -404,20 +387,13 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
         <View style={styles.header}>
           <Pressable
             accessibilityRole="button"
-            onPress={onBack}
+            onPress={handleBack}
             style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
           >
             <ArrowLeft size={20} color={colors.text} />
           </Pressable>
           <Text style={styles.headerTitle}>{t('settings.title', 'Настройки')}</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={handleSave}
-            disabled={isSaving}
-            style={({ pressed }) => [styles.saveBtn, pressed && styles.pressed]}
-          >
-            <Text style={styles.saveBtnText}>{isSaving ? t('settings.saving', 'Сохранение…') : t('settings.save', 'Сохранить')}</Text>
-          </Pressable>
+          <View style={{ width: 34 }} />
         </View>
 
         {/* Main Settings Modal Layout */}
