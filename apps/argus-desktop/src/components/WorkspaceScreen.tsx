@@ -161,6 +161,7 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [inputTokens, setInputTokens] = useState(0);
   const [outputTokens, setOutputTokens] = useState(0);
+  const [streamingSpeedMap, setStreamingSpeedMap] = useState<Record<string, string>>({});
   const [internetEnabled, setInternetEnabled] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const streamedTextRef = useRef('');
@@ -697,6 +698,9 @@ ${names}`);
     setOutputTokens(0);
     streamedTextRef.current = '';
 
+    const streamStartTime = Date.now();
+    let totalStreamedTokens = 0;
+
     try {
       const result = await requestChatCompletion({
         settings,
@@ -712,6 +716,12 @@ ${names}`);
         onToken: (token) => {
           streamQueue.current += token;
           streamedTextRef.current += token;
+          totalStreamedTokens += estimateTokens(token) || 1;
+          const elapsedSec = (Date.now() - streamStartTime) / 1000;
+          if (elapsedSec > 0.05) {
+            const speed = (totalStreamedTokens / elapsedSec).toFixed(1);
+            setStreamingSpeedMap((prev) => ({ ...prev, [assistantMessage.id]: speed }));
+          }
           setOutputTokens(estimateTokens(streamedTextRef.current));
         },
         onStep: (step) => {
@@ -784,6 +794,12 @@ ${names}`);
       setMessages(errorMessages);
       void saveChatSnapshot(chatId, chatTitle, errorMessages);
       scrollToEnd();
+    } finally {
+      setStreamingSpeedMap((prev) => {
+        const copy = { ...prev };
+        delete copy[assistantMessage.id];
+        return copy;
+      });
     }
   };
 
@@ -991,6 +1007,7 @@ ${names}`);
                       message={m}
                       onRegenerate={m.role === 'assistant' ? () => handleRegenerate(m.id) : undefined}
                       onDelete={() => handleDeleteMessage(m.id)}
+                      streamingSpeed={streamingSpeedMap[m.id]}
                     />
                   ))
               )}

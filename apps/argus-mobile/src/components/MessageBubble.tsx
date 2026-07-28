@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import Markdown, { ASTNode } from 'react-native-markdown-display';
+import { Zap } from 'lucide-react-native';
 import { ChatMessage } from '../types';
 import { colors, fontFamily, radius, spacing, typography } from '../styles/theme';
 import { t } from '../i18n';
@@ -9,9 +10,10 @@ import MermaidChart from './MermaidChart';
 
 type Props = {
   message: ChatMessage;
+  streamingSpeed?: string | null;
 };
 
-export const MessageBubble = memo(({ message }: Props) => {
+export const MessageBubble = memo(({ message, streamingSpeed }: Props) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const isUser = message.role === 'user';
   const isEmpty = !isUser && message.content.length === 0;
@@ -141,6 +143,13 @@ export const MessageBubble = memo(({ message }: Props) => {
             {raw}
           </Markdown>
         )}
+
+        {streamingSpeed ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(167, 139, 250, 0.12)', borderColor: 'rgba(167, 139, 250, 0.35)', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, alignSelf: 'flex-start', marginTop: 6 }}>
+            <Zap size={11} color={colors.accent} />
+            <Text style={{ color: colors.accent, fontSize: 10, fontWeight: '700' }}>{streamingSpeed} т/сек</Text>
+          </View>
+        ) : null}
       </Animated.View>
     </View>
   );

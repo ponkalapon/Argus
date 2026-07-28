@@ -166,6 +166,7 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [inputTokens, setInputTokens] = useState(0);
   const [outputTokens, setOutputTokens] = useState(0);
+  const [streamingSpeedMap, setStreamingSpeedMap] = useState<Record<string, string>>({});
   const [internetEnabled, setInternetEnabled] = useState(settings.internetEnabled);
   const [isRecording, setIsRecording] = useState(false);
   const streamedTextRef = useRef('');
@@ -684,6 +685,9 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     setOutputTokens(0);
     streamedTextRef.current = '';
 
+    const streamStartTime = Date.now();
+    let totalStreamedTokens = 0;
+
     try {
       const activeTools = internetEnabled
         ? TOOL_DEFINITIONS
@@ -703,6 +707,12 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
         onToken: (token) => {
           streamQueue.current += token;
           streamedTextRef.current += token;
+          totalStreamedTokens += estimateTokens(token) || 1;
+          const elapsedSec = (Date.now() - streamStartTime) / 1000;
+          if (elapsedSec > 0.05) {
+            const speed = (totalStreamedTokens / elapsedSec).toFixed(1);
+            setStreamingSpeedMap((prev) => ({ ...prev, [assistantMessage.id]: speed }));
+          }
           setOutputTokens(estimateTokens(streamedTextRef.current));
         },
       });
@@ -761,6 +771,12 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
       setMessages(errorMessages);
       void saveChatSnapshot(chatId, chatTitle, errorMessages);
       scrollToEnd();
+    } finally {
+      setStreamingSpeedMap((prev) => {
+        const copy = { ...prev };
+        delete copy[assistantMessage.id];
+        return copy;
+      });
     }
   };
 
@@ -931,7 +947,7 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
               ) : (
                 messages
                   .filter((m) => m.id !== 'welcome')
-                  .map((m) => <MessageBubble key={m.id} message={m} />)
+                  .map((m) => <MessageBubble key={m.id} message={m} streamingSpeed={streamingSpeedMap[m.id]} />)
               )}
 
               {!!error && (

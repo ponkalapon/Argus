@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import Markdown, { ASTNode } from 'react-native-markdown-display';
-import { Check, ChevronRight, Copy, RotateCw } from 'lucide-react-native';
+import { Check, ChevronRight, Copy, RotateCw, Zap } from 'lucide-react-native';
 import { ChatMessage } from '../types';
 import { colors, radius, spacing, typography } from '../styles/theme';
 import MermaidChart from './MermaidChart';
@@ -105,9 +105,10 @@ type Props = {
   message: ChatMessage;
   onRegenerate?: () => void;
   onDelete?: () => void;
+  streamingSpeed?: string | null;
 };
 
-export const MessageBubble = memo(({ message, onRegenerate, onDelete }: Props) => {
+export const MessageBubble = memo(({ message, onRegenerate, onDelete, streamingSpeed }: Props) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copiedMessage, setCopiedMessage] = useState(false);
 
@@ -257,8 +258,8 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete }: Props) =
           </Markdown>
         )}
 
-        {/* Message Action Bar (Copy, Like, Dislike, Regenerate, Delete) */}
-        {(!isEmpty || (message.steps && message.steps.length > 0)) && (
+        {/* Message Action Bar (Copy, Like, Dislike, Regenerate, Delete, Speed Badge) */}
+        {(!isEmpty || (message.steps && message.steps.length > 0) || streamingSpeed) && (
           <View style={styles.actionBar}>
             <Pressable
               onPress={copyFullMessage}
@@ -281,6 +282,13 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete }: Props) =
               >
                 <RotateCw size={14} color={colors.textMuted} />
               </Pressable>
+            ) : null}
+
+            {streamingSpeed ? (
+              <View style={styles.speedBadge}>
+                <Zap size={12} color={colors.accent} />
+                <Text style={styles.speedText}>{streamingSpeed} т/сек</Text>
+              </View>
             ) : null}
           </View>
         )}
@@ -555,5 +563,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontStyle: 'italic',
     marginLeft: 4,
+  },
+  speedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(167, 139, 250, 0.12)',
+    borderColor: 'rgba(167, 139, 250, 0.35)',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    marginLeft: 6,
+  },
+  speedText: {
+    color: colors.accent,
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 });
