@@ -286,8 +286,7 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, streamingS
 
             {streamingSpeed ? (
               <View style={styles.speedBadge}>
-                <Zap size={12} color={colors.accent} />
-                <Text style={styles.speedText}>{streamingSpeed} т/сек</Text>
+                <Text style={styles.speedText}>{streamingSpeed} т/с</Text>
               </View>
             ) : null}
           </View>
@@ -565,21 +564,17 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   speedBadge: {
-    flexDirection: 'row',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    marginLeft: 4,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(167, 139, 250, 0.12)',
-    borderColor: 'rgba(167, 139, 250, 0.35)',
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
-    marginLeft: 6,
   },
   speedText: {
-    color: colors.accent,
+    color: colors.textMuted,
     fontSize: 11,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '500',
   },
 });

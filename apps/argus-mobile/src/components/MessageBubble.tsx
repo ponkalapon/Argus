@@ -145,9 +145,8 @@ export const MessageBubble = memo(({ message, streamingSpeed }: Props) => {
         )}
 
         {streamingSpeed ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(167, 139, 250, 0.12)', borderColor: 'rgba(167, 139, 250, 0.35)', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, alignSelf: 'flex-start', marginTop: 6 }}>
-            <Zap size={11} color={colors.accent} />
-            <Text style={{ color: colors.accent, fontSize: 10, fontWeight: '700' }}>{streamingSpeed} т/сек</Text>
+          <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.06)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm, alignSelf: 'flex-start', marginTop: 6 }}>
+            <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '500' }}>{streamingSpeed} т/с</Text>
           </View>
         ) : null}
       </Animated.View>
