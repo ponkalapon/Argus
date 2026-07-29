@@ -1056,38 +1056,38 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
             {activeTab === 'updates' && (
               <View style={styles.sectionCard}>
                 <View style={styles.cardHeader}>
-                  <RefreshCw size={18} color={colors.accent} />
-                  <Text style={styles.cardTitle}>Синхронизация с Git и автообновление</Text>
+                  <RefreshCw size={18} color="#a78bfa" />
+                  <Text style={styles.cardTitle}>Синхронизация с Git и обновлением</Text>
                 </View>
                 <Text style={styles.cardDesc}>
-                  Обновление приложения напрямую из GitHub репозитория без скачивания установочных файлов .exe. Изменения подтягиваются и собираются локально.
+                  Локальное обновление из GitHub репозитория без необходимости скачивать новые установочные .exe файлы.
                 </Text>
 
-                {/* Status Box */}
-                <View style={{ backgroundColor: '#18181b', borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.lg }}>
+                {/* Status Card */}
+                <View style={{ backgroundColor: '#121215', borderWidth: 1, borderColor: '#232328', borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs }}>
-                    <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>Репозиторий:</Text>
-                    <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '700' }}>github.com/ponkalapon/Argus.git (main)</Text>
+                    <Text style={{ color: '#80808a', fontSize: 12, fontWeight: '500' }}>Репозиторий:</Text>
+                    <Text style={{ color: '#a78bfa', fontSize: 12, fontWeight: '600', fontFamily: 'Consolas, monospace' }}>github.com/ponkalapon/Argus.git (main)</Text>
                   </View>
 
-                  <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginVertical: spacing.xs }} />
+                  <View style={{ height: 1, backgroundColor: '#1c1c22', marginVertical: spacing.xs }} />
 
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: gitStatus?.available ? colors.success : colors.accent }} />
-                    <Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 4 }}>
+                    <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: gitStatus?.available ? '#22c55e' : gitStatus?.error ? '#f87171' : '#a78bfa', marginTop: 5 }} />
+                    <Text style={{ color: '#e4e4e7', fontSize: 13, fontWeight: '500', flex: 1, lineHeight: 19 }}>
                       {gitStatus?.available
                         ? `Доступны новые обновления (коммитов: ${gitStatus.commitCount})`
                         : gitStatus?.error
-                          ? `Статус: ${gitStatus.error}`
+                          ? gitStatus.error
                           : 'Версия актуальна — локальный код совпадает с GitHub'}
                     </Text>
                   </View>
 
                   {gitStatus?.commits && gitStatus.commits.length > 0 && (
-                    <View style={{ marginTop: spacing.md, backgroundColor: '#0d0d10', borderRadius: radius.md, padding: spacing.sm, borderWidth: 1, borderColor: '#232328' }}>
-                      <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '700', marginBottom: 4 }}>СВЕЖИЕ КОММИТЫ В MAIN:</Text>
+                    <View style={{ marginTop: spacing.md, backgroundColor: '#0b0b0e', borderRadius: radius.sm, padding: spacing.sm, borderWidth: 1, borderColor: '#1c1c22' }}>
+                      <Text style={{ color: '#80808a', fontSize: 10, fontWeight: '700', letterSpacing: 0.5, marginBottom: 4 }}>СВЕЖИЕ КОММИТЫ:</Text>
                       {gitStatus.commits.slice(0, 5).map((commit, idx) => (
-                        <Text key={idx} style={{ color: '#e4e4e7', fontFamily: 'Consolas, monospace', fontSize: 11, marginVertical: 2 }}>
+                        <Text key={idx} style={{ color: '#d4d4d8', fontFamily: 'Consolas, monospace', fontSize: 11, marginVertical: 2 }}>
                           • {commit}
                         </Text>
                       ))}
@@ -1099,17 +1099,17 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                 <View style={styles.switchRow}>
                   <View style={{ flex: 1, paddingRight: spacing.md }}>
                     <Text style={styles.switchTitle}>Автопроверка обновлений</Text>
-                    <Text style={styles.switchDesc}>Проверять новые коммиты в GitHub при запуске приложения</Text>
+                    <Text style={styles.switchDesc}>Проверять наличие свежих коммитов на GitHub при запуске</Text>
                   </View>
                   <Switch
                     value={autoCheckUpdates}
                     onValueChange={handleToggleAutoCheck}
-                    trackColor={{ false: '#27272a', true: colors.accent }}
+                    trackColor={{ false: '#232328', true: '#8b5cf6' }}
                     thumbColor="#ffffff"
                   />
                 </View>
 
-                <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.lg }} />
+                <View style={{ height: 1, backgroundColor: '#1c1c22', marginVertical: spacing.md }} />
 
                 {/* Action Buttons */}
                 <View style={{ flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' }}>
@@ -1118,14 +1118,26 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                     onPress={handleCheckUpdates}
                     disabled={isCheckingGit || isUpdatingGit}
                     style={({ pressed }) => [
-                      styles.mcBtn,
-                      { flex: 1, minWidth: 160, paddingVertical: 12, flexDirection: 'row', justifyContent: 'center', gap: 8 },
+                      {
+                        flex: 1,
+                        minWidth: 150,
+                        paddingVertical: 10,
+                        paddingHorizontal: 14,
+                        borderRadius: radius.md,
+                        backgroundColor: '#16161a',
+                        borderWidth: 1,
+                        borderColor: '#26262e',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                      },
                       (isCheckingGit || isUpdatingGit) && { opacity: 0.5 },
                       pressed && styles.pressed,
                     ]}
                   >
-                    <RefreshCw size={16} color={colors.text} />
-                    <Text style={{ color: colors.text, fontWeight: '600', fontSize: 13 }}>
+                    <RefreshCw size={15} color="#e4e4e7" />
+                    <Text style={{ color: '#e4e4e7', fontWeight: '500', fontSize: 13 }}>
                       {isCheckingGit ? 'Проверка...' : 'Проверить Git'}
                     </Text>
                   </Pressable>
@@ -1135,26 +1147,37 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                     onPress={handleRunUpdate}
                     disabled={isUpdatingGit}
                     style={({ pressed }) => [
-                      styles.mcBtn,
-                      styles.mcBtnPrimary,
-                      { flex: 1, minWidth: 200, paddingVertical: 12, flexDirection: 'row', justifyContent: 'center', gap: 8 },
+                      {
+                        flex: 1,
+                        minWidth: 190,
+                        paddingVertical: 10,
+                        paddingHorizontal: 14,
+                        borderRadius: radius.md,
+                        backgroundColor: '#1e1b2e',
+                        borderWidth: 1,
+                        borderColor: 'rgba(167, 139, 250, 0.3)',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                      },
                       isUpdatingGit && { opacity: 0.5 },
                       pressed && styles.pressed,
                     ]}
                   >
-                    <Zap size={16} color="#ffffff" fill="#ffffff" />
-                    <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>
-                      {isUpdatingGit ? 'Сборка локально...' : 'Синхронизировать и собрать ПК'}
+                    <Zap size={15} color="#c084fc" />
+                    <Text style={{ color: '#c084fc', fontWeight: '600', fontSize: 13 }}>
+                      {isUpdatingGit ? 'Сборка...' : 'Синхронизировать и собрать ПК'}
                     </Text>
                   </Pressable>
                 </View>
 
                 {/* Output log */}
                 {Boolean(updateLog) && (
-                  <View style={{ marginTop: spacing.lg, backgroundColor: '#0d0d10', borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md }}>
-                    <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700', marginBottom: spacing.xs }}>ЛОГ СИНХРОНИЗАЦИИ:</Text>
-                    <ScrollView style={{ maxHeight: 160 }}>
-                      <Text style={{ color: '#4ade80', fontFamily: 'Consolas, monospace', fontSize: 12, lineHeight: 18 }}>
+                  <View style={{ marginTop: spacing.md, backgroundColor: '#0b0b0e', borderRadius: radius.md, borderWidth: 1, borderColor: '#232328', padding: spacing.md }}>
+                    <Text style={{ color: '#80808a', fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: spacing.xs }}>ЛОГ СИНХРОНИЗАЦИИ:</Text>
+                    <ScrollView style={{ maxHeight: 140 }}>
+                      <Text style={{ color: '#a1a1aa', fontFamily: 'Consolas, monospace', fontSize: 11, lineHeight: 17 }}>
                         {updateLog}
                       </Text>
                     </ScrollView>
@@ -1162,12 +1185,19 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                     <Pressable
                       onPress={reloadApp}
                       style={({ pressed }) => [
-                        styles.mcBtn,
-                        { marginTop: spacing.md, backgroundColor: colors.accent, borderColor: colors.accent, paddingVertical: 10, alignItems: 'center' },
+                        {
+                          marginTop: spacing.md,
+                          backgroundColor: '#16161a',
+                          borderWidth: 1,
+                          borderColor: '#26262e',
+                          borderRadius: radius.md,
+                          paddingVertical: 9,
+                          alignItems: 'center',
+                        },
                         pressed && styles.pressed,
                       ]}
                     >
-                      <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>Перезапустить приложение</Text>
+                      <Text style={{ color: '#e4e4e7', fontWeight: '600', fontSize: 13 }}>Перезапустить приложение</Text>
                     </Pressable>
                   </View>
                 )}

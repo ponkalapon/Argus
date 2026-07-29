@@ -9,7 +9,10 @@ ipcMain.handle('git-check-updates', async () => {
     const projectRoot = path.join(__dirname, '../..');
     exec('git fetch origin && git log HEAD..origin/main --oneline -n 15', { cwd: projectRoot }, (err, stdout) => {
       if (err) {
-        resolve({ available: false, commitCount: 0, commits: [], error: err.message });
+        const msg = err.message.includes('not a git repository')
+          ? 'Локальный репозиторий Git не обнаружен (приложение запущено из отдельной папки / готового .exe). Скачайте свежий релиз с GitHub.'
+          : `Ошибка Git: ${err.message.split('\n')[0]}`;
+        resolve({ available: false, commitCount: 0, commits: [], error: msg });
         return;
       }
       const lines = stdout.trim().split('\n').filter(Boolean);
@@ -29,12 +32,15 @@ ipcMain.handle('git-pull-and-build', async () => {
 
     exec('git pull origin main', { cwd: projectRoot }, (errPull, stdoutPull) => {
       if (errPull) {
-        resolve({ success: false, built: false, log: `Ошибка git pull: ${errPull.message}` });
+        const msg = errPull.message.includes('not a git repository')
+          ? 'Папка с проектом не содержит .git. Для автообновления запустите приложение из исходного Git-репозитория.'
+          : errPull.message.split('\n')[0];
+        resolve({ success: false, built: false, log: `Не удалось выполнить git pull: ${msg}` });
         return;
       }
       exec('npm run build', { cwd: appDir }, (errBuild, stdoutBuild) => {
         if (errBuild) {
-          resolve({ success: true, built: false, log: `Git pull успешен.\nLog:\n${stdoutPull}\n\nОшибка сборки: ${errBuild.message}` });
+          resolve({ success: true, built: false, log: `Git pull успешен.\nОшибка сборки: ${errBuild.message.split('\n')[0]}` });
           return;
         }
         resolve({ success: true, built: true, log: `Успешно обновлено и собрано локально!\n${stdoutPull}\n${stdoutBuild}` });
