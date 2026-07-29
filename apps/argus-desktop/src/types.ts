@@ -18,6 +18,10 @@ export type ChatMessage = {
   content: string;
   createdAt: number;
   steps?: AgentStep[];
+  /** Alternative response texts when user has regenerated */
+  branches?: string[];
+  /** Currently shown branch index (0 = first/original) */
+  branchIndex?: number;
 };
 
 export type StoredChat = {
@@ -26,6 +30,7 @@ export type StoredChat = {
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
+  tokenCount?: number;
 };
 
 export type AgentSettings = {
@@ -67,6 +72,7 @@ export type ChatCompletionRequest = {
   onToken?: (token: string) => void;
   onStep?: (step: AgentStep) => void;
   tools?: any[];
+  signal?: AbortSignal;
 };
 
 export type TokenUsage = {

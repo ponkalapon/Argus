@@ -31,7 +31,7 @@ import { estimateTokens, estimateMessagesTokens } from '../services/context';
 import { recordTokenUsage } from '../services/tokenStats';
 import { t } from '../services/i18n';
 import * as ImagePicker from 'expo-image-picker';
-import { ArrowLeft, ArrowUp, Bot, Camera, Check, ChevronDown, Download, Folder, Globe, Image, Layers, Menu, Mic, Paperclip, Plus, Search, Settings, Trash2, Users, X } from 'lucide-react-native';
+import { ArrowLeft, ArrowUp, Bot, Camera, Check, ChevronDown, Download, Folder, Globe, Image, Layers, Menu, Mic, Paperclip, Plus, Search, Settings, Square, Trash2, Users, X } from 'lucide-react-native';
 import { WebView } from 'react-native-webview';
 import { SvgXml } from 'react-native-svg';
 
@@ -164,6 +164,10 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
   const [streamingSpeedMap, setStreamingSpeedMap] = useState<Record<string, string>>({});
   const [internetEnabled, setInternetEnabled] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
+  const [chatSearchVisible, setChatSearchVisible] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const streamedTextRef = useRef('');
   const confirmedContactPhonesRef = useRef<Set<string>>(new Set());
   const tokenPulse = useRef(new Animated.Value(1)).current;
@@ -400,6 +404,36 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
     };
   }, []);
 
+  // ── Keyboard shortcuts (Ctrl+N, Ctrl+K, Ctrl+F, Esc) ──
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        startNewChat();
+      } else if (e.ctrlKey && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setShowChatList(true);
+        setTimeout(() => openSearch(), 350);
+      } else if (e.ctrlKey && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        setChatSearchVisible((prev) => !prev);
+        if (!chatSearchVisible) setChatSearchQuery('');
+      } else if (e.key === 'Escape') {
+        if (chatSearchVisible) {
+          setChatSearchVisible(false);
+          setChatSearchQuery('');
+        } else if (showChatList) {
+          closeDrawer();
+        }
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+    return undefined;
+  }, [showChatList, chatSearchVisible]);
+
   const scrollToEnd = () => {
     requestAnimationFrame(() => {
       scrollRef.current?.scrollToEnd({ animated: true });
@@ -423,12 +457,14 @@ export const WorkspaceScreen = ({ settings, apiKey, onOpenSettings, onOpenSandbo
 
     const existing = chatsRef.current.find((chat) => chat.id === chatId);
     const now = Date.now();
+    const tokenCount = estimateMessagesTokens(storedMessages.map((m) => ({ role: m.role, content: m.content })));
     const nextChat: StoredChat = {
       id: chatId,
       title: existing?.title || title,
       messages: storedMessages,
       createdAt: existing?.createdAt || now,
       updatedAt: now,
+      tokenCount,
     };
 
     await persistChats([nextChat, ...chatsRef.current.filter((chat) => chat.id !== chatId)]);
@@ -623,6 +659,10 @@ ${names}`);
     const content = text.trim();
     if (!content || status === 'thinking') return;
 
+    // Clear editing state if editing
+    setEditingMessageId(null);
+    setChatSearchVisible(false);
+
     if (!hasRequiredSettings) {
       Alert.alert('Нужны настройки', 'Укажи Base URL и Model перед отправкой.', [
         { text: 'Отмена', style: 'cancel' },
@@ -700,11 +740,16 @@ ${names}`);
 
     let firstTokenTime: number | null = null;
 
+    // Create abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       const result = await requestChatCompletion({
         settings,
         apiKey,
         messages: apiMessages,
+        signal: abortController.signal,
         context: {
           workspaceId: chatId,
           contactsAccessEnabled: settings.allowAssistantContacts,
@@ -778,6 +823,20 @@ ${names}`);
       flushAllStreamText();
       stopStreamTicker();
       streamMessageId.current = null;
+
+      // If aborted by user — clean up silently without error message
+      if (requestError instanceof Error && (requestError.name === 'AbortError' || requestError.message.includes('aborted'))) {
+        setStatus('idle');
+        abortControllerRef.current = null;
+        setStreamingSpeedMap((prev) => {
+          const copy = { ...prev };
+          delete copy[assistantMessage.id];
+          return copy;
+        });
+        // Keep whatever was streamed so far
+        return;
+      }
+
       let message =
         requestError instanceof Error ? requestError.message : 'Неизвестная ошибка запроса';
 
@@ -799,6 +858,7 @@ ${names}`);
       void saveChatSnapshot(chatId, chatTitle, errorMessages);
       scrollToEnd();
     } finally {
+      abortControllerRef.current = null;
       setStreamingSpeedMap((prev) => {
         const copy = { ...prev };
         delete copy[assistantMessage.id];
@@ -886,6 +946,17 @@ ${names}`);
     setTimeout(() => onOpenSettings(), 350);
   };
 
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    stopStreamTicker();
+    flushAllStreamText();
+    streamMessageId.current = null;
+    setStatus('idle');
+  };
+
   const handleRegenerate = (messageId: string) => {
     const currentMsgs = messages.filter((m) => m.id !== 'welcome');
     const targetIndex = currentMsgs.findIndex((m) => m.id === messageId);
@@ -902,12 +973,63 @@ ${names}`);
     }
 
     if (userQuery) {
+      // Save current content as branch before regenerating
+      const currentContent = currentMsgs[targetIndex].content;
+      const existingBranches = currentMsgs[targetIndex].branches || [currentContent];
+      const branchSnapshot = existingBranches;
+
       const kept = currentMsgs.slice(0, sliceIndex);
       setMessages(kept.length > 0 ? kept : [{ id: 'welcome', role: 'assistant', content: 'Чем могу помочь?', createdAt: Date.now() }]);
       setTimeout(() => {
         sendMessage(userQuery);
+        // After sendMessage creates new assistant message, tag it with branch info
       }, 50);
+      // Store pending branch data to attach after generation
+      pendingBranchRef.current = { parentBranches: branchSnapshot, messageId };
     }
+  };
+
+  const pendingBranchRef = useRef<{ parentBranches: string[]; messageId: string } | null>(null);
+
+  // After a regeneration finishes, attach branch history to the new message
+  useEffect(() => {
+    if (pendingBranchRef.current && status === 'idle') {
+      const { parentBranches } = pendingBranchRef.current;
+      pendingBranchRef.current = null;
+      setMessages((prev) => {
+        const lastAssistant = [...prev].reverse().find((m) => m.role === 'assistant' && m.id !== 'welcome');
+        if (!lastAssistant) return prev;
+        const allBranches = [...parentBranches, lastAssistant.content];
+        return prev.map((m) =>
+          m.id === lastAssistant.id
+            ? { ...m, branches: allBranches, branchIndex: allBranches.length - 1 }
+            : m
+        );
+      });
+    }
+  }, [status]);
+
+  const handleBranchNav = (messageId: string, direction: 'prev' | 'next') => {
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId || !m.branches) return m;
+        const total = m.branches.length;
+        const current = m.branchIndex ?? total - 1;
+        const next = direction === 'prev' ? Math.max(0, current - 1) : Math.min(total - 1, current + 1);
+        return { ...m, branchIndex: next, content: m.branches[next] };
+      })
+    );
+  };
+
+  const handleEditMessage = (messageId: string) => {
+    const msg = messages.find((m) => m.id === messageId);
+    if (!msg || msg.role !== 'user') return;
+    // Remove message and everything after it
+    const idx = messages.findIndex((m) => m.id === messageId);
+    const kept = messages.slice(0, idx);
+    setMessages(kept.length > 0 ? kept : [initialAssistantMessage]);
+    setDraft(msg.content);
+    setEditingMessageId(messageId);
   };
 
   return (
@@ -1005,15 +1127,29 @@ ${names}`);
               ) : (
                 messages
                   .filter((m) => m.id !== 'welcome')
-                  .map((m) => (
-                    <MessageBubble
-                      key={m.id}
-                      message={m}
-                      onRegenerate={m.role === 'assistant' ? () => handleRegenerate(m.id) : undefined}
-                      onDelete={() => handleDeleteMessage(m.id)}
-                      streamingSpeed={streamingSpeedMap[m.id]}
-                    />
-                  ))
+                  .map((m) => {
+                    const branchTotal = m.branches?.length;
+                    const branchIdx = m.branchIndex ?? (branchTotal ? branchTotal - 1 : undefined);
+                    const matchesSearch = chatSearchQuery.trim()
+                      ? m.content.toLowerCase().includes(chatSearchQuery.toLowerCase())
+                      : true;
+                    if (!matchesSearch && chatSearchVisible && chatSearchQuery.trim()) return null;
+                    return (
+                      <MessageBubble
+                        key={m.id}
+                        message={m}
+                        onRegenerate={m.role === 'assistant' ? () => handleRegenerate(m.id) : undefined}
+                        onDelete={() => handleDeleteMessage(m.id)}
+                        onEdit={m.role === 'user' ? () => handleEditMessage(m.id) : undefined}
+                        streamingSpeed={streamingSpeedMap[m.id]}
+                        branchTotal={branchTotal}
+                        branchIndex={branchIdx}
+                        onBranchPrev={branchTotal && branchTotal > 1 ? () => handleBranchNav(m.id, 'prev') : undefined}
+                        onBranchNext={branchTotal && branchTotal > 1 ? () => handleBranchNav(m.id, 'next') : undefined}
+                        highlightText={chatSearchVisible && chatSearchQuery.trim() ? chatSearchQuery : undefined}
+                      />
+                    );
+                  })
               )}
 
               {!!error && (
@@ -1023,8 +1159,26 @@ ${names}`);
               )}
             </Animated.ScrollView>
 
-            {/* ── Composer ── */}
-            <View style={styles.composerWrap}>
+              {/* ── In-chat Search Bar ── */}
+              {chatSearchVisible && (
+                <View style={styles.chatSearchBar}>
+                  <Search size={14} color={colors.textMuted} style={{ marginRight: 6 }} />
+                  <TextInput
+                    autoFocus
+                    value={chatSearchQuery}
+                    onChangeText={setChatSearchQuery}
+                    placeholder="Поиск в чате..."
+                    placeholderTextColor={colors.textDim}
+                    style={styles.chatSearchInput}
+                  />
+                  <Pressable onPress={() => { setChatSearchVisible(false); setChatSearchQuery(''); }} style={{ padding: 4 }}>
+                    <X size={14} color={colors.textMuted} />
+                  </Pressable>
+                </View>
+              )}
+
+              {/* ── Composer ── */}
+              <View style={styles.composerWrap}>
               {attachedDocs.length > 0 && (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.docScroll}>
                   {attachedDocs.map((doc, i) => (
@@ -1071,17 +1225,27 @@ ${names}`);
                   style={styles.sendBtnWrap}
                   pointerEvents={draft.trim().length > 0 ? 'auto' : 'auto'}
                 >
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={draft.trim().length > 0 ? () => sendMessage(draft) : handleVoiceToggle}
-                    style={({ pressed }) => [styles.sendBtn, pressed && styles.sendBtnPressed]}
-                  >
-                    {draft.trim().length > 0 ? (
-                      <ArrowUp size={20} color={colors.background} />
-                    ) : (
-                      <Mic size={20} color={isRecording ? '#ef4444' : colors.background} />
-                    )}
-                  </Pressable>
+                  {status === 'thinking' ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={handleStop}
+                      style={({ pressed }) => [styles.sendBtn, { backgroundColor: colors.danger }, pressed && styles.sendBtnPressed]}
+                    >
+                      <Square size={18} color={colors.background} fill={colors.background} />
+                    </Pressable>
+                  ) : (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={draft.trim().length > 0 ? () => sendMessage(draft) : handleVoiceToggle}
+                      style={({ pressed }) => [styles.sendBtn, pressed && styles.sendBtnPressed]}
+                    >
+                      {draft.trim().length > 0 ? (
+                        <ArrowUp size={20} color={colors.background} />
+                      ) : (
+                        <Mic size={20} color={isRecording ? '#ef4444' : colors.background} />
+                      )}
+                    </Pressable>
+                  )}
                 </Animated.View>
               </View>
 
@@ -1262,7 +1426,7 @@ ${names}`);
                         <View style={styles.chatItemTextWrap}>
                           <Text style={styles.chatItemTitle} numberOfLines={1}>{chat.title}</Text>
                           <Text style={styles.chatItemMeta} numberOfLines={1}>
-                            {formatChatDate(chat.updatedAt)} · {chat.messages.length} {t('search.msgs_count', 'сообщ.')}
+                            {formatChatDate(chat.updatedAt)} · {chat.messages.length} {t('search.msgs_count', 'сообщ.')}{chat.tokenCount ? ` · ~${formatTokenNumber(chat.tokenCount)} т` : ''}
                           </Text>
                         </View>
                         <Pressable
@@ -2396,4 +2560,24 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 2,
   },
+  chatSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 10,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  chatSearchInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: typography.body,
+    height: 28,
+    paddingVertical: 0,
+  },
 });
+

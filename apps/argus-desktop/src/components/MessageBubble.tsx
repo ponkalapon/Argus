@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import Markdown, { ASTNode } from 'react-native-markdown-display';
-import { Check, ChevronRight, Copy, RotateCw, Zap } from 'lucide-react-native';
+import { Check, ChevronLeft, ChevronRight as ChevronRightIcon, Copy, Pencil, RotateCw } from 'lucide-react-native';
 import { ChatMessage } from '../types';
 import { colors, radius, spacing, typography } from '../styles/theme';
 import MermaidChart from './MermaidChart';
@@ -105,10 +105,18 @@ type Props = {
   message: ChatMessage;
   onRegenerate?: () => void;
   onDelete?: () => void;
+  onEdit?: () => void;
   streamingSpeed?: string | null;
+  /** Branch navigation */
+  onBranchPrev?: () => void;
+  onBranchNext?: () => void;
+  branchIndex?: number;
+  branchTotal?: number;
+  /** In-chat search highlight */
+  highlightText?: string;
 };
 
-export const MessageBubble = memo(({ message, onRegenerate, onDelete, streamingSpeed }: Props) => {
+export const MessageBubble = memo(({ message, onRegenerate, onDelete, onEdit, streamingSpeed, onBranchPrev, onBranchNext, branchIndex, branchTotal, highlightText }: Props) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copiedMessage, setCopiedMessage] = useState(false);
 
@@ -123,17 +131,42 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, streamingS
     setTimeout(() => setCopiedMessage(false), 1500);
   };
 
-  const toggleLike = () => setLiked((prev) => (prev === true ? null : true));
-  const toggleDislike = () => setLiked((prev) => (prev === false ? null : false));
+
+  /** Render text with optional search highlight */
+  const renderHighlightedText = (text: string, style: any) => {
+    if (!highlightText || !highlightText.trim()) {
+      return <Text style={style}>{text}</Text>;
+    }
+    const parts = text.split(new RegExp(`(${highlightText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+    return (
+      <Text style={style}>
+        {parts.map((part, i) =>
+          part.toLowerCase() === highlightText.toLowerCase() ? (
+            <Text key={i} style={[style, styles.highlight]}>{part}</Text>
+          ) : (
+            part
+          )
+        )}
+      </Text>
+    );
+  };
 
   if (isUser) {
     return (
       <View style={[styles.row, styles.rowUser]}>
         <View style={styles.userContainer}>
           <View style={styles.userBubble}>
-            <Text style={styles.userContent}>{raw}</Text>
+            {renderHighlightedText(raw, styles.userContent)}
           </View>
           <View style={[styles.actionBar, { justifyContent: 'flex-end', marginTop: 2 }]}>
+            {onEdit && (
+              <Pressable
+                onPress={onEdit}
+                style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+              >
+                <Pencil size={13} color={colors.textMuted} />
+              </Pressable>
+            )}
             <Pressable
               onPress={copyFullMessage}
               style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
@@ -207,7 +240,7 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, streamingS
               onPress={() => setStepsExpanded((prev) => !prev)}
               style={({ pressed }) => [styles.stepsHeader, pressed && styles.pressed]}
             >
-              <ChevronRight
+              <ChevronRightIcon
                 size={13}
                 color={colors.textMuted}
                 style={{ transform: [{ rotate: stepsExpanded ? '90deg' : '0deg' }] }}
@@ -258,7 +291,7 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, streamingS
           </Markdown>
         )}
 
-        {/* Message Action Bar (Copy, Like, Dislike, Regenerate, Delete, Speed Badge) */}
+        {/* Message Action Bar */}
         {(!isEmpty || (message.steps && message.steps.length > 0) || streamingSpeed) && (
           <View style={styles.actionBar}>
             <Pressable
@@ -283,6 +316,27 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, streamingS
                 <RotateCw size={14} color={colors.textMuted} />
               </Pressable>
             ) : null}
+
+            {/* Branch navigator ← 1/N → */}
+            {branchTotal !== undefined && branchTotal > 1 && (
+              <View style={styles.branchNav}>
+                <Pressable
+                  onPress={onBranchPrev}
+                  disabled={branchIndex === 0}
+                  style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed, branchIndex === 0 && { opacity: 0.3 }]}
+                >
+                  <ChevronLeft size={13} color={colors.textMuted} />
+                </Pressable>
+                <Text style={styles.branchLabel}>{(branchIndex ?? 0) + 1}/{branchTotal}</Text>
+                <Pressable
+                  onPress={onBranchNext}
+                  disabled={branchIndex === branchTotal - 1}
+                  style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed, branchIndex === branchTotal - 1 && { opacity: 0.3 }]}
+                >
+                  <ChevronRightIcon size={13} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            )}
 
             {streamingSpeed ? (
               <View style={styles.speedBadge}>
@@ -576,4 +630,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
   },
+  branchNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginLeft: 4,
+  },
+  branchLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    minWidth: 28,
+    textAlign: 'center',
+  },
+  highlight: {
+    backgroundColor: 'rgba(234, 179, 8, 0.35)',
+    color: '#fde047',
+    borderRadius: 2,
+  },
 });
+

@@ -329,6 +329,7 @@ export const requestChatCompletion = async ({
   onToken,
   onStep,
   tools,
+  signal,
 }: ChatCompletionRequest): Promise<ChatCompletionResult> => {
   const baseUrl = normalizeBaseUrl(settings.baseUrl);
   const model = settings.model.trim();
@@ -430,6 +431,7 @@ export const requestChatCompletion = async ({
         stream: Boolean(onToken),
         tools: tools || [...TOOL_DEFINITIONS, ...mcpToolDefs],
       }),
+      signal,
     });
 
     if (!response.ok) {
