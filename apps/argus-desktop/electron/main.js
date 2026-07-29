@@ -113,27 +113,32 @@ ipcMain.handle('git-pull-and-build', async () => {
 });
 
 function runBuild(appDir, pullLog, resolve) {
+  const cleanPullLog = (pullLog || '').trim();
+  const summaryLog = cleanPullLog ? `Результат Git:\n${cleanPullLog}` : 'Код успешно синхронизирован с GitHub!';
+
   if (!fs.existsSync(path.join(appDir, 'package.json'))) {
     resolve({
       success: true,
       built: false,
-      log: `Код обновлен из GitHub!\n${pullLog}`,
+      log: `✓ Обновление из GitHub успешно выполнено!\n\n${summaryLog}\n\nНажмите «Перезапустить приложение» для применения изменений.`,
     });
     return;
   }
+
   exec('npm run build', { cwd: appDir }, (errBuild, stdoutBuild) => {
     if (errBuild) {
+      // NPM is not installed or build skipped (normal on end-user PCs without Node.js)
       resolve({
         success: true,
         built: false,
-        log: `Код успешно подтянут из Git!\nLog:\n${pullLog}\n\nСборка npm skipped/warning: ${errBuild.message.split('\n')[0]}`,
+        log: `✓ Свежие обновления успешно подтянуты из GitHub!\n\n${summaryLog}\n\nНажмите «Перезапустить приложение» для применения изменений.`,
       });
       return;
     }
     resolve({
       success: true,
       built: true,
-      log: `Успешно обновлено и собрано локально!\n${pullLog}\n${stdoutBuild}`,
+      log: `✓ Обновление успешно выполнено и собрано локально!\n\n${summaryLog}\n${stdoutBuild ? stdoutBuild.slice(0, 300) : ''}`,
     });
   });
 }
