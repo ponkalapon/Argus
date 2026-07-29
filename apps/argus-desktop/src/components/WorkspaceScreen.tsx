@@ -1511,22 +1511,7 @@ ${names}`);
                     </View>
                     <Text style={styles.navRowLabel}>{t('navigation.search', 'Поиск')}</Text>
                   </Pressable>
-                  <Pressable
-                    onPress={async () => {
-                      if (activeChatId) {
-                        const files = await listWorkspaceFiles(activeChatId);
-                        setWsFiles(files);
-                      }
-                      closeDrawer();
-                      setShowWsModal(true);
-                    }}
-                    style={({ pressed }) => [styles.navRowItem, pressed && styles.pressed]}
-                  >
-                    <View style={styles.navRowIcon}>
-                      <Folder size={18} color={colors.text} />
-                    </View>
-                    <Text style={styles.navRowLabel}>{t('navigation.library', 'Библиотека')}</Text>
-                  </Pressable>
+
                   <Pressable
                     onPress={() => { closeDrawer(); onOpenSandbox(); }}
                     style={({ pressed }) => [styles.navRowItem, pressed && styles.pressed]}
