@@ -957,6 +957,15 @@ ${names}`);
     setStatus('idle');
   };
 
+  const handleDeleteMessage = (messageId: string) => {
+    const next = messages.filter((m) => m.id !== messageId);
+    setMessages(next.length > 0 ? next : [initialAssistantMessage]);
+    if (activeChatId) {
+      void saveChatSnapshot(activeChatId, chatsRef.current.find(c => c.id === activeChatId)?.title || '', next);
+    }
+  };
+
+
   const handleRegenerate = (messageId: string) => {
     const currentMsgs = messages.filter((m) => m.id !== 'welcome');
     const targetIndex = currentMsgs.findIndex((m) => m.id === messageId);
