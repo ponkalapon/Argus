@@ -19,6 +19,18 @@ function getGitRootDir() {
   return candidates[0] || process.cwd();
 }
 
+function getAppWorkingDir() {
+  const root = getGitRootDir();
+  if (fs.existsSync(path.join(root, '.git'))) {
+    return root;
+  }
+  const userDataRepo = path.join(app.getPath('userData'), 'argus-repo');
+  if (!fs.existsSync(userDataRepo)) {
+    try { fs.mkdirSync(userDataRepo, { recursive: true }); } catch {}
+  }
+  return userDataRepo;
+}
+
 async function fetchGitHubCommits() {
   try {
     const res = await fetch('https://api.github.com/repos/ponkalapon/Argus/commits?per_page=10', {
@@ -37,14 +49,13 @@ async function fetchGitHubCommits() {
 }
 
 ipcMain.handle('git-check-updates', async () => {
-  const projectRoot = getGitRootDir();
+  const projectRoot = getAppWorkingDir();
   const hasGit = fs.existsSync(path.join(projectRoot, '.git'));
 
   if (hasGit) {
     return new Promise((resolve) => {
       exec('git fetch origin && git log HEAD..origin/main --oneline -n 15', { cwd: projectRoot }, async (err, stdout) => {
         if (err) {
-          // If local fetch fails (e.g. offline or no remote), check GitHub API
           const remoteCommits = await fetchGitHubCommits();
           resolve({
             available: remoteCommits.length > 0,
@@ -65,7 +76,6 @@ ipcMain.handle('git-check-updates', async () => {
     });
   }
 
-  // Standalone mode without .git folder: fetch from GitHub API directly
   const remoteCommits = await fetchGitHubCommits();
   return {
     available: remoteCommits.length > 0,
@@ -77,71 +87,42 @@ ipcMain.handle('git-check-updates', async () => {
 });
 
 ipcMain.handle('git-pull-and-build', async () => {
-  const projectRoot = getGitRootDir();
-  const appDir = fs.existsSync(path.join(projectRoot, 'apps/argus-desktop'))
-    ? path.join(projectRoot, 'apps/argus-desktop')
-    : path.join(__dirname, '..');
-
+  const projectRoot = getAppWorkingDir();
   const hasGit = fs.existsSync(path.join(projectRoot, '.git'));
 
   return new Promise((resolve) => {
-    // If .git folder does not exist, initialize git repository and set remote URL
     const gitCmd = hasGit
       ? 'git pull origin main'
       : 'git init && git remote add origin https://github.com/ponkalapon/Argus.git && git fetch origin main && git checkout -B main origin/main';
 
     exec(gitCmd, { cwd: projectRoot }, (errPull, stdoutPull) => {
       if (errPull) {
-        // Try fallback with set-url if remote already exists
         const fallbackCmd = 'git remote set-url origin https://github.com/ponkalapon/Argus.git && git fetch origin main && git reset --hard origin/main';
         exec(fallbackCmd, { cwd: projectRoot }, (errFallback, stdoutFallback) => {
           if (errFallback) {
             resolve({
               success: false,
               built: false,
-              log: `Не удалось инициализировать Git репозиторий: ${errFallback.message.split('\n')[0]}`,
+              log: `Ошибка инициализации репозитория: ${errFallback.message.split('\n')[0]}`,
             });
             return;
           }
-          runBuild(appDir, stdoutFallback, resolve);
+          resolve({
+            success: true,
+            built: true,
+            log: `✓ Лаунчер-оболочка успешно синхронизирована с GitHub!\n\n${stdoutFallback}\n\nНажмите «Перезапустить приложение» для применения обновлений.`,
+          });
         });
         return;
       }
-      runBuild(appDir, stdoutPull, resolve);
+      resolve({
+        success: true,
+        built: true,
+        log: `✓ Лаунчер-оболочка успешно синхронизирована с GitHub!\n\n${stdoutPull}\n\nНажмите «Перезапустить приложение» для применения обновлений.`,
+      });
     });
   });
 });
-
-function runBuild(appDir, pullLog, resolve) {
-  const cleanPullLog = (pullLog || '').trim();
-  const summaryLog = cleanPullLog ? `Результат Git:\n${cleanPullLog}` : 'Код успешно синхронизирован с GitHub!';
-
-  if (!fs.existsSync(path.join(appDir, 'package.json'))) {
-    resolve({
-      success: true,
-      built: false,
-      log: `✓ Обновление из GitHub успешно выполнено!\n\n${summaryLog}\n\nНажмите «Перезапустить приложение» для применения изменений.`,
-    });
-    return;
-  }
-
-  exec('npm run build', { cwd: appDir }, (errBuild, stdoutBuild) => {
-    if (errBuild) {
-      // NPM is not installed or build skipped (normal on end-user PCs without Node.js)
-      resolve({
-        success: true,
-        built: false,
-        log: `✓ Свежие обновления успешно подтянуты из GitHub!\n\n${summaryLog}\n\nНажмите «Перезапустить приложение» для применения изменений.`,
-      });
-      return;
-    }
-    resolve({
-      success: true,
-      built: true,
-      log: `✓ Обновление успешно выполнено и собрано локально!\n\n${summaryLog}\n${stdoutBuild ? stdoutBuild.slice(0, 300) : ''}`,
-    });
-  });
-}
 
 ipcMain.handle('app-reload', async () => {
   const win = BrowserWindow.getAllWindows()[0];
@@ -355,20 +336,23 @@ app.whenReady().then(() => {
       log(`Protocol request: url=${request.url}, rawPath=${pathname}`);
 
       const relativePath = pathname.replace(/^[\/\\]+/, '');
-      const distPath = path.join(__dirname, '../dist');
-      const filePath = path.join(distPath, relativePath || 'index.html');
+      const workingDir = getAppWorkingDir();
 
-      log(`Mapped filePath: ${filePath}`);
+      const candidates = [
+        path.join(workingDir, 'apps/argus-desktop/dist', relativePath || 'index.html'),
+        path.join(workingDir, 'dist', relativePath || 'index.html'),
+        path.join(__dirname, '../dist', relativePath || 'index.html'),
+      ];
 
-      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-        const mimeType = getMimeType(filePath);
-        const data = fs.readFileSync(filePath);
-        log(`Serving file ${filePath} (${data.length} bytes, ${mimeType})`);
-        return new Response(data, {
-          headers: { 'content-type': mimeType },
-        });
-      } else {
-        log(`File NOT found: ${filePath}`);
+      for (const filePath of candidates) {
+        if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+          const mimeType = getMimeType(filePath);
+          const data = fs.readFileSync(filePath);
+          log(`Serving file ${filePath} (${data.length} bytes, ${mimeType})`);
+          return new Response(data, {
+            headers: { 'content-type': mimeType },
+          });
+        }
       }
     } catch (e) {
       log(`App protocol error: ${e.stack || e}`);
