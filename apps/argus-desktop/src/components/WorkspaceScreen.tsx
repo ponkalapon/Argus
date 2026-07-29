@@ -966,57 +966,185 @@ ${names}`);
   };
 
 
-  const handleRegenerate = (messageId: string) => {
+  const handleRegenerate = async (messageId: string) => {
+    if (status === 'thinking') return;
+
     const currentMsgs = messages.filter((m) => m.id !== 'welcome');
     const targetIndex = currentMsgs.findIndex((m) => m.id === messageId);
     if (targetIndex === -1) return;
 
-    let userQuery = '';
-    let sliceIndex = targetIndex;
-    for (let i = targetIndex; i >= 0; i--) {
+    const targetMsg = currentMsgs[targetIndex];
+    if (targetMsg.role !== 'assistant') return;
+
+    let userMsgIndex = -1;
+    for (let i = targetIndex - 1; i >= 0; i--) {
       if (currentMsgs[i].role === 'user') {
-        userQuery = currentMsgs[i].content;
-        sliceIndex = i;
+        userMsgIndex = i;
         break;
       }
     }
+    if (userMsgIndex === -1) return;
 
-    if (userQuery) {
-      // Save current content as branch before regenerating
-      const currentContent = currentMsgs[targetIndex].content;
-      const existingBranches = currentMsgs[targetIndex].branches || [currentContent];
-      const branchSnapshot = existingBranches;
+    const contextMsgs = currentMsgs.slice(0, userMsgIndex + 1);
 
-      const kept = currentMsgs.slice(0, sliceIndex);
-      setMessages(kept.length > 0 ? kept : [{ id: 'welcome', role: 'assistant', content: 'Чем могу помочь?', createdAt: Date.now() }]);
-      setTimeout(() => {
-        sendMessage(userQuery);
-        // After sendMessage creates new assistant message, tag it with branch info
-      }, 50);
-      // Store pending branch data to attach after generation
-      pendingBranchRef.current = { parentBranches: branchSnapshot, messageId };
-    }
-  };
+    const oldContent = targetMsg.content;
+    const existingBranches = targetMsg.branches && targetMsg.branches.length > 0
+      ? [...targetMsg.branches]
+      : [oldContent];
 
-  const pendingBranchRef = useRef<{ parentBranches: string[]; messageId: string } | null>(null);
+    const newBranchIdx = existingBranches.length;
+    const newBranches = [...existingBranches, ''];
 
-  // After a regeneration finishes, attach branch history to the new message
-  useEffect(() => {
-    if (pendingBranchRef.current && status === 'idle') {
-      const { parentBranches } = pendingBranchRef.current;
-      pendingBranchRef.current = null;
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? {
+              ...m,
+              content: '',
+              branches: newBranches,
+              branchIndex: newBranchIdx,
+              steps: [],
+            }
+          : m
+      )
+    );
+
+    setStatus('thinking');
+    setError('');
+    startStreamTicker(messageId);
+    scrollToEnd();
+
+    const apiMessages = toApiMessages(contextMsgs);
+    const chatId = activeChatId || createId();
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    let firstTokenTime: number | null = null;
+    streamedTextRef.current = '';
+
+    try {
+      const result = await requestChatCompletion({
+        settings,
+        apiKey,
+        messages: apiMessages,
+        signal: abortController.signal,
+        context: {
+          workspaceId: chatId,
+          contactsAccessEnabled: settings.allowAssistantContacts,
+          internetEnabled,
+          requestContactDisclosure,
+          confirmCommunication,
+        },
+        onToken: (token) => {
+          const now = Date.now();
+          if (!firstTokenTime) firstTokenTime = now;
+
+          streamQueue.current += token;
+          streamedTextRef.current += token;
+          const tokensSoFar = estimateTokens(streamedTextRef.current);
+          setOutputTokens(tokensSoFar);
+
+          const elapsedSec = (now - firstTokenTime) / 1000;
+          if (elapsedSec > 0.05 && tokensSoFar > 0) {
+            const speed = (tokensSoFar / elapsedSec).toFixed(1);
+            setStreamingSpeedMap((prev) => ({ ...prev, [messageId]: speed }));
+          }
+
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.id !== messageId) return m;
+              const b = [...(m.branches || [])];
+              const idx = m.branchIndex ?? (b.length - 1);
+              b[idx] = (b[idx] || '') + token;
+              return { ...m, content: b[idx], branches: b };
+            })
+          );
+        },
+        onStep: (step) => {
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.id !== messageId) return msg;
+              const existingSteps = msg.steps || [];
+              const stepIndex = existingSteps.findIndex((s) => s.id === step.id);
+              let newSteps = [...existingSteps];
+              if (stepIndex >= 0) newSteps[stepIndex] = step;
+              else newSteps.push(step);
+              return { ...msg, steps: newSteps };
+            })
+          );
+        },
+      });
+
+      flushAllStreamText();
+      stopStreamTicker();
+      streamMessageId.current = null;
+      setStatus('idle');
+
+      const finalText = result.text || streamedTextRef.current;
       setMessages((prev) => {
-        const lastAssistant = [...prev].reverse().find((m) => m.role === 'assistant' && m.id !== 'welcome');
-        if (!lastAssistant) return prev;
-        const allBranches = [...parentBranches, lastAssistant.content];
-        return prev.map((m) =>
-          m.id === lastAssistant.id
-            ? { ...m, branches: allBranches, branchIndex: allBranches.length - 1 }
-            : m
-        );
+        const nextMsgs = prev.map((m) => {
+          if (m.id !== messageId) return m;
+          const b = [...(m.branches || [])];
+          const idx = m.branchIndex ?? (b.length - 1);
+          b[idx] = finalText;
+          return { ...m, content: finalText, branches: b };
+        });
+        if (chatId) {
+          const chatTitle = chatsRef.current.find((c) => c.id === chatId)?.title || 'Чат';
+          void saveChatSnapshot(chatId, chatTitle, nextMsgs);
+        }
+        return nextMsgs;
+      });
+
+      const inputUsed = result.usage?.input || estimateMessagesTokens(apiMessages);
+      const outputUsed = result.usage?.output || estimateTokens(finalText);
+      void recordTokenUsage(inputUsed, outputUsed);
+
+    } catch (requestError) {
+      flushAllStreamText();
+      stopStreamTicker();
+      streamMessageId.current = null;
+
+      if (requestError instanceof Error && (requestError.name === 'AbortError' || requestError.message.includes('aborted'))) {
+        setStatus('idle');
+        abortControllerRef.current = null;
+        setStreamingSpeedMap((prev) => {
+          const copy = { ...prev };
+          delete copy[messageId];
+          return copy;
+        });
+        return;
+      }
+
+      const message = requestError instanceof Error ? requestError.message : 'Неизвестная ошибка запроса';
+      setError(message);
+      setStatus('error');
+
+      setMessages((prev) => {
+        const nextMsgs = prev.map((item) => {
+          if (item.id !== messageId) return item;
+          const b = [...(item.branches || [])];
+          const idx = item.branchIndex ?? (b.length - 1);
+          const errText = item.content.trim() ? item.content : `Ошибка: ${message}`;
+          b[idx] = errText;
+          return { ...item, content: errText, branches: b };
+        });
+        if (chatId) {
+          const chatTitle = chatsRef.current.find((c) => c.id === chatId)?.title || 'Чат';
+          void saveChatSnapshot(chatId, chatTitle, nextMsgs);
+        }
+        return nextMsgs;
+      });
+    } finally {
+      abortControllerRef.current = null;
+      setStreamingSpeedMap((prev) => {
+        const copy = { ...prev };
+        delete copy[messageId];
+        return copy;
       });
     }
-  }, [status]);
+  };
 
   const handleBranchNav = (messageId: string, direction: 'prev' | 'next') => {
     setMessages((prev) =>
