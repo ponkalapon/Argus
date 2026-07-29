@@ -4,50 +4,139 @@ const path = require('path');
 const url = require('url');
 const fs = require('fs');
 
+function getGitRootDir() {
+  const candidates = [
+    path.join(__dirname, '../..'),
+    path.join(__dirname, '..'),
+    process.cwd(),
+    app.getAppPath(),
+  ];
+  for (const dir of candidates) {
+    if (dir && fs.existsSync(path.join(dir, '.git'))) {
+      return dir;
+    }
+  }
+  return candidates[0] || process.cwd();
+}
+
+async function fetchGitHubCommits() {
+  try {
+    const res = await fetch('https://api.github.com/repos/ponkalapon/Argus/commits?per_page=10', {
+      headers: { 'User-Agent': 'ArgusApp/1.0' },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.map((c) => {
+      const sha = c.sha ? c.sha.slice(0, 7) : '';
+      const msg = c.commit?.message ? c.commit.message.split('\n')[0] : '';
+      return `${sha} ${msg}`;
+    });
+  } catch {
+    return [];
+  }
+}
+
 ipcMain.handle('git-check-updates', async () => {
-  return new Promise((resolve) => {
-    const projectRoot = path.join(__dirname, '../..');
-    exec('git fetch origin && git log HEAD..origin/main --oneline -n 15', { cwd: projectRoot }, (err, stdout) => {
-      if (err) {
-        const msg = err.message.includes('not a git repository')
-          ? 'Локальный репозиторий Git не обнаружен (приложение запущено из отдельной папки / готового .exe). Скачайте свежий релиз с GitHub.'
-          : `Ошибка Git: ${err.message.split('\n')[0]}`;
-        resolve({ available: false, commitCount: 0, commits: [], error: msg });
-        return;
-      }
-      const lines = stdout.trim().split('\n').filter(Boolean);
-      resolve({
-        available: lines.length > 0,
-        commitCount: lines.length,
-        commits: lines,
+  const projectRoot = getGitRootDir();
+  const hasGit = fs.existsSync(path.join(projectRoot, '.git'));
+
+  if (hasGit) {
+    return new Promise((resolve) => {
+      exec('git fetch origin && git log HEAD..origin/main --oneline -n 15', { cwd: projectRoot }, async (err, stdout) => {
+        if (err) {
+          // If local fetch fails (e.g. offline or no remote), check GitHub API
+          const remoteCommits = await fetchGitHubCommits();
+          resolve({
+            available: remoteCommits.length > 0,
+            commitCount: remoteCommits.length,
+            commits: remoteCommits.length > 0 ? remoteCommits : ['Связаться с GitHub не удалось'],
+            error: null,
+          });
+          return;
+        }
+        const lines = stdout.trim().split('\n').filter(Boolean);
+        resolve({
+          available: lines.length > 0,
+          commitCount: lines.length,
+          commits: lines,
+          error: null,
+        });
       });
     });
-  });
+  }
+
+  // Standalone mode without .git folder: fetch from GitHub API directly
+  const remoteCommits = await fetchGitHubCommits();
+  return {
+    available: remoteCommits.length > 0,
+    commitCount: remoteCommits.length,
+    commits: remoteCommits,
+    isStandalone: true,
+    error: null,
+  };
 });
 
 ipcMain.handle('git-pull-and-build', async () => {
-  return new Promise((resolve) => {
-    const projectRoot = path.join(__dirname, '../..');
-    const appDir = path.join(__dirname, '..');
+  const projectRoot = getGitRootDir();
+  const appDir = fs.existsSync(path.join(projectRoot, 'apps/argus-desktop'))
+    ? path.join(projectRoot, 'apps/argus-desktop')
+    : path.join(__dirname, '..');
 
-    exec('git pull origin main', { cwd: projectRoot }, (errPull, stdoutPull) => {
+  const hasGit = fs.existsSync(path.join(projectRoot, '.git'));
+
+  return new Promise((resolve) => {
+    // If .git folder does not exist, initialize git repository and set remote URL
+    const gitCmd = hasGit
+      ? 'git pull origin main'
+      : 'git init && git remote add origin https://github.com/ponkalapon/Argus.git && git fetch origin main && git checkout -B main origin/main';
+
+    exec(gitCmd, { cwd: projectRoot }, (errPull, stdoutPull) => {
       if (errPull) {
-        const msg = errPull.message.includes('not a git repository')
-          ? 'Папка с проектом не содержит .git. Для автообновления запустите приложение из исходного Git-репозитория.'
-          : errPull.message.split('\n')[0];
-        resolve({ success: false, built: false, log: `Не удалось выполнить git pull: ${msg}` });
+        // Try fallback with set-url if remote already exists
+        const fallbackCmd = 'git remote set-url origin https://github.com/ponkalapon/Argus.git && git fetch origin main && git reset --hard origin/main';
+        exec(fallbackCmd, { cwd: projectRoot }, (errFallback, stdoutFallback) => {
+          if (errFallback) {
+            resolve({
+              success: false,
+              built: false,
+              log: `Не удалось инициализировать Git репозиторий: ${errFallback.message.split('\n')[0]}`,
+            });
+            return;
+          }
+          runBuild(appDir, stdoutFallback, resolve);
+        });
         return;
       }
-      exec('npm run build', { cwd: appDir }, (errBuild, stdoutBuild) => {
-        if (errBuild) {
-          resolve({ success: true, built: false, log: `Git pull успешен.\nОшибка сборки: ${errBuild.message.split('\n')[0]}` });
-          return;
-        }
-        resolve({ success: true, built: true, log: `Успешно обновлено и собрано локально!\n${stdoutPull}\n${stdoutBuild}` });
-      });
+      runBuild(appDir, stdoutPull, resolve);
     });
   });
 });
+
+function runBuild(appDir, pullLog, resolve) {
+  if (!fs.existsSync(path.join(appDir, 'package.json'))) {
+    resolve({
+      success: true,
+      built: false,
+      log: `Код обновлен из GitHub!\n${pullLog}`,
+    });
+    return;
+  }
+  exec('npm run build', { cwd: appDir }, (errBuild, stdoutBuild) => {
+    if (errBuild) {
+      resolve({
+        success: true,
+        built: false,
+        log: `Код успешно подтянут из Git!\nLog:\n${pullLog}\n\nСборка npm skipped/warning: ${errBuild.message.split('\n')[0]}`,
+      });
+      return;
+    }
+    resolve({
+      success: true,
+      built: true,
+      log: `Успешно обновлено и собрано локально!\n${pullLog}\n${stdoutBuild}`,
+    });
+  });
+}
 
 ipcMain.handle('app-reload', async () => {
   const win = BrowserWindow.getAllWindows()[0];
