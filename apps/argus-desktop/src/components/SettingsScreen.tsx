@@ -58,6 +58,8 @@ import { availableLanguages, setLanguage as setI18nLanguage, t } from '../servic
 import { UsageChart } from './UsageChart';
 import { colors, motion, radius, spacing, typography, ACCENT_PALETTES, applyAccentColor } from '../styles/theme';
 
+import { GitStatusResult, checkGitUpdates, runGitUpdateAndBuild, reloadApp, loadAutoCheckUpdates, saveAutoCheckUpdates } from '../services/updater';
+
 type Props = {
   initialSettings: AgentSettings;
   onBack: () => void;
@@ -65,7 +67,7 @@ type Props = {
   onThemeChange?: () => void;
 };
 
-type TabType = 'connection' | 'customization' | 'mcp' | 'stats' | 'skills' | 'privacy';
+type TabType = 'connection' | 'customization' | 'mcp' | 'stats' | 'skills' | 'updates' | 'privacy';
 
 const MODEL_PRESETS = [
   'mimo-v2.5',
@@ -170,6 +172,12 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
   const [bubbleStyle, setBubbleStyle] = useState<BubbleStyleType>('glass');
   const [fontSize, setFontSize] = useState<FontSizeScaleType>('standard');
 
+  const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null);
+  const [isCheckingGit, setIsCheckingGit] = useState(false);
+  const [isUpdatingGit, setIsUpdatingGit] = useState(false);
+  const [updateLog, setUpdateLog] = useState('');
+  const [autoCheckUpdates, setAutoCheckUpdates] = useState(true);
+
   const entrance = useRef(new Animated.Value(0)).current;
 
   const refreshSkills = useCallback(async () => {
@@ -226,6 +234,8 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
 
     loadStats();
     listSkills().then((s) => { if (mounted) setSkills(s); });
+    loadAutoCheckUpdates().then((val) => { if (mounted) setAutoCheckUpdates(val); });
+    checkGitUpdates().then((res) => { if (mounted) setGitStatus(res); });
 
     return () => { mounted = false; };
   }, [entrance, loadStats]);
@@ -373,10 +383,36 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
     ]);
   };
 
-  const handleDeleteSkill = useCallback(async (id: string) => {
-    await deleteSkill(id);
-    await refreshSkills();
-  }, [refreshSkills]);
+  const handleCheckUpdates = async () => {
+    setIsCheckingGit(true);
+    setUpdateLog('');
+    try {
+      const res = await checkGitUpdates();
+      setGitStatus(res);
+    } finally {
+      setIsCheckingGit(false);
+    }
+  };
+
+  const handleRunUpdate = async () => {
+    setIsUpdatingGit(true);
+    setUpdateLog('Подключение к Git репозиторию и сборка...');
+    try {
+      const res = await runGitUpdateAndBuild();
+      setUpdateLog(res.log);
+      if (res.success) {
+        const nextStatus = await checkGitUpdates();
+        setGitStatus(nextStatus);
+      }
+    } finally {
+      setIsUpdatingGit(false);
+    }
+  };
+
+  const handleToggleAutoCheck = async (enabled: boolean) => {
+    setAutoCheckUpdates(enabled);
+    await saveAutoCheckUpdates(enabled);
+  };
 
   const formatLargeNumber = (n: number) => {
     if (isNaN(n) || !isFinite(n)) return '0';
@@ -393,6 +429,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
     { id: 'mcp', label: 'MCP Серверы', icon: Network },
     { id: 'stats', label: t('settings.tab_stats', 'Использование'), icon: BarChart3 },
     { id: 'skills', label: t('settings.tab_skills', 'Навыки'), icon: Sparkles },
+    { id: 'updates', label: 'Обновления', icon: RefreshCw },
     { id: 'privacy', label: t('settings.tab_privacy', 'Безопасность'), icon: Shield },
   ];
 
@@ -1012,6 +1049,128 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                     thumbColor="#ffffff"
                   />
                 </View>
+              </View>
+            )}
+
+            {/* Updates / Git Sync Tab */}
+            {activeTab === 'updates' && (
+              <View style={styles.sectionCard}>
+                <View style={styles.cardHeader}>
+                  <RefreshCw size={18} color={colors.accent} />
+                  <Text style={styles.cardTitle}>Синхронизация с Git и автообновление</Text>
+                </View>
+                <Text style={styles.cardDesc}>
+                  Обновление приложения напрямую из GitHub репозитория без скачивания установочных файлов .exe. Изменения подтягиваются и собираются локально.
+                </Text>
+
+                {/* Status Box */}
+                <View style={{ backgroundColor: '#18181b', borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.lg }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+                    <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>Репозиторий:</Text>
+                    <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '700' }}>github.com/ponkalapon/Argus.git (main)</Text>
+                  </View>
+
+                  <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginVertical: spacing.xs }} />
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: gitStatus?.available ? colors.success : colors.accent }} />
+                    <Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>
+                      {gitStatus?.available
+                        ? `Доступны новые обновления (коммитов: ${gitStatus.commitCount})`
+                        : gitStatus?.error
+                          ? `Статус: ${gitStatus.error}`
+                          : 'Версия актуальна — локальный код совпадает с GitHub'}
+                    </Text>
+                  </View>
+
+                  {gitStatus?.commits && gitStatus.commits.length > 0 && (
+                    <View style={{ marginTop: spacing.md, backgroundColor: '#0d0d10', borderRadius: radius.md, padding: spacing.sm, borderWidth: 1, borderColor: '#232328' }}>
+                      <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '700', marginBottom: 4 }}>СВЕЖИЕ КОММИТЫ В MAIN:</Text>
+                      {gitStatus.commits.slice(0, 5).map((commit, idx) => (
+                        <Text key={idx} style={{ color: '#e4e4e7', fontFamily: 'Consolas, monospace', fontSize: 11, marginVertical: 2 }}>
+                          • {commit}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                {/* Auto Check Switch */}
+                <View style={styles.switchRow}>
+                  <View style={{ flex: 1, paddingRight: spacing.md }}>
+                    <Text style={styles.switchTitle}>Автопроверка обновлений</Text>
+                    <Text style={styles.switchDesc}>Проверять новые коммиты в GitHub при запуске приложения</Text>
+                  </View>
+                  <Switch
+                    value={autoCheckUpdates}
+                    onValueChange={handleToggleAutoCheck}
+                    trackColor={{ false: '#27272a', true: colors.accent }}
+                    thumbColor="#ffffff"
+                  />
+                </View>
+
+                <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.lg }} />
+
+                {/* Action Buttons */}
+                <View style={{ flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={handleCheckUpdates}
+                    disabled={isCheckingGit || isUpdatingGit}
+                    style={({ pressed }) => [
+                      styles.mcBtn,
+                      { flex: 1, minWidth: 160, paddingVertical: 12, flexDirection: 'row', justifyContent: 'center', gap: 8 },
+                      (isCheckingGit || isUpdatingGit) && { opacity: 0.5 },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <RefreshCw size={16} color={colors.text} />
+                    <Text style={{ color: colors.text, fontWeight: '600', fontSize: 13 }}>
+                      {isCheckingGit ? 'Проверка...' : 'Проверить Git'}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={handleRunUpdate}
+                    disabled={isUpdatingGit}
+                    style={({ pressed }) => [
+                      styles.mcBtn,
+                      styles.mcBtnPrimary,
+                      { flex: 1, minWidth: 200, paddingVertical: 12, flexDirection: 'row', justifyContent: 'center', gap: 8 },
+                      isUpdatingGit && { opacity: 0.5 },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Zap size={16} color="#ffffff" fill="#ffffff" />
+                    <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>
+                      {isUpdatingGit ? 'Сборка локально...' : 'Синхронизировать и собрать ПК'}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {/* Output log */}
+                {Boolean(updateLog) && (
+                  <View style={{ marginTop: spacing.lg, backgroundColor: '#0d0d10', borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md }}>
+                    <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700', marginBottom: spacing.xs }}>ЛОГ СИНХРОНИЗАЦИИ:</Text>
+                    <ScrollView style={{ maxHeight: 160 }}>
+                      <Text style={{ color: '#4ade80', fontFamily: 'Consolas, monospace', fontSize: 12, lineHeight: 18 }}>
+                        {updateLog}
+                      </Text>
+                    </ScrollView>
+
+                    <Pressable
+                      onPress={reloadApp}
+                      style={({ pressed }) => [
+                        styles.mcBtn,
+                        { marginTop: spacing.md, backgroundColor: colors.accent, borderColor: colors.accent, paddingVertical: 10, alignItems: 'center' },
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>Перезапустить приложение</Text>
+                    </Pressable>
+                  </View>
+                )}
               </View>
             )}
 

@@ -1,7 +1,53 @@
 const { app, BrowserWindow, protocol, session, ipcMain, dialog } = require('electron');
+const { exec } = require('child_process');
 const path = require('path');
 const url = require('url');
 const fs = require('fs');
+
+ipcMain.handle('git-check-updates', async () => {
+  return new Promise((resolve) => {
+    const projectRoot = path.join(__dirname, '../..');
+    exec('git fetch origin && git log HEAD..origin/main --oneline -n 15', { cwd: projectRoot }, (err, stdout) => {
+      if (err) {
+        resolve({ available: false, commitCount: 0, commits: [], error: err.message });
+        return;
+      }
+      const lines = stdout.trim().split('\n').filter(Boolean);
+      resolve({
+        available: lines.length > 0,
+        commitCount: lines.length,
+        commits: lines,
+      });
+    });
+  });
+});
+
+ipcMain.handle('git-pull-and-build', async () => {
+  return new Promise((resolve) => {
+    const projectRoot = path.join(__dirname, '../..');
+    const appDir = path.join(__dirname, '..');
+
+    exec('git pull origin main', { cwd: projectRoot }, (errPull, stdoutPull) => {
+      if (errPull) {
+        resolve({ success: false, built: false, log: `Ошибка git pull: ${errPull.message}` });
+        return;
+      }
+      exec('npm run build', { cwd: appDir }, (errBuild, stdoutBuild) => {
+        if (errBuild) {
+          resolve({ success: true, built: false, log: `Git pull успешен.\nLog:\n${stdoutPull}\n\nОшибка сборки: ${errBuild.message}` });
+          return;
+        }
+        resolve({ success: true, built: true, log: `Успешно обновлено и собрано локально!\n${stdoutPull}\n${stdoutBuild}` });
+      });
+    });
+  });
+});
+
+ipcMain.handle('app-reload', async () => {
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win) win.reload();
+});
+
 
 
 

@@ -7,4 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   writeFile: (dirPath, relativePath, content) => ipcRenderer.invoke('write-file', { dirPath, relativePath, content }),
   readFile: (dirPath, relativePath) => ipcRenderer.invoke('read-file', { dirPath, relativePath }),
   deleteFile: (dirPath, relativePath) => ipcRenderer.invoke('delete-file', { dirPath, relativePath }),
+  gitCheckUpdates: () => ipcRenderer.invoke('git-check-updates'),
+  gitPullAndBuild: () => ipcRenderer.invoke('git-pull-and-build'),
+  appReload: () => ipcRenderer.invoke('app-reload'),
 });
