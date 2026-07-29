@@ -148,6 +148,13 @@ ipcMain.handle('app-reload', async () => {
   if (win) win.reload();
 });
 
+ipcMain.handle('open-external', async (event, targetUrl) => {
+  const { shell } = require('electron');
+  if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
+    await shell.openExternal(targetUrl);
+  }
+});
+
 
 
 

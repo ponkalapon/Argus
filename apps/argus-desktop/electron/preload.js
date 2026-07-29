@@ -10,4 +10,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   gitCheckUpdates: () => ipcRenderer.invoke('git-check-updates'),
   gitPullAndBuild: () => ipcRenderer.invoke('git-pull-and-build'),
   appReload: () => ipcRenderer.invoke('app-reload'),
+  openExternal: (targetUrl) => ipcRenderer.invoke('open-external', targetUrl),
 });

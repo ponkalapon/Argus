@@ -71,3 +71,11 @@ export const reloadApp = () => {
     window.location.reload();
   }
 };
+
+export const openExternalUrl = (url: string) => {
+  if (typeof window !== 'undefined' && (window as any).electronAPI?.openExternal) {
+    (window as any).electronAPI.openExternal(url);
+  } else if (typeof window !== 'undefined') {
+    window.open(url, '_blank');
+  }
+};
