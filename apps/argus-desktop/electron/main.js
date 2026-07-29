@@ -24,11 +24,12 @@ function getAppWorkingDir() {
   if (fs.existsSync(path.join(root, '.git'))) {
     return root;
   }
-  const userDataRepo = path.join(app.getPath('userData'), 'argus-repo');
-  if (!fs.existsSync(userDataRepo)) {
-    try { fs.mkdirSync(userDataRepo, { recursive: true }); } catch {}
+  const exeDir = path.dirname(app.getPath('exe'));
+  const installRepoDir = path.join(exeDir, 'repo');
+  if (!fs.existsSync(installRepoDir)) {
+    try { fs.mkdirSync(installRepoDir, { recursive: true }); } catch {}
   }
-  return userDataRepo;
+  return installRepoDir;
 }
 
 async function fetchGitHubCommits() {

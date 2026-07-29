@@ -72,7 +72,7 @@
       "!node_modules/**/*",
       "!node_modules"
     ],
-    "asar": true,
+    "asar": false,
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
