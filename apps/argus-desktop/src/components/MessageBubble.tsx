@@ -222,7 +222,7 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, onEdit, st
     code_block: (node: ASTNode) => renderCodeBlock(node),
   };
 
-  const [stepsExpanded, setStepsExpanded] = useState(true);
+  const [stepsExpanded, setStepsExpanded] = useState(false);
   const [thinkingExpanded, setThinkingExpanded] = useState(false);
 
   return (
@@ -274,7 +274,7 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, onEdit, st
                 style={{ transform: [{ rotate: stepsExpanded ? '90deg' : '0deg' }] }}
               />
               <Text style={styles.stepsHeaderText}>
-                Exploring {message.steps.length} {message.steps.length === 1 ? 'file' : 'files'}
+                Инструменты ({message.steps.length})
               </Text>
             </Pressable>
 
