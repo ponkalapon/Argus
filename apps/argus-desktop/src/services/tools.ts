@@ -322,11 +322,25 @@ export const TOOL_DEFINITIONS = [
     type: 'function',
     function: {
       name: 'read_file',
-      description: 'Читает файл из рабочей области/проекта (например src/App.tsx). Используй для исследования кода.',
+      description: 'Читает файл из рабочей области или с диска ПК (например src/App.tsx или H:\\Загрузки\\doc.txt).',
       parameters: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'Относительный путь к файлу' },
+          path: { type: 'string', description: 'Путь к файлу (относительный или абсолютный)' },
+        },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_system_dir',
+      description: 'Просматривает содержимое ЛЮБОЙ папки или диска ПК (например H:\\Загрузки, C:\\Users, Рабочий стол). Используй когда пользователь просит посмотреть папку на компьютере.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Полный путь к папке (например H:\\Загрузки)' },
         },
         required: ['path'],
       },
@@ -771,10 +785,29 @@ export const TOOL_HANDLERS: Record<
       })),
     };
   },
-  read_file: async ({ path }, ctx) => {
+  list_system_dir: async ({ path: targetPath }) => {
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.listSystemDirectory) {
+      const res = await (window as any).electronAPI.listSystemDirectory(targetPath);
+      return res;
+    }
+    return { error: 'Просмотр дисков ПК доступен в приложении Argus Desktop.' };
+  },
+  read_file: async ({ path: filePath }, ctx) => {
+    const isAbsolute = /^[a-zA-Z]:[\\\/]/.test(filePath) || filePath.startsWith('/');
+    if (isAbsolute && typeof window !== 'undefined' && (window as any).electronAPI?.readSystemFile) {
+      const res = await (window as any).electronAPI.readSystemFile(filePath);
+      return res;
+    }
     if (!ctx?.workspaceId) return { error: 'Нет активной рабочей области' };
-    const content = await readWorkspaceFile(ctx.workspaceId, path);
-    return { path, content, length: content.length };
+    try {
+      const content = await readWorkspaceFile(ctx.workspaceId, filePath);
+      return { path: filePath, content, length: content.length };
+    } catch {
+      if (typeof window !== 'undefined' && (window as any).electronAPI?.readSystemFile) {
+        return await (window as any).electronAPI.readSystemFile(filePath);
+      }
+      return { error: `Не удалось прочитать файл ${filePath}` };
+    }
   },
   write_file: async ({ path, content }, ctx) => {
     if (!ctx?.workspaceId) return { error: 'Нет активной рабочей области' };

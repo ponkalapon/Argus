@@ -224,8 +224,45 @@ ipcMain.handle('delete-file', async (event, { dirPath, relativePath }) => {
       fs.unlinkSync(fullPath);
       return true;
     }
-  } catch {}
-  return false;
+    return false;
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle('list-system-directory', async (event, targetPath) => {
+  try {
+    if (!targetPath || !fs.existsSync(targetPath)) return { error: `Путь ${targetPath} не найден` };
+    const stat = fs.statSync(targetPath);
+    if (!stat.isDirectory()) return { error: `Путь ${targetPath} не является папкой` };
+    const entries = fs.readdirSync(targetPath, { withFileTypes: true });
+    const items = entries.map((entry) => {
+      const fullPath = path.join(targetPath, entry.name);
+      let size = 0;
+      try { size = entry.isFile() ? fs.statSync(fullPath).size : 0; } catch {}
+      return {
+        name: entry.name,
+        path: fullPath,
+        isDirectory: entry.isDirectory(),
+        size,
+      };
+    });
+    return { path: targetPath, items };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('read-system-file', async (event, filePath) => {
+  try {
+    if (!filePath || !fs.existsSync(filePath)) return { error: `Файл ${filePath} не найден` };
+    const stat = fs.statSync(filePath);
+    if (stat.size > 10 * 1024 * 1024) return { error: 'Файл слишком большой (>10MB)' };
+    const content = fs.readFileSync(filePath, 'utf8');
+    return { path: filePath, content, size: stat.size };
+  } catch (e) {
+    return { error: e.message };
+  }
 });
 
 const logFile = path.join(app.getPath('userData'), 'app_debug.log');
