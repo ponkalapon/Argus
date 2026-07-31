@@ -243,7 +243,7 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, onEdit, st
               style={({ pressed }) => [styles.thinkingHeaderRow, pressed && styles.pressed]}
             >
               <Text style={styles.thinkingHeaderLabel}>
-                {message.reasoning!.length > 1200 ? 'Worked for 1m' : 'Worked for a moment'}
+                {message.reasoning!.length > 1200 ? 'Thinking ~1m' : 'Thinking…'}
               </Text>
               <ChevronRightIcon
                 size={13}
