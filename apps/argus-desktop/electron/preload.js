@@ -12,4 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   appReload: () => ipcRenderer.invoke('app-reload'),
   listSystemDirectory: (targetPath) => ipcRenderer.invoke('list-system-directory', targetPath),
   readSystemFile: (filePath) => ipcRenderer.invoke('read-system-file', filePath),
+  writeSystemFile: (filePath, content) => ipcRenderer.invoke('write-system-file', { filePath, content }),
+  deleteSystemFile: (filePath) => ipcRenderer.invoke('delete-system-file', filePath),
+  moveSystemFile: (sourcePath, destinationPath) => ipcRenderer.invoke('move-system-file', { sourcePath, destinationPath }),
 });

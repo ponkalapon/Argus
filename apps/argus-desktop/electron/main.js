@@ -265,6 +265,49 @@ ipcMain.handle('read-system-file', async (event, filePath) => {
   }
 });
 
+ipcMain.handle('write-system-file', async (event, { filePath, content }) => {
+  try {
+    if (!filePath) return { error: 'Путь к файлу не указан' };
+    const parentDir = path.dirname(filePath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+    fs.writeFileSync(filePath, content, 'utf8');
+    return { success: true, path: filePath, size: content.length };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('delete-system-file', async (event, filePath) => {
+  try {
+    if (!filePath || !fs.existsSync(filePath)) return { error: `Файл или папка ${filePath} не найдена` };
+    const stat = fs.statSync(filePath);
+    if (stat.isDirectory()) {
+      fs.rmSync(filePath, { recursive: true, force: true });
+    } else {
+      fs.unlinkSync(filePath);
+    }
+    return { success: true, path: filePath };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('move-system-file', async (event, { sourcePath, destinationPath }) => {
+  try {
+    if (!sourcePath || !fs.existsSync(sourcePath)) return { error: `Исходный файл ${sourcePath} не найден` };
+    const parentDir = path.dirname(destinationPath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+    fs.renameSync(sourcePath, destinationPath);
+    return { success: true, from: sourcePath, to: destinationPath };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
 const logFile = path.join(app.getPath('userData'), 'app_debug.log');
 function log(msg) {
   const line = `[${new Date().toISOString()}] ${msg}\n`;

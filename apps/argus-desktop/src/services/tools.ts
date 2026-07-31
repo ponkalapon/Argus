@@ -350,14 +350,43 @@ export const TOOL_DEFINITIONS = [
     type: 'function',
     function: {
       name: 'write_file',
-      description: 'Создаёт или редактирует файл в рабочей области/проекте. Напиши полный код файла.',
+      description: 'Создаёт или редактирует файл в рабочей области или по любому пути на ПК (например H:\\Загрузки\\notes.txt или src/index.js).',
       parameters: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'Относительный путь к файлу (напр. index.js)' },
+          path: { type: 'string', description: 'Путь к файлу (относительный или полный абсолютный)' },
           content: { type: 'string', description: 'Полный код/текст файла' },
         },
         required: ['path', 'content'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_system_file',
+      description: 'Удаляет файл или папку по указанному абсолютному или относительному пути на ПК.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Полный путь к удаляемому файлу или папке на ПК' },
+        },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'move_system_file',
+      description: 'Перемещает или переименовывает файл/папку из одного места в другое на диске ПК (сортировка, раскладка файлов).',
+      parameters: {
+        type: 'object',
+        properties: {
+          sourcePath: { type: 'string', description: 'Откуда переместить/переименовать' },
+          destinationPath: { type: 'string', description: 'Куда переместить/переименовать' },
+        },
+        required: ['sourcePath', 'destinationPath'],
       },
     },
   },
@@ -809,10 +838,29 @@ export const TOOL_HANDLERS: Record<
       return { error: `Не удалось прочитать файл ${filePath}` };
     }
   },
-  write_file: async ({ path, content }, ctx) => {
+  write_file: async ({ path: filePath, content }, ctx) => {
+    const isAbsolute = /^[a-zA-Z]:[\\\/]/.test(filePath) || filePath.startsWith('/');
+    if (isAbsolute && typeof window !== 'undefined' && (window as any).electronAPI?.writeSystemFile) {
+      const res = await (window as any).electronAPI.writeSystemFile(filePath, content);
+      return res;
+    }
     if (!ctx?.workspaceId) return { error: 'Нет активной рабочей области' };
-    const result = await writeWorkspaceFile(ctx.workspaceId, path, content);
+    const result = await writeWorkspaceFile(ctx.workspaceId, filePath, content);
     return { success: true, path: result.path, size: result.size };
+  },
+  delete_system_file: async ({ path: filePath }) => {
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.deleteSystemFile) {
+      const res = await (window as any).electronAPI.deleteSystemFile(filePath);
+      return res;
+    }
+    return { error: 'Удаление файлов с диска доступно в приложении Argus Desktop.' };
+  },
+  move_system_file: async ({ sourcePath, destinationPath }) => {
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.moveSystemFile) {
+      const res = await (window as any).electronAPI.moveSystemFile(sourcePath, destinationPath);
+      return res;
+    }
+    return { error: 'Перемещение файлов на диске доступно в приложении Argus Desktop.' };
   },
   list_files: async (_args, ctx) => {
     if (!ctx?.workspaceId) return { error: 'Нет активной рабочей области' };
