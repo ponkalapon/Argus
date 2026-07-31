@@ -324,6 +324,32 @@ const summarizeMiddle = async (
   return extractTextFromJson(data).trim();
 };
 
+const parseInTextToolCalls = (rawText: string): any[] | undefined => {
+  if (!rawText) return undefined;
+  const matches = rawText.match(/\{\s*"name"\s*:\s*"([a-zA-Z0-9_\-]+)"\s*,\s*"(?:arguments|parameters)"\s*:\s*\{[\s\S]*?\}\s*\}/g);
+  if (!matches || matches.length === 0) return undefined;
+
+  try {
+    const toolCalls: any[] = [];
+    for (let i = 0; i < matches.length; i++) {
+      const obj = JSON.parse(matches[i]);
+      if (obj.name) {
+        toolCalls.push({
+          id: `call_intext_${Date.now()}_${i}`,
+          type: 'function',
+          function: {
+            name: obj.name,
+            arguments: typeof obj.arguments === 'string' ? obj.arguments : JSON.stringify(obj.arguments || obj.parameters || {}),
+          },
+        });
+      }
+    }
+    return toolCalls.length > 0 ? toolCalls : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export const requestChatCompletion = async ({
   settings,
   apiKey,
@@ -399,24 +425,7 @@ export const requestChatCompletion = async ({
       ];
 
       currentMessages = compressedMessages;
-
-      nudgeOrFlushMessages = [
-        ...currentMessages,
-        {
-          role: 'system' as const,
-          content:
-            '[Context Warning] Контекст приближается к лимиту. Если в этом разговоре есть важная информация — сохрани её через remember_fact или remember_preference СЕЙЧАС. Затем я сожму контекст.',
-        },
-      ];
-    } else if (shouldNudge && !compressInfo.needed) {
-      nudgeOrFlushMessages = [
-        ...currentMessages,
-        {
-          role: 'system' as const,
-          content:
-            '[Memory Nudge] Если появилась важная информация обо мне, проектах или предпочтениях — сохрани через remember_fact или remember_preference.',
-        },
-      ];
+      nudgeOrFlushMessages = currentMessages;
     }
 
     const response = await fetchWithRetry(`${baseUrl}/v1/chat/completions`, {
@@ -463,6 +472,13 @@ export const requestChatCompletion = async ({
       text = extractTextFromJson(data);
       toolCalls = extractToolCalls(data);
       streamUsage = data.usage;
+    }
+
+    if (!toolCalls || toolCalls.length === 0) {
+      const inTextCalls = parseInTextToolCalls(text);
+      if (inTextCalls) {
+        toolCalls = inTextCalls;
+      }
     }
 
     if (!toolCalls || toolCalls.length === 0) {
