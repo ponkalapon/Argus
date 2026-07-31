@@ -28,23 +28,41 @@ export const extractReasoningFromJson = (data: ChatCompletionResponse) =>
   '';
 
 export const cleanMetaTalk = (text: string): { cleanText: string; extractedReasoning: string } => {
+  if (!text) return { cleanText: '', extractedReasoning: '' };
+
   let cleanText = text;
   let extractedReasoning = '';
 
-  // Extract <thinking>...</thinking>, <reasoning>...</reasoning>, or <thought>...</thought> blocks
+  // 1. Extract <thinking>...</thinking>, <reasoning>...</reasoning>, or <thought>...</thought> blocks
   const thinkRegex = /<(?:thinking|reasoning|thought)>([\s\S]*?)(?:<\/(?:thinking|reasoning|thought)>|$)/gi;
   let match: RegExpExecArray | null;
   while ((match = thinkRegex.exec(text)) !== null) {
-    if (match[1]) {
+    if (match[1]?.trim()) {
       extractedReasoning += (extractedReasoning ? '\n\n' : '') + match[1].trim();
     }
   }
 
-  // Remove thinking tags from clean text
-  cleanText = cleanText.replace(/<(?:thinking|reasoning|thought)>[\s\S]*?(?:<\/(?:thinking|reasoning|thought)>|$)/gi, '');
+  // 2. If model outputted thoughts BEFORE an orphan </thinking> tag without opening <thinking>
+  if (!extractedReasoning && /<\/(?:thinking|reasoning|thought)>/i.test(text)) {
+    const parts = text.split(/<\/(?:thinking|reasoning|thought)>/i);
+    extractedReasoning = parts[0].trim();
+    cleanText = parts.slice(1).join('');
+  } else {
+    // Strip matched thinking blocks
+    cleanText = cleanText.replace(/<(?:thinking|reasoning|thought)>[\s\S]*?(?:<\/(?:thinking|reasoning|thought)>|$)/gi, '');
+  }
 
-  // Strip system/meta-talk prefixes like "[Ответ отправлен пользователю]:", "[Draft]:", etc.
-  cleanText = cleanText.replace(/^\[(?:Ответ\s+отправлен\s+пользователю|Answer|Draft|Response)\]:\s*/i, '');
+  // 3. Remove any lingering orphan tags (<thinking>, </thinking>, <reasoning>, </reasoning>)
+  cleanText = cleanText.replace(/<\/?(?:thinking|reasoning|thought)>/gi, '');
+
+  // 4. Strip system/meta-talk headers anywhere in text (e.g. "[Ответ отправлен пользователю]:")
+  cleanText = cleanText.replace(/\[(?:Ответ\s+отправлен\s+пользователю|Answer|Draft|Response|User\s+Response)\]:\s*/gi, '');
+
+  // 5. Clean Chinese/CJK leakage from prompt confusion (e.g. 給的, 形式上再强调一下)
+  cleanText = cleanText.replace(/[\u4e00-\u9fff]+/g, '');
+
+  // 6. Clean raw stringified JSON tool call dumps if model accidentally outputted raw tool JSON text
+  cleanText = cleanText.replace(/\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[\s\S]*?\}\s*\}/gi, '');
 
   return { cleanText: cleanText.trim(), extractedReasoning: extractedReasoning.trim() };
 };
