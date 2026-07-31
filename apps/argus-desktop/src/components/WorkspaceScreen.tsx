@@ -1216,25 +1216,6 @@ ${names}`);
             {/* ── Header ── */}
             <View style={styles.header}>
               <View style={{ width: 38, height: 38 }} />
-
-              <Text style={styles.headerTitle} numberOfLines={1}>
-                {chats.find((c) => c.id === activeChatId)?.title || 'Argus'}
-              </Text>
-
-              <View style={styles.headerRight}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={async () => {
-                    if (activeChatId) {
-                      await refreshWorkspaceFiles(activeChatId);
-                    }
-                    setShowWsModal(true);
-                  }}
-                  style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
-                >
-                  <Folder size={20} color={colors.text} />
-                </Pressable>
-              </View>
             </View>
 
             {/* ── Messages ── */}
