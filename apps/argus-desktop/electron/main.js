@@ -1,4 +1,4 @@
-const { app, BrowserWindow, protocol, session, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, protocol, session, ipcMain, dialog, Menu } = require('electron');
 const { exec } = require('child_process');
 const path = require('path');
 const url = require('url');
@@ -285,6 +285,9 @@ function createWindow() {
     },
   });
 
+  win.removeMenu();
+  win.setMenu(null);
+
   win.webContents.on('did-fail-load', (e, code, desc, validatedUrl) => {
     log(`did-fail-load: code=${code}, desc=${desc}, url=${validatedUrl}`);
   });
@@ -307,6 +310,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   log('App ready. Setting up protocol handler...');
+  try { Menu.setApplicationMenu(null); } catch {}
 
   app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
     event.preventDefault();
