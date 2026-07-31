@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import Markdown, { ASTNode } from 'react-native-markdown-display';
@@ -7,6 +7,7 @@ import { ChatMessage } from '../types';
 import { colors, radius, spacing, typography } from '../styles/theme';
 import MermaidChart from './MermaidChart';
 import { t } from '../services/i18n';
+import { cleanMetaTalk } from '../services/openaiStream';
 
 const TypingDots = memo(() => {
   const dot1 = useRef(new Animated.Value(0)).current;
@@ -225,6 +226,17 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, onEdit, st
   const [stepsExpanded, setStepsExpanded] = useState(false);
   const [thinkingExpanded, setThinkingExpanded] = useState(false);
 
+  const { cleanText, extractedReasoning } = useMemo(() => {
+    if (message.role !== 'assistant' || !message.content) {
+      return { cleanText: message.content || '', extractedReasoning: '' };
+    }
+    return cleanMetaTalk(message.content);
+  }, [message.role, message.content]);
+
+  const displayReasoning = message.reasoning || extractedReasoning;
+  const displayContent = cleanText;
+  const isDisplayContentEmpty = !displayContent.trim();
+
   return (
     <View style={styles.row}>
       <View style={styles.avatar}>
@@ -236,14 +248,14 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, onEdit, st
       </View>
       <View style={styles.assistantBubble}>
         {/* Collapsible Reasoning / Thinking Block (Matching reference UI) */}
-        {Boolean(message.reasoning) && (
+        {Boolean(displayReasoning) && (
           <View style={styles.thinkingContainer}>
             <Pressable
               onPress={() => setThinkingExpanded((prev) => !prev)}
               style={({ pressed }) => [styles.thinkingHeaderRow, pressed && styles.pressed]}
             >
               <Text style={styles.thinkingHeaderLabel}>
-                {message.reasoning!.length > 1200 ? 'Thinking ~1m' : 'Thinking…'}
+                {displayReasoning.length > 1200 ? 'Thinking ~1m' : 'Thinking…'}
               </Text>
               <ChevronRightIcon
                 size={13}
@@ -255,7 +267,7 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, onEdit, st
             {thinkingExpanded && (
               <View style={styles.thinkingMarkdownWrap}>
                 <Markdown style={thinkingMarkdownStyles} rules={rules}>
-                  {message.reasoning}
+                  {displayReasoning}
                 </Markdown>
               </View>
             )}
@@ -311,11 +323,11 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, onEdit, st
           </View>
         )}
 
-        {isEmpty && (!message.steps || message.steps.length === 0) ? (
+        {isDisplayContentEmpty && (!message.steps || message.steps.length === 0) ? (
           <TypingDots />
         ) : (
           <Markdown style={markdownStyles} rules={rules}>
-            {message.content}
+            {displayContent}
           </Markdown>
         )}
 
