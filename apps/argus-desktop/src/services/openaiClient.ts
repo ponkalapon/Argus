@@ -5,6 +5,7 @@ import { TOOL_DEFINITIONS, executeTool } from './tools';
 import { workspaceSummary } from './workspace';
 import { loadMcpServers } from './mcpStorage';
 import { mcpToolsToOpenAI, tryExecuteMcpTool } from './mcpClient';
+import { cleanMetaTalk } from './openaiStream';
 import {
   AgentSettings,
   ChatCompletionContext,
@@ -94,6 +95,8 @@ const buildSystemPrompt = async (userMessage: string, context?: ChatCompletionCo
   }
 
   finalPrompt += '\n\n## СОХРАНЕНИЕ НАВЫКОВ\nКогда пользователь просит запомнить, создать или сохранить навык (skill), ты ОБЯЗАН использовать инструмент save_skill({ name, description, pattern, triggerKeywords }).';
+
+  finalPrompt += '\n\n## ВНУТРЕННЕЕ МЫШЛЕНИЕ И ФОРМАТИРОВАНИЕ\nПеред предоставлением итогового ответа на сложные вопросы или задачи, размышляй. Помещай свои внутренние размышления в блок `<thinking>...</thinking>`. Твой итоговый ответ пользователю должен находиться СТРОГО вне блока `<thinking>` — он должен быть чистым, грамотным, структурированным и без технических префиксов вроде `[Ответ отправлен пользователю]:`.';
 
   return finalPrompt;
 };
@@ -463,25 +466,28 @@ export const requestChatCompletion = async ({
     }
 
     if (!toolCalls || toolCalls.length === 0) {
-      if (!text.trim() && !toolCalls) {
+      const { cleanText, extractedReasoning } = cleanMetaTalk(text);
+      const finalText = cleanText || text.trim();
+
+      if (!finalText && !toolCalls) {
         throw new Error('API ответил без текста. Проверь совместимость модели с /v1/chat/completions.');
       }
       try {
-        const skillMatch = /(?:навык|skill)\s+[`"']?([a-z0-9_\-а-я]+)[`"']?\s+(?:успешно\s+)?(?:сохранен|сохранён|создан|сохраненный)/i.exec(text);
+        const skillMatch = /(?:навык|skill)\s+[`"']?([a-z0-9_\-а-я]+)[`"']?\s+(?:успешно\s+)?(?:сохранен|сохранён|создан|сохраненный)/i.exec(finalText);
         if (skillMatch && skillMatch[1]) {
           const skillName = skillMatch[1].trim();
           const { saveSkill } = await import('./skills');
           await saveSkill({
             name: skillName,
             description: `Навык ${skillName}, сохранённый во время диалога`,
-            pattern: text,
+            pattern: finalText,
             triggerKeywords: [skillName.toLowerCase()],
           });
         }
       } catch {}
 
       return {
-        text: text.trim(),
+        text: finalText,
         usage: streamUsage ? { input: streamUsage.prompt_tokens, output: streamUsage.completion_tokens, total: streamUsage.total_tokens } : undefined,
       };
     }

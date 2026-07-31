@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { requestChatCompletion, getEstimatedSystemPromptTokens } from '../services/openaiClient';
+import { cleanMetaTalk } from '../services/openaiStream';
 import { loadChats, saveChats, loadInternetEnabled, saveInternetEnabled } from '../services/storage';
 import { listWorkspaceFiles, exportWorkspaceFile, exportWorkspaceArchive, WorkspaceFile, selectLocalFolderOnPC, importWorkspaceFiles, getWorkspaceFolderName, deleteWorkspaceFile } from '../services/workspace';
 import { searchSessions } from '../services/sessionSearch';
@@ -685,10 +686,10 @@ ${names}`);
     if (wsFilesList.length > 0) {
       const topFiles = wsFilesList.slice(0, 25);
       const fileSummaries = topFiles
-        .map(f => `- ${f.path.replace(/[\u0000-\u001F\u7F-\u9F]/g, '')} (${(f.size / 1024).toFixed(1)} KB)`)
+        .map(f => `- ${f.path.replace(/[\u0000-\u001F]/g, '')} (${(f.size / 1024).toFixed(1)} KB)`)
         .join('\n');
       const extraCount = wsFilesList.length > 25 ? `\n...и ещё ${wsFilesList.length - 25} файлов` : '';
-      wsContext = `[Доступная рабочая папка ПК${wsFolderNameStr ? ` "${wsFolderNameStr.replace(/[\u0000-\u001F\u7F-\u9F]/g, '')}"` : ''}]:\n${fileSummaries}${extraCount}\n\n`;
+      wsContext = `[Доступная рабочая папка ПК${wsFolderNameStr ? ` "${wsFolderNameStr.replace(/[\u0000-\u001F]/g, '')}"` : ''}]:\n${fileSummaries}${extraCount}\n\n`;
     }
 
     // RAG Logic: Search in attached documents
@@ -796,11 +797,17 @@ ${names}`);
       stopStreamTicker();
       streamMessageId.current = null;
       setStatus('idle');
-      scrollToEnd();
+      const finalRawText = result.text || streamedTextRef.current;
+      const { cleanText, extractedReasoning } = cleanMetaTalk(finalRawText);
+      const finalText = cleanText || finalRawText;
 
       const finalMessages = visibleMessages.map((m) =>
-        m.id === assistantMessage.id && !m.content.trim()
-          ? { ...m, content: result.text }
+        m.id === assistantMessage.id
+          ? {
+              ...m,
+              content: finalText,
+              reasoning: extractedReasoning || m.reasoning,
+            }
           : m,
       );
 
@@ -814,7 +821,7 @@ ${names}`);
 
       // Update Android home-screen widget data. Never block chat if widget update fails.
       try {
-        setWidgetData(JSON.stringify({ lastResponse: result.text }), 'com.dimap.argus');
+        setWidgetData();
       } catch {
         // Widget module can be unavailable on some builds/dev environments.
       }
@@ -1081,14 +1088,17 @@ ${names}`);
       streamMessageId.current = null;
       setStatus('idle');
 
-      const finalText = result.text || streamedTextRef.current;
+      const finalRawText = result.text || streamedTextRef.current;
+      const { cleanText, extractedReasoning } = cleanMetaTalk(finalRawText);
+      const finalText = cleanText || finalRawText;
+
       setMessages((prev) => {
         const nextMsgs = prev.map((m) => {
           if (m.id !== messageId) return m;
           const b = [...(m.branches || [])];
           const idx = m.branchIndex ?? (b.length - 1);
           b[idx] = finalText;
-          return { ...m, content: finalText, branches: b };
+          return { ...m, content: finalText, branches: b, reasoning: extractedReasoning || m.reasoning };
         });
         if (chatId) {
           const chatTitle = chatsRef.current.find((c) => c.id === chatId)?.title || 'Чат';

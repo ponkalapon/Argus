@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import Markdown, { ASTNode } from 'react-native-markdown-display';
-import { Check, ChevronLeft, ChevronRight as ChevronRightIcon, Copy, Pencil, RotateCw } from 'lucide-react-native';
+import { Brain, Check, ChevronLeft, ChevronRight as ChevronRightIcon, Copy, Pencil, RotateCw } from 'lucide-react-native';
 import { ChatMessage } from '../types';
 import { colors, radius, spacing, typography } from '../styles/theme';
 import MermaidChart from './MermaidChart';
@@ -223,6 +223,7 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, onEdit, st
   };
 
   const [stepsExpanded, setStepsExpanded] = useState(true);
+  const [thinkingExpanded, setThinkingExpanded] = useState(false);
 
   return (
     <View style={styles.row}>
@@ -234,6 +235,34 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, onEdit, st
         />
       </View>
       <View style={styles.assistantBubble}>
+        {/* Collapsible Reasoning / Thinking Block (Hermes / DeepSeek style) */}
+        {Boolean(message.reasoning) && (
+          <View style={styles.thinkingWrap}>
+            <Pressable
+              onPress={() => setThinkingExpanded((prev) => !prev)}
+              style={({ pressed }) => [styles.thinkingHeader, pressed && styles.pressed]}
+            >
+              <Brain size={14} color="#a78bfa" style={{ marginRight: 6 }} />
+              <Text style={styles.thinkingHeaderText}>
+                Размышления ({message.reasoning!.length} символов)
+              </Text>
+              <ChevronRightIcon
+                size={13}
+                color={colors.textMuted}
+                style={{ marginLeft: 'auto', transform: [{ rotate: thinkingExpanded ? '90deg' : '0deg' }] }}
+              />
+            </Pressable>
+
+            {thinkingExpanded && (
+              <View style={styles.thinkingBody}>
+                <Text style={styles.thinkingText} selectable>
+                  {message.reasoning}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {message.steps && message.steps.length > 0 && (
           <View style={styles.stepsWrap}>
             <Pressable
@@ -647,6 +676,40 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(234, 179, 8, 0.35)',
     color: '#fde047',
     borderRadius: 2,
+  },
+
+  // ── Thinking / Reasoning Accordion ──
+  thinkingWrap: {
+    marginBottom: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(167, 139, 250, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(167, 139, 250, 0.2)',
+    overflow: 'hidden',
+  },
+  thinkingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+  },
+  thinkingHeaderText: {
+    color: '#a78bfa',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  thinkingBody: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(167, 139, 250, 0.15)',
+    backgroundColor: '#0b0b0e',
+  },
+  thinkingText: {
+    color: '#d4d4d8',
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: 'Consolas, monospace',
   },
 });
 

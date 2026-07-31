@@ -20,6 +20,35 @@ export const extractTextFromJson = (data: ChatCompletionResponse) =>
   data.output_text ||
   '';
 
+export const extractReasoningFromJson = (data: ChatCompletionResponse) =>
+  data.choices?.[0]?.delta?.reasoning_content ||
+  data.choices?.[0]?.delta?.reasoning ||
+  data.choices?.[0]?.message?.reasoning_content ||
+  data.choices?.[0]?.message?.reasoning ||
+  '';
+
+export const cleanMetaTalk = (text: string): { cleanText: string; extractedReasoning: string } => {
+  let cleanText = text;
+  let extractedReasoning = '';
+
+  // Extract <thinking>...</thinking>, <reasoning>...</reasoning>, or <thought>...</thought> blocks
+  const thinkRegex = /<(?:thinking|reasoning|thought)>([\s\S]*?)(?:<\/(?:thinking|reasoning|thought)>|$)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = thinkRegex.exec(text)) !== null) {
+    if (match[1]) {
+      extractedReasoning += (extractedReasoning ? '\n\n' : '') + match[1].trim();
+    }
+  }
+
+  // Remove thinking tags from clean text
+  cleanText = cleanText.replace(/<(?:thinking|reasoning|thought)>[\s\S]*?(?:<\/(?:thinking|reasoning|thought)>|$)/gi, '');
+
+  // Strip system/meta-talk prefixes like "[Ответ отправлен пользователю]:", "[Draft]:", etc.
+  cleanText = cleanText.replace(/^\[(?:Ответ\s+отправлен\s+пользователю|Answer|Draft|Response)\]:\s*/i, '');
+
+  return { cleanText: cleanText.trim(), extractedReasoning: extractedReasoning.trim() };
+};
+
 export const extractToolCalls = (data: ChatCompletionResponse) =>
   data.choices?.[0]?.message?.tool_calls ||
   data.choices?.[0]?.delta?.tool_calls;
@@ -49,7 +78,11 @@ const parseSseJsonChunk = (rawData: string): ChatCompletionResponse => {
   }
 };
 
-export const readStreamingResponse = async (response: Response, onToken: (token: string) => void) => {
+export const readStreamingResponse = async (
+  response: Response,
+  onToken: (token: string) => void,
+  onReasoning?: (reasoningToken: string) => void,
+) => {
   const body = response.body;
   const reader = body?.getReader?.();
 
@@ -60,6 +93,7 @@ export const readStreamingResponse = async (response: Response, onToken: (token:
   const decoder = new TextDecoder();
   let buffer = '';
   let fullText = '';
+  let fullReasoning = '';
   let toolCalls: any[] = [];
   let finalUsage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | undefined;
 
@@ -68,10 +102,16 @@ export const readStreamingResponse = async (response: Response, onToken: (token:
 
     const data = parseSseJsonChunk(rawData);
     const token = extractTextFromJson(data);
+    const reasoningToken = extractReasoningFromJson(data);
     const deltaToolCalls = extractToolCalls(data);
 
     if (data.usage) {
       finalUsage = data.usage;
+    }
+
+    if (reasoningToken) {
+      fullReasoning += reasoningToken;
+      if (onReasoning) onReasoning(reasoningToken);
     }
 
     if (token) {
@@ -125,6 +165,7 @@ export const readStreamingResponse = async (response: Response, onToken: (token:
 
   return {
     text: fullText,
+    reasoning: fullReasoning || undefined,
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     usage: finalUsage,
   };

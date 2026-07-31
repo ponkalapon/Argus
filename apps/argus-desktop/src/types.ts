@@ -22,6 +22,8 @@ export type ChatMessage = {
   branches?: string[];
   /** Currently shown branch index (0 = first/original) */
   branchIndex?: number;
+  /** Internal thinking/reasoning process before final answer */
+  reasoning?: string;
 };
 
 export type StoredChat = {
@@ -46,6 +48,8 @@ export type AgentStatus = 'idle' | 'thinking' | 'error';
 export type ChatCompletionMessage = {
   role: Role;
   content: string | null;
+  reasoning_content?: string | null;
+  reasoning?: string | null;
   name?: string;
   tool_call_id?: string;
   tool_calls?: any[];
