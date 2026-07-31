@@ -235,29 +235,28 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, onEdit, st
         />
       </View>
       <View style={styles.assistantBubble}>
-        {/* Collapsible Reasoning / Thinking Block (Hermes / DeepSeek style) */}
+        {/* Collapsible Reasoning / Thinking Block (Matching reference UI) */}
         {Boolean(message.reasoning) && (
-          <View style={styles.thinkingWrap}>
+          <View style={styles.thinkingContainer}>
             <Pressable
               onPress={() => setThinkingExpanded((prev) => !prev)}
-              style={({ pressed }) => [styles.thinkingHeader, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.thinkingHeaderRow, pressed && styles.pressed]}
             >
-              <Brain size={14} color="#a78bfa" style={{ marginRight: 6 }} />
-              <Text style={styles.thinkingHeaderText}>
-                Размышления ({message.reasoning!.length} символов)
+              <Text style={styles.thinkingHeaderLabel}>
+                {message.reasoning!.length > 1200 ? 'Worked for 1m' : 'Worked for a moment'}
               </Text>
               <ChevronRightIcon
                 size={13}
                 color={colors.textMuted}
-                style={{ marginLeft: 'auto', transform: [{ rotate: thinkingExpanded ? '90deg' : '0deg' }] }}
+                style={{ marginLeft: 4, transform: [{ rotate: thinkingExpanded ? '90deg' : '0deg' }] }}
               />
             </Pressable>
 
             {thinkingExpanded && (
-              <View style={styles.thinkingBody}>
-                <Text style={styles.thinkingText} selectable>
+              <View style={styles.thinkingMarkdownWrap}>
+                <Markdown style={thinkingMarkdownStyles} rules={rules}>
                   {message.reasoning}
-                </Text>
+                </Markdown>
               </View>
             )}
           </View>
@@ -377,6 +376,24 @@ export const MessageBubble = memo(({ message, onRegenerate, onDelete, onEdit, st
       </View>
     </View>
   );
+});
+
+const thinkingMarkdownStyles = StyleSheet.create({
+  body: {
+    color: '#a1a1aa',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  code_inline: {
+    backgroundColor: '#1c1c22',
+    borderColor: '#27272a',
+    borderWidth: 1,
+    borderRadius: 4,
+    color: '#e4e4e7',
+    fontSize: 12,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
 });
 
 const markdownStyles = StyleSheet.create({
@@ -678,38 +695,26 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
 
-  // ── Thinking / Reasoning Accordion ──
-  thinkingWrap: {
-    marginBottom: spacing.sm,
-    borderRadius: radius.md,
-    backgroundColor: 'rgba(167, 139, 250, 0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(167, 139, 250, 0.2)',
-    overflow: 'hidden',
+  // ── Thinking / Reasoning Flat Accordion ──
+  thinkingContainer: {
+    marginBottom: spacing.xs,
   },
-  thinkingHeader: {
+  thinkingHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+    paddingRight: 8,
   },
-  thinkingHeaderText: {
-    color: '#a78bfa',
-    fontSize: 12,
-    fontWeight: '600',
+  thinkingHeaderLabel: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
   },
-  thinkingBody: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(167, 139, 250, 0.15)',
-    backgroundColor: '#0b0b0e',
-  },
-  thinkingText: {
-    color: '#d4d4d8',
-    fontSize: 12,
-    lineHeight: 18,
-    fontFamily: 'Consolas, monospace',
+  thinkingMarkdownWrap: {
+    marginTop: 4,
+    marginBottom: 8,
+    paddingLeft: 4,
   },
 });
 
