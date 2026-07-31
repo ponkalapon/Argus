@@ -44,6 +44,7 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  X,
   Zap,
 } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
@@ -443,16 +444,23 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
             onPress={handleBack}
             style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
           >
-            <ArrowLeft size={20} color={colors.text} />
+            <ArrowLeft size={18} color={colors.text} />
           </Pressable>
           <Text style={styles.headerTitle}>{t('settings.title', 'Настройки')}</Text>
-          <View style={{ width: 34 }} />
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleBack}
+            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+          >
+            <X size={18} color={colors.textMuted} />
+          </Pressable>
         </View>
 
         {/* Main Settings Modal Layout */}
         <View style={styles.layoutBody}>
           {/* Sidebar Tabs */}
           <View style={styles.sidebar}>
+            <Text style={styles.sidebarSectionTitle}>Settings</Text>
             {navItems.map((item) => {
               const active = activeTab === item.id;
               const Icon = item.icon;
@@ -466,7 +474,7 @@ export const SettingsScreen = ({ initialSettings, onBack, onSave, onThemeChange 
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Icon size={18} color={active ? colors.accent : colors.textMuted} />
+                  <Icon size={16} color={active ? '#ffffff' : '#a1a1aa'} />
                   <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
                     {item.label}
                   </Text>
@@ -1565,11 +1573,21 @@ const styles = StyleSheet.create({
   sidebar: {
     width: 220,
     borderRightWidth: 1,
-    borderRightColor: 'rgba(255, 255, 255, 0.06)',
+    borderRightColor: '#232328',
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
     gap: 2,
-    backgroundColor: 'rgba(9, 9, 11, 0.35)',
+    backgroundColor: '#121215',
+  },
+  sidebarSectionTitle: {
+    color: '#71717a',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.6,
+    marginBottom: 6,
+    marginTop: 4,
+    paddingHorizontal: spacing.md,
+    textTransform: 'uppercase',
   },
   tabItem: {
     flexDirection: 'row',
@@ -1577,15 +1595,15 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: 8,
-    borderRadius: radius.md,
+    borderRadius: 8,
   },
   tabItemActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#27272a',
     borderColor: 'transparent',
     borderWidth: 0,
   },
   tabLabel: {
-    color: 'rgba(255, 255, 255, 0.5)',
+    color: '#a1a1aa',
     fontSize: 13,
     fontWeight: '500',
   },
@@ -1596,19 +1614,17 @@ const styles = StyleSheet.create({
 
   contentScroll: {
     flex: 1,
+    backgroundColor: '#0d0d10',
   },
   contentContainer: {
     padding: spacing.xl,
-    maxWidth: 1040,
+    maxWidth: 960,
     width: '100%',
-    alignSelf: 'center',
+    alignSelf: 'flex-start',
   },
 
   sectionCard: {
     backgroundColor: 'transparent',
-    borderColor: 'transparent',
-    borderWidth: 0,
-    borderRadius: 0,
     padding: 0,
   },
   cardHeader: {
@@ -1619,40 +1635,45 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     color: '#f4f4f5',
-    fontSize: 18,
-    fontWeight: '600',
-    letterSpacing: -0.2,
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   cardDesc: {
-    color: 'rgba(255, 255, 255, 0.45)',
+    color: '#a1a1aa',
     fontSize: 13,
     lineHeight: 18,
     marginBottom: spacing.xl,
   },
 
   fieldGroup: {
-    marginBottom: spacing.xl,
+    backgroundColor: '#16161a',
+    borderColor: '#27272a',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: spacing.lg,
+    marginBottom: 12,
   },
   fieldLabel: {
     color: '#f4f4f5',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   fieldHint: {
-    color: 'rgba(255, 255, 255, 0.45)',
+    color: '#71717a',
     fontSize: 12,
     lineHeight: 16,
-    marginTop: 2,
+    marginTop: 4,
   },
   textInput: {
-    backgroundColor: 'rgba(18, 18, 20, 0.6)',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#232328',
+    borderColor: '#27272a',
     borderWidth: 1,
-    borderRadius: radius.md,
-    color: colors.text,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 9,
+    borderRadius: 8,
+    color: '#f4f4f5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     fontSize: 13,
     outlineStyle: 'none' as any,
   },
