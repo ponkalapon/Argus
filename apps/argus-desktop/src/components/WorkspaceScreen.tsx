@@ -32,7 +32,7 @@ import { estimateTokens, estimateMessagesTokens } from '../services/context';
 import { recordTokenUsage } from '../services/tokenStats';
 import { t } from '../services/i18n';
 import * as ImagePicker from 'expo-image-picker';
-import { ArrowLeft, ArrowUp, Bot, Camera, Check, ChevronDown, Download, Folder, Globe, Image, Layers, Menu, Mic, Paperclip, Plus, Search, Settings, Square, Trash2, Users, X } from 'lucide-react-native';
+import { ArrowLeft, ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Download, Folder, Globe, Image, Layers, Menu, Mic, Paperclip, Plus, Search, Settings, Square, Trash2, Users, X } from 'lucide-react-native';
 import { WebView } from 'react-native-webview';
 import { SvgXml } from 'react-native-svg';
 
@@ -1217,17 +1217,9 @@ ${names}`);
             <View style={styles.header}>
               <View style={{ width: 38, height: 38 }} />
 
-              <Pressable
-                style={({ pressed }) => [styles.modelPill, pressed && styles.pressed]}
-                onPress={() => { setModelSearch(''); setShowModelPicker(true); }}
-                accessibilityRole="button"
-              >
-                <Bot size={14} color={colors.accent} style={{ marginRight: 4 }} />
-                <Text style={styles.modelPillLabel} numberOfLines={1}>
-                  {modelLabel}
-                </Text>
-                <ChevronDown size={12} color={colors.textMuted} style={{ marginLeft: 4 }} />
-              </Pressable>
+              <Text style={styles.headerTitle} numberOfLines={1}>
+                {chats.find((c) => c.id === activeChatId)?.title || 'Argus'}
+              </Text>
 
               <View style={styles.headerRight}>
                 <Pressable
@@ -1340,14 +1332,6 @@ ${names}`);
               )}
 
               <View style={[styles.composer, isFocused && styles.composerFocused]}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setShowAttachMenu(true)}
-                  style={({ pressed }) => pressed && styles.pressed}
-                >
-                  <Text style={styles.attachIcon}>+</Text>
-                </Pressable>
-
                 <TextInput
                   multiline
                   onChangeText={setDraft}
@@ -1361,39 +1345,70 @@ ${names}`);
                       }
                     }
                   }}
-                  placeholder={t('chat.placeholder', 'Спросить Agent…')}
+                  placeholder={t('chat.placeholder', 'Ask anything, @ to mention, / for actions')}
                   placeholderTextColor={colors.textDim}
-                  style={styles.input}
-                  textAlignVertical="center"
+                  style={styles.composerInput}
+                  textAlignVertical="top"
                   value={draft}
                 />
 
-                <Animated.View
-                  style={styles.sendBtnWrap}
-                  pointerEvents={draft.trim().length > 0 ? 'auto' : 'auto'}
-                >
-                  {status === 'thinking' ? (
+                <View style={styles.composerBottomRow}>
+                  <View style={styles.composerBottomLeft}>
                     <Pressable
                       accessibilityRole="button"
-                      onPress={handleStop}
-                      style={({ pressed }) => [styles.sendBtn, { backgroundColor: colors.danger }, pressed && styles.sendBtnPressed]}
+                      onPress={() => setShowAttachMenu(true)}
+                      style={({ pressed }) => [styles.attachIconBtn, pressed && styles.pressed]}
                     >
-                      <Square size={18} color={colors.background} fill={colors.background} />
+                      <Plus size={16} color={colors.textMuted} />
                     </Pressable>
-                  ) : (
+
                     <Pressable
+                      style={({ pressed }) => [styles.modelPillBottom, pressed && styles.pressed]}
+                      onPress={() => { setModelSearch(''); setShowModelPicker(true); }}
                       accessibilityRole="button"
-                      onPress={draft.trim().length > 0 ? () => sendMessage(draft) : handleVoiceToggle}
-                      style={({ pressed }) => [styles.sendBtn, pressed && styles.sendBtnPressed]}
                     >
-                      {draft.trim().length > 0 ? (
-                        <ArrowUp size={20} color={colors.background} />
-                      ) : (
-                        <Mic size={20} color={isRecording ? '#ef4444' : colors.background} />
-                      )}
+                      <Text style={styles.modelPillBottomLabel} numberOfLines={1}>
+                        {modelLabel}
+                      </Text>
+                      <ChevronUp size={12} color={colors.textMuted} style={{ marginLeft: 3 }} />
                     </Pressable>
-                  )}
-                </Animated.View>
+                  </View>
+
+                  <View style={styles.composerBottomRight}>
+                    {status === 'thinking' ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={handleStop}
+                        style={({ pressed }) => [styles.sendBtn, { backgroundColor: colors.danger }, pressed && styles.sendBtnPressed]}
+                      >
+                        <Square size={16} color={colors.background} fill={colors.background} />
+                      </Pressable>
+                    ) : (
+                      <>
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={handleVoiceToggle}
+                          style={({ pressed }) => [styles.micBtn, pressed && styles.pressed]}
+                        >
+                          <Mic size={18} color={isRecording ? '#ef4444' : colors.textMuted} />
+                        </Pressable>
+
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => { if (draft.trim().length > 0) sendMessage(draft); }}
+                          disabled={draft.trim().length === 0}
+                          style={({ pressed }) => [
+                            styles.sendBtn,
+                            draft.trim().length === 0 && styles.sendBtnDisabled,
+                            pressed && styles.sendBtnPressed,
+                          ]}
+                        >
+                          <ArrowUp size={18} color={draft.trim().length > 0 ? '#000000' : colors.textDim} />
+                        </Pressable>
+                      </>
+                    )}
+                  </View>
+                </View>
               </View>
 
               {/* ── Status bar ── */}
@@ -2320,23 +2335,95 @@ const styles = StyleSheet.create({
   composerWrap: {
     paddingBottom: Platform.OS === 'ios' ? spacing.lg : spacing.md,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.xs,
     backgroundColor: 'transparent',
   },
   composer: {
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.xxl,
+    backgroundColor: '#16161a',
+    borderColor: '#27272a',
+    borderRadius: 16,
     borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 4,
-    minHeight: 52,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 8,
+    flexDirection: 'column',
   },
   composerFocused: {
-    borderColor: colors.borderStrong,
+    borderColor: '#3f3f46',
+  },
+  composerInput: {
+    color: colors.text,
+    fontSize: 14,
+    lineHeight: 20,
+    minHeight: 40,
+    maxHeight: 140,
+    padding: 0,
+    outlineStyle: 'none' as any,
+    outlineWidth: 0 as any,
+  },
+  composerBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  composerBottomLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  composerBottomRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  attachIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  modelPillBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  modelPillBottomLabel: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
+    maxWidth: 240,
+  },
+  micBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendBtn: {
+    alignItems: 'center',
+    backgroundColor: colors.text,
+    borderRadius: radius.pill,
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
+  sendBtnDisabled: {
+    backgroundColor: '#27272a',
+    opacity: 0.5,
+  },
+  headerTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
   },
   statusBar: {
     alignItems: 'center',
@@ -2355,11 +2442,6 @@ const styles = StyleSheet.create({
     height: 6,
     width: 6,
   },
-  statusText: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '500',
-  },
   tokenText: {
     color: colors.textMuted,
     fontSize: 11,
@@ -2371,47 +2453,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '400',
     maxWidth: '50%',
-  },
-  attachIcon: {
-    color: colors.textMuted,
-    fontSize: 22,
-    fontWeight: '300',
-    paddingHorizontal: spacing.xs,
-    alignSelf: 'center',
-    marginTop: -1,
-  },
-  voiceBtn: {
-    alignItems: 'center',
-    height: 36,
-    justifyContent: 'center',
-    width: 36,
-  },
-  input: {
-    color: colors.text,
-    flex: 1,
-    fontSize: typography.body,
-    lineHeight: 22,
-    maxHeight: 120,
-    minHeight: 34,
-    paddingTop: 11,
-    paddingBottom: 11,
-    paddingHorizontal: 0,
-    alignSelf: 'center',
-    outlineStyle: 'none' as any,
-    outlineWidth: 0 as any,
-  },
-
-  sendBtnWrap: {
-    height: 34,
-    width: 34,
-  },
-  sendBtn: {
-    alignItems: 'center',
-    backgroundColor: colors.text,
-    borderRadius: radius.pill,
-    height: 34,
-    justifyContent: 'center',
-    width: 34,
   },
   sendBtnPressed: {
     opacity: 0.75,
@@ -2425,13 +2466,6 @@ const styles = StyleSheet.create({
   },
 
   /* Attach bottom sheet */
-  attachOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.42)',
-    justifyContent: 'flex-end',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.lg,
-  },
   attachSheet: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -2446,7 +2480,7 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   attachOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   attachMenuCard: {
